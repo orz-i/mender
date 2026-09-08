@@ -1,0 +1,43 @@
+{
+  "name": "mender",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Mender — Agent 能力集成、治理与分发平台",
+  "license": "MIT",
+  "packageManager": "pnpm@11.18.0",
+  "engines": { "node": "24.19.0", "pnpm": "11.18.0" },
+  "scripts": {
+    "preinstall": "node scripts/check-toolchain.mjs",
+    "dev": "pnpm --filter @mender/console --filter @mender/admin --parallel run dev",
+    "dev:console": "pnpm --filter @mender/console dev",
+    "dev:admin": "pnpm --filter @mender/admin dev",
+    "dev:api": "node scripts/backend.mjs run ./cmd/api",
+    "dev:worker": "node scripts/backend.mjs run ./cmd/worker",
+    "build": "pnpm --filter @mender/console --filter @mender/admin run build",
+    "build:backend": "node scripts/backend.mjs build ./...",
+    "lint": "eslint frontend scripts eslint.config.mjs --max-warnings 0",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "node --test frontend/packages/api-client/src/health.test.mjs",
+    "test:backend": "node scripts/backend.mjs test ./...",
+    "vet:backend": "node scripts/backend.mjs vet ./...",
+    "check:toolchain": "node scripts/check-toolchain.mjs --go",
+    "check:workspace": "node scripts/check-workspace.mjs",
+    "check:docs": "node scripts/check-docs.mjs",
+    "check:contracts": "node scripts/check-contracts.mjs",
+    "check": "pnpm check:toolchain && pnpm check:workspace && pnpm check:docs && pnpm check:contracts && pnpm lint && pnpm typecheck && pnpm test && pnpm test:backend && pnpm vet:backend && pnpm build:backend && pnpm build"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.13.3",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "eslint": "10.10.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "eslint-plugin-react-refresh": "0.5.6",
+    "globals": "17.12.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.69.0",
+    "yaml": "2.9.0"
+  }
+}

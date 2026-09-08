@@ -1,0 +1,10 @@
+{
+  "fields": [
+    {
+      "path": "credential_ref",
+      "widget": "credential-reference-picker",
+      "label": "授权连接",
+      "required_permission": "connection:use"
+    }
+  ]
+}

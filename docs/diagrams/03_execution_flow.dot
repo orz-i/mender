@@ -1,0 +1,19 @@
+digraph G {
+graph [bgcolor="white", pad="0.25", nodesep="0.28", ranksep="0.45", dpi=160];
+node [shape=box, style="rounded,filled", color="#BCCAD4", fillcolor="#F6F8FA", fontname="Noto Sans CJK SC", fontsize=15, margin="0.18,0.12", penwidth=1.2];
+edge [color="#708494", penwidth=1.2, arrowsize=0.75, fontname="Noto Sans CJK SC", fontsize=11];
+
+rankdir=TB;
+request[label="1 认证与规范化\n主体 · 工具 · 参数 · 请求摘要"];
+policy[label="2 解析固定版本并授权\nConnection · 风险 · 报价上限"];
+tx[label="3 单个数据库事务\n幂等键 + 预算预留 + Run + Job + Outbox",fillcolor="#E7F2F2"];
+accepted[label="4 返回 Run / 可选短等待\n未提交事务前不执行外部动作"];
+job[label="5 Worker 领取任务\n租约 / fencing / 紧急禁用复核"];
+execute[label="6 上游执行\n受控凭据 / 出口 / 限额",fillcolor="#FFF7E8"];
+known[label="结果和用量已确认"];
+unknown[label="结果不明\nreconciling · 禁止盲重试",fillcolor="#FFF0E7"];
+settle[label="7 幂等结算事务\n计量事实 + 分录 + 预算归集",fillcolor="#E7F2F2"];
+notify[label="8 结果 / 产物 / 已提交事件通知"];
+request->policy->tx->accepted->job->execute;
+execute->known;execute->unknown;known->settle;unknown->settle[label="查询或裁决后"];settle->notify;
+}

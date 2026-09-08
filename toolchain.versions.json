@@ -1,0 +1,10 @@
+{
+  "status": "initialization_baseline_pending_G0_review",
+  "package_manager": "pnpm",
+  "pnpm_exact_version": "11.18.0",
+  "node_exact_version": "24.19.0",
+  "go_exact_version": "1.26.7",
+  "verified_at": "2026-09-08",
+  "verification_evidence": "docs/engineering/initialization-report.md",
+  "approval_reference": null
+}

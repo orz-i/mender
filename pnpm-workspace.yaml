@@ -1,0 +1,8 @@
+packages:
+  - 'frontend/apps/*'
+  - 'frontend/packages/*'
+sharedWorkspaceLockfile: true
+engineStrict: true
+strictPeerDependencies: true
+savePrefix: ''
+minimumReleaseAgeStrict: true

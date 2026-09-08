@@ -1,0 +1,82 @@
+[
+  [
+    "BC01",
+    "identity",
+    "身份与租户",
+    "Workspace、Membership、ServiceAccount、APIKey",
+    "成员和调用主体、Key 生命周期",
+    "BE-A",
+    "身份与 Workspace ID／授权事实",
+    "平台管理员与租户管理员分离"
+  ],
+  [
+    "BC02",
+    "catalog",
+    "能力目录",
+    "Tool、ToolVersion",
+    "工具语义、输入输出合同、可见性",
+    "BE-A",
+    "ToolContract、PublishedToolVersion",
+    "Provider 和价格只是引用／投影"
+  ],
+  [
+    "BC03",
+    "connections",
+    "授权连接",
+    "Connection",
+    "授权范围、连接状态、秘密引用",
+    "BE-A",
+    "ConnectionCapability、凭据代理端口",
+    "不对消费者暴露原始全局秘密"
+  ],
+  [
+    "BC04",
+    "distribution",
+    "工具集分发",
+    "Toolset、PublishedSnapshot",
+    "绑定、版本固定、入口与环境",
+    "BE-B",
+    "ToolsetSnapshot、路由解析结果",
+    "不持有 Tool／Connection 聚合对象"
+  ],
+  [
+    "BC05",
+    "execution",
+    "执行",
+    "Run、Attempt；Artifact 元数据模块",
+    "状态、幂等、租约、执行与产物",
+    "BE-A／BE-B",
+    "RunView、ExecutionOutcome",
+    "执行状态与结算状态分开"
+  ],
+  [
+    "BC06",
+    "commerce",
+    "计量与资金",
+    "PriceVersion、Wallet、Budget、Reservation、Settlement",
+    "计价、预留、使用事实、分录和对账",
+    "BE-A",
+    "PriceQuote、ReservationReceipt、SettlementResult",
+    "共享事务不开放任意跨域写表"
+  ],
+  [
+    "BC07",
+    "supply",
+    "供应与发布",
+    "Provider、PluginVersion、Deployment、ReleasePlan",
+    "供应商入驻、制品、审核与发布",
+    "BE-B",
+    "ProviderProfile、DeploymentDescriptor",
+    "runtime 是此领域的外部执行机制"
+  ],
+  [
+    "BC08",
+    "governance",
+    "策略与审计",
+    "PolicyRevision、Approval；AuditRecord",
+    "风险决策、审批、审计与例外",
+    "BE-A／SRE",
+    "PolicyDecision、ApprovalDecision",
+    "审计读模型不反向修改业务聚合"
+  ]
+]

@@ -1,0 +1,5 @@
+{
+  "extends": "@mender/config/tsconfig.base.json",
+  "compilerOptions": { "paths": { "@mender/ui/*": ["./src/*"] } },
+  "include": ["src"]
+}

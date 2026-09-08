@@ -1,0 +1,22 @@
+.anchor/
+
+# Dependencies and generated output
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+backend/bin/
+.cache/
+.tmp/
+*.log
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Editor and operating system files
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,23 @@
+digraph G {
+graph [bgcolor="white", pad="0.25", nodesep="0.28", ranksep="0.45", dpi=160];
+node [shape=box, style="rounded,filled", color="#BCCAD4", fillcolor="#F6F8FA", fontname="Noto Sans CJK SC", fontsize=15, margin="0.18,0.12", penwidth=1.2];
+edge [color="#708494", penwidth=1.2, arrowsize=0.75, fontname="Noto Sans CJK SC", fontsize=11];
+
+rankdir=TB;
+subgraph cluster_clients {label="消费与管理入口";fontname="Noto Sans CJK SC";fontsize=17;color="#D5DFE6";style="rounded";
+client[label="Agent / MCP Client\nREST / CLI / Skill"];console[label="消费者 / 发布者控制台\nReact · Vite · shadcn · pnpm"];admin[label="平台 Admin\n独立入口与高权限会话"];
+{rank=same;client;console;admin;}}
+subgraph cluster_api {label="API 进程：控制面与数据面";fontname="Noto Sans CJK SC";fontsize=17;color="#9CB9CA";style="rounded";
+gateway[label="Gin API + MCP SDK\n认证 · 协议校验 · 对象授权",fillcolor="#E7F2F2"];
+core[label="DDD 上下文 / 清洁架构内核\n目录与版本 · 策略 · Run · 预算 · 计量 · 审计",fillcolor="#E7F2F2"];
+gateway->core;}
+subgraph cluster_work {label="Worker 进程：执行面";fontname="Noto Sans CJK SC";fontsize=17;color="#9CB9CA";style="rounded";
+worker[label="持久任务 · 租约 · 回调 · 对账"];
+adapters[label="HTTP / MCP / Agent Adapter\n声明式执行器 + 凭据代理"];
+worker->adapters;}
+store[label="PostgreSQL：业务 / 任务 / 账本真源\nRedis：可重建缓存与限制\n对象存储：产物 / 制品",fillcolor="#EEF1F7"];
+upstream[label="受控网络出口\n供应商 API / MCP / 远程 Agent",fillcolor="#FFF7E8"];
+future[label="S6 可选隔离执行池\n进程 / 容器 / WASM",style="rounded,dashed,filled",fillcolor="#FBFBFB"];
+client->gateway;console->gateway;admin->gateway;
+core->store [label="原子受理"];store->worker [dir=both,label="任务 / 结算"];core->worker [style=dashed,label="统一用例合同"];adapters->upstream;adapters->future [style=dashed];
+}

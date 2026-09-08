@@ -1,0 +1,7 @@
+* text=auto eol=lf
+*.png binary
+*.pdf binary
+*.docx binary
+*.xlsx binary
+# Historical delivery checksums are defined over the original bytes.
+docs/archive/** -text

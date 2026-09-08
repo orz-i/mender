@@ -1,0 +1,7 @@
+PASS: Schema and instance — plugin-manifest.example.json
+PASS: Schema and instance — event.example.json
+PASS: Connection config schema and reference-only example
+PASS: Confined local references and SHA-256 artifact digest
+PASS: Tool schemas and representative input/output examples
+PASS: OpenAPI structural checks — 10 paths / 11 operations, unique IDs, path parameters, local references and JSON Schemas
+LIMIT: Not a full OpenAPI validator, MCP conformance test, security test, or running-service integration test.

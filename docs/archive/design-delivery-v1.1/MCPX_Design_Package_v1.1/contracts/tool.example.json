@@ -1,0 +1,79 @@
+{
+  "tool_id": "tool_example_company_search",
+  "namespace": "example",
+  "slug": "company_search",
+  "version": "1.0.0",
+  "display_name": "企业搜索（设计样例）",
+  "description": "仅用于说明字段合同；示例域名不是可调用供应商。",
+  "input_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "query",
+      "limit"
+    ],
+    "properties": {
+      "query": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100
+      }
+    }
+  },
+  "output_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "required": [
+      "items"
+    ],
+    "properties": {
+      "items": {
+        "type": "array",
+        "maxItems": 100,
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "domain": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        }
+      }
+    }
+  },
+  "risk": {
+    "side_effect": "read_only",
+    "idempotency": "safe_read",
+    "review_required": true
+  },
+  "execution": {
+    "adapter": "http",
+    "runtime": "builtin",
+    "mode": "sync_short",
+    "timeout_ms": 10000
+  },
+  "pricing": {
+    "version": "example-price-1",
+    "currency": "USD",
+    "settlement_scale": 6,
+    "model": "per_result",
+    "base_micro": "1000",
+    "unit_price_micro": "500",
+    "max_results": 100,
+    "rounding": "half_up_at_run_total",
+    "hard_cap_supported": true,
+    "hard_cap_evidence": "Design-only: real supplier support and contract tests are required."
+  }
+}

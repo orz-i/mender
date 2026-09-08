@@ -1,0 +1,9 @@
+{
+  "name": "@mender/api-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --project tsconfig.json" },
+  "devDependencies": { "@mender/config": "workspace:*", "typescript": "6.0.3" }
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Connection Config (design sample)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "credential_ref"
+  ],
+  "properties": {
+    "credential_ref": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Reference handled by the platform credential broker; never a raw API key."
+    }
+  }
+}

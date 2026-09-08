@@ -1,0 +1,18 @@
+digraph G {
+graph [bgcolor="white", rankdir=TB, pad="0.3", nodesep="0.5", ranksep="0.55", dpi=150];
+node [shape=box, style="rounded,filled", fontname="Noto Sans CJK SC", fontsize=17, margin="0.18,0.15", color="#BACCD6", fillcolor="#F1F5F8"];
+edge [fontname="Noto Sans CJK SC",fontsize=12,color="#648294",arrowsize=0.8];
+root[label="Composition Root / bootstrap\n只装配依赖，不承载业务规则",fillcolor="#E5F2F1"];
+in[label="入站适配器\nGin / MCP / Worker / React 页面"];
+out[label="出站适配器\nPostgres / API / MCP SDK / Agent SDK"];
+app[label="Application\n用例 + 消费方端口",fillcolor="#E5F2F1"];
+domain[label="Domain\n聚合 · 值对象 · 不变量 · 领域事件",fillcolor="#D5EBE8"];
+root->in;root->out;root->app;
+{rank=same;in;out;}
+in->app[label="调用用例"];
+out->app[label="实现消费方接口"];
+app->domain[label="源码依赖向内"];
+out->domain[label="持久化 / 映射"];
+note[label="禁止：Domain / Application → 具体框架、数据库、SDK\n运行时通过端口调用外层，不改变源码依赖方向",shape=note,fillcolor="#FFF6E6",fontsize=14];
+domain->note[style=invis];
+}

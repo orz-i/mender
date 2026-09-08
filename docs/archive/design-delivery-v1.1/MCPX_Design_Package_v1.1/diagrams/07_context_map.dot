@@ -1,0 +1,27 @@
+digraph G {
+graph [bgcolor="white",rankdir=TB,pad="0.3",nodesep="0.35",ranksep="0.55",dpi=150];
+node [shape=box,style="rounded,filled",fontname="Noto Sans CJK SC",fontsize=16,margin="0.15,0.12",color="#BACCD6",fillcolor="#F1F5F8"];
+edge [fontname="Noto Sans CJK SC",fontsize=11,color="#648294",arrowsize=0.75];
+supply[label="supply\n供应商 / 插件 / 部署"];
+catalog[label="catalog\n工具 / 能力合同"];
+dist[label="distribution\n工具集 / 发布快照"];
+identity[label="identity\n身份 / 租户 / Key"];
+gov[label="governance\n策略 / 审批 / 审计"];
+conn[label="connections\n授权连接 / 秘密引用"];
+exec[label="execution\nRun / Attempt / 产物",fillcolor="#E5F2F1"];
+commerce[label="commerce\n价格 / 预算 / 计量 / 结算",fillcolor="#E5F2F1"];
+process[label="admission 流程协调\n不是第九个业务上下文",fillcolor="#FFF6E6"];
+supply->catalog[label="Provider 投影"];
+catalog->dist[label="版本合同"];
+dist->process[label="绑定快照"];
+identity->process[label="主体事实"];
+gov->process[label="策略决议"];
+conn->exec[label="受控连接"];
+process->exec[label="创建 Run"];
+process->commerce[label="预算预留"];
+exec->commerce[label="执行事实",style=dashed];
+{rank=same;identity;dist;gov;}
+{rank=same;exec;commerce;}
+note[label="箭头表示主要业务合同关系；省略部分审计与查询连接\n同库原子受理由 ADR-020 约束，不允许跨域直接写表",shape=note,fontsize=13,fillcolor="#FAFAFA"];
+exec->note[style=invis];commerce->note[style=invis];
+}

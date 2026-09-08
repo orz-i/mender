@@ -1,0 +1,18 @@
+digraph G {
+graph [bgcolor="white", pad="0.25", nodesep="0.28", ranksep="0.45", dpi=160];
+node [shape=box, style="rounded,filled", color="#BCCAD4", fillcolor="#F6F8FA", fontname="Noto Sans CJK SC", fontsize=15, margin="0.18,0.12", penwidth=1.2];
+edge [color="#708494", penwidth=1.2, arrowsize=0.75, fontname="Noto Sans CJK SC", fontsize=11];
+
+rankdir=TB;
+queued[label="queued\n已受理"];
+running[label="running\n执行中",fillcolor="#E7F2F2"];
+waiting[label="waiting_input\n等待结构化输入"];
+cancel[label="cancel_requested\n尚未确认停止"];
+recon[label="reconciling\n外部结果不明",fillcolor="#FFF0E7"];
+success[label="succeeded / failed\n明确完成结果"];
+terminal[label="canceled / timed_out\n确认取消或安全终止"];
+queued->running;queued->terminal[label="未提交即取消 / 超时"];
+running->waiting;waiting->running[label="授权后继续"];running->cancel;waiting->cancel;
+running->success;running->recon;cancel->terminal;cancel->recon;cancel->success[label="竞态：已完成"];
+recon->success[label="确认 / 裁决"];recon->terminal[label="确认停止"];
+}
