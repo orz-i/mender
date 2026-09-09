@@ -1,20 +1,15 @@
-# Mender 合同设计样例
+# Mender 接口合同
 
-来源：设计交付包 v1.1。展示标题已统一为 Mender，业务字段、插件版本、媒体类型、示例 Schema URL 和制品摘要保持原设计语义。历史协议标识的保留原因见 [更名记录](../docs/decisions/0001-project-name.md)。
+API、插件、工具和事件的设计合同，供接口评审与实现使用。业务接口尚在开发中。
 
-- `public-api.openapi.yaml`：OpenAPI 3.1 消费 API 设计子集，不含完整 Console／Admin API，也不是 MCP wire schema。
-- `plugin-manifest.*`：声明式 HTTP 插件设计合同，含本地制品 SHA-256。
-- `tool.example.json`、`http-executor.example.json`、`connection-*`：工具映射和引用凭据配置。
-- `event-envelope.schema.json`、`event.example.json`：平台业务事件设计，不是 MCP 协议通知。
+| 文件 | 内容 |
+| --- | --- |
+| [public-api.openapi.yaml](public-api.openapi.yaml) | OpenAPI 3.1 消费 API，覆盖工具发现与任务执行 |
+| [plugin-manifest.schema.json](plugin-manifest.schema.json) | 声明式插件清单与制品摘要约束 |
+| [tool.example.json](tool.example.json) · [http-executor.example.json](http-executor.example.json) | 工具定义与 HTTP 执行映射 |
+| [connection-config.schema.json](connection-config.schema.json) · [connection-ui.example.json](connection-ui.example.json) | 授权连接配置与表单描述 |
+| [event-envelope.schema.json](event-envelope.schema.json) · [event.example.json](event.example.json) | 平台业务事件结构与样例 |
 
-在仓库根执行：
+在仓库根运行 `pnpm check:contracts`，校验 Schema、样例、制品摘要、OpenAPI 引用和操作定义。独立 Python 校验器 `validate_contracts.py` 需要 PyYAML 与 jsonschema。
 
-```sh
-pnpm check:contracts
-```
-
-Node 校验使用锁定的 Ajv 2020／ajv-formats／YAML，复核 Schema、代表性样例、制品摘要、受限本地引用、OpenAPI 操作编号与路径参数。保留的 `validate_contracts.py` 是历史校验器的更名副本，若单独使用需要 Python、PyYAML 和 jsonschema；它不是当前 CI 的运行依赖。
-
-这些合同对应的业务接口尚未实现。当前 API 只有 `/healthz` 与 `/readyz`，记录于 [开发指南](../docs/engineering/development.md)。本目录校验不替代完整 OpenAPI 校验、协议一致性、安全测试、并发资金验证或真实供应商集成。
-
-示例不包含真实凭据，`example.test` 不是实际供应商。将来生成业务 API 客户端时应记录生成器精确版本和再生成命令，再接入生成漂移检查。
+示例使用 `example.test` 和凭据引用，不含真实密钥。当前可运行的 API 见[开发指南](../docs/engineering/development.md)。

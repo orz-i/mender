@@ -1,5 +1,5 @@
 {
-  "apiVersion": "mcpx.io/plugin/v1alpha1",
+  "apiVersion": "mender.io/plugin/v1alpha1",
   "plugin_id": "example.company-search",
   "version": "1.0.0",
   "kind": "declarative-http",
@@ -9,7 +9,7 @@
   },
   "artifact": {
     "file": "http-executor.example.json",
-    "media_type": "application/vnd.mcpx.declarative+json",
+    "media_type": "application/vnd.mender.declarative+json",
     "sha256": "9b0e9ff5ac54fc268dd2b05407079b70635e6cd718fa9049b5fd69efe677c14b"
   },
   "config_schema_file": "connection-config.schema.json",

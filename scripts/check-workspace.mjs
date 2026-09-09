@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
-import { basename, join, relative, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
 import { readJSON, walkFiles } from './lib/files.mjs';
@@ -36,7 +36,7 @@ for (const { manifest } of packages) {
   }
 }
 const forbidden = new Set(['package-lock.json', 'npm-shrinkwrap.json', 'yarn.lock', 'bun.lock', 'bun.lockb']);
-const files = walkFiles(root).filter((path) => !relative(root, path).replaceAll('\\', '/').startsWith('docs/archive/'));
+const files = walkFiles(root);
 assert.deepEqual(files.filter((path) => basename(path) === 'pnpm-lock.yaml'), [resolve(root, 'pnpm-lock.yaml')], 'Only the root pnpm lockfile is allowed');
 assert.deepEqual(files.filter((path) => forbidden.has(basename(path))), [], 'Unexpected package manager lockfile');
 console.log(`PASS: ${packages.length} private workspace packages, workspace: dependencies, required scripts and one lockfile`);

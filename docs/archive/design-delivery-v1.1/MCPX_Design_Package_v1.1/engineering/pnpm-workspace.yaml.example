@@ -1,5 +1,0 @@
-# 设计模板；需按最终选定 pnpm 版本验证。
-packages:
-  - 'frontend/apps/*'
-  - 'frontend/packages/*'
-sharedWorkspaceLockfile: true

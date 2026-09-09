@@ -7,7 +7,7 @@
 | `pnpm check` | 下列必要检查和构建的聚合入口，任一失败即停止 |
 | `pnpm check:toolchain` | Node／pnpm／Go 精确版本与清单一致 |
 | `pnpm check:workspace` | 必需包、scripts、workspace: 依赖、唯一锁文件 |
-| `pnpm check:docs` | 原始 SHA-256、计划计数／引用、当前 Markdown 本地链接 |
+| `pnpm check:docs` | 计划计数、任务引用和 Markdown 本地链接 |
 | `pnpm check:contracts` | Schema、样例、制品摘要、OpenAPI 结构 |
 | `pnpm lint` | JS／TS／React 语法和基础规则 |
 | `pnpm typecheck` | 工作区严格 TypeScript 检查 |

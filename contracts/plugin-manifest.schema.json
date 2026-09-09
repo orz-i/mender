@@ -16,7 +16,7 @@
   ],
   "properties": {
     "apiVersion": {
-      "const": "mcpx.io/plugin/v1alpha1"
+      "const": "mender.io/plugin/v1alpha1"
     },
     "plugin_id": {
       "type": "string",
@@ -62,7 +62,7 @@
           "minLength": 1
         },
         "media_type": {
-          "const": "application/vnd.mcpx.declarative+json"
+          "const": "application/vnd.mender.declarative+json"
         },
         "sha256": {
           "type": "string",
@@ -180,6 +180,6 @@
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.example.test/mcpx/plugin-manifest-v1alpha1.json",
+  "$id": "https://schemas.example.test/mender/plugin-manifest-v1alpha1.json",
   "title": "Mender PluginManifest v1alpha1 — design sample"
 }

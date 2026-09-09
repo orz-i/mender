@@ -3453,5 +3453,5 @@
     ]
   ],
   "project_name": "Mender",
-  "baseline_notice": "从设计包 v1.1 导入的计划基线；任务状态未因仓库初始化而改为完成。当前实施证据见 docs/engineering/initialization-report.md。"
+  "baseline_notice": "设计基线 v1.1；任务状态以验收证据为准。当前工程进展见 docs/engineering/initialization-report.md。"
 }

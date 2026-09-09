@@ -1,9 +1,0 @@
-{
-  "status": "G0_to_confirm",
-  "package_manager": "pnpm",
-  "pnpm_exact_version": null,
-  "node_exact_version": null,
-  "go_exact_version": null,
-  "approval_reference": null,
-  "verification_evidence": null
-}
