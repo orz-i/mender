@@ -3,30 +3,35 @@ package domain
 import (
 	"errors"
 	"time"
+	"unicode/utf8"
 )
 
 type JobState string
 
 const (
-	JobBlocked  JobState = "blocked"
-	JobQueued   JobState = "queued"
-	JobLeased   JobState = "leased"
-	JobCanceled JobState = "canceled"
+	JobBlocked     JobState = "blocked"
+	JobQueued      JobState = "queued"
+	JobLeased      JobState = "leased"
+	JobReconciling JobState = "reconciling"
+	JobCanceled    JobState = "canceled"
 )
 
 const (
-	BlockExecutorNotConfigured = "executor_not_configured"
-	BlockAttemptLimitReached   = "attempt_limit_reached"
+	BlockExecutorNotConfigured    = "executor_not_configured"
+	BlockAttemptLimitReached      = "attempt_limit_reached"
+	BlockSubmissionOutcomeUnknown = "submission_outcome_unknown"
 )
 
 var (
-	ErrInvalidJob     = errors.New("invalid execution job")
-	ErrJobState       = errors.New("invalid execution job transition")
-	ErrLeaseLost      = errors.New("execution job lease lost")
-	ErrLeaseExpired   = errors.New("execution job lease expired")
-	ErrAttemptLimit   = errors.New("execution job attempt limit reached")
-	ErrInvalidWorker  = errors.New("invalid worker identifier")
-	ErrInvalidJobTime = errors.New("invalid execution job time")
+	ErrInvalidJob        = errors.New("invalid execution job")
+	ErrJobState          = errors.New("invalid execution job transition")
+	ErrLeaseLost         = errors.New("execution job lease lost")
+	ErrLeaseExpired      = errors.New("execution job lease expired")
+	ErrAttemptLimit      = errors.New("execution job attempt limit reached")
+	ErrInvalidWorker     = errors.New("invalid worker identifier")
+	ErrInvalidJobTime    = errors.New("invalid execution job time")
+	ErrSubmissionState   = errors.New("invalid supplier submission transition")
+	ErrInvalidSubmission = errors.New("invalid supplier submission facts")
 )
 
 type LeaseToken struct {
@@ -72,6 +77,10 @@ func RestoreJob(s JobSnapshot) (Job, error) {
 		}
 	case JobLeased:
 		if s.BlockedReason != "" || !validID(s.LeaseOwner) || !validJobTime(s.LeaseUntil) || !s.LeaseUntil.After(s.UpdatedAt) || s.LeaseGeneration == 0 || s.AttemptCount == 0 || !s.StoppedAt.IsZero() {
+			return Job{}, ErrInvalidJob
+		}
+	case JobReconciling:
+		if s.BlockedReason != BlockSubmissionOutcomeUnknown || s.LeaseOwner != "" || !s.LeaseUntil.IsZero() || s.AttemptCount == 0 || s.LeaseGeneration == 0 || !s.StoppedAt.IsZero() {
 			return Job{}, ErrInvalidJob
 		}
 	case JobCanceled:
@@ -245,41 +254,246 @@ func (j *Job) RecoverExpired(at time.Time) error {
 	return nil
 }
 
+func (j *Job) moveToSubmissionReconciliation(at time.Time) {
+	j.snapshot.State = JobReconciling
+	j.snapshot.BlockedReason = BlockSubmissionOutcomeUnknown
+	j.snapshot.LeaseOwner = ""
+	j.snapshot.LeaseUntil = time.Time{}
+	j.snapshot.AvailableAt = at.UTC()
+	j.snapshot.UpdatedAt = at.UTC()
+}
+
+// MarkSubmissionUnknown is used by the current lease owner after an attempted
+// supplier call has an indeterminate result. It consumes the lease locally and
+// makes the Job non-leaseable until a reconciliation use case resolves it.
+func (j *Job) MarkSubmissionUnknown(token LeaseToken, at time.Time) error {
+	if err := j.checkTime(at); err != nil {
+		return err
+	}
+	if j.snapshot.State != JobLeased || !j.matches(token) {
+		return ErrLeaseLost
+	}
+	if !at.Before(j.snapshot.LeaseUntil) {
+		return ErrLeaseExpired
+	}
+	j.moveToSubmissionReconciliation(at)
+	return nil
+}
+
+// RecoverSubmissionUnknown is the crash-recovery counterpart. A submitting or
+// submitted Attempt must never be requeued after its lease expires.
+func (j *Job) RecoverSubmissionUnknown(at time.Time) error {
+	if err := j.checkTime(at); err != nil {
+		return err
+	}
+	if j.snapshot.State != JobLeased {
+		return ErrJobState
+	}
+	if at.Before(j.snapshot.LeaseUntil) {
+		return ErrLeaseExpired
+	}
+	j.moveToSubmissionReconciliation(at)
+	return nil
+}
+
 type AttemptState string
 
 const (
-	AttemptLeased   AttemptState = "leased"
-	AttemptReleased AttemptState = "released"
-	AttemptExpired  AttemptState = "expired"
+	AttemptLeased     AttemptState = "leased"
+	AttemptReleased   AttemptState = "released"
+	AttemptExpired    AttemptState = "expired"
+	AttemptSubmitting AttemptState = "submitting"
+	AttemptSubmitted  AttemptState = "submitted"
+	AttemptUnknown    AttemptState = "unknown"
 )
 
 type AttemptSnapshot struct {
-	WorkspaceID     WorkspaceID
-	RunID           RunID
-	AttemptNo       uint32
-	LeaseGeneration uint64
-	LeaseOwner      string
-	State           AttemptState
-	LeasedAt        time.Time
-	LeaseUntil      time.Time
-	FinishedAt      time.Time
+	WorkspaceID        WorkspaceID
+	RunID              RunID
+	AttemptNo          uint32
+	LeaseGeneration    uint64
+	LeaseOwner         string
+	State              AttemptState
+	LeasedAt           time.Time
+	LeaseUntil         time.Time
+	FinishedAt         time.Time
+	SubmissionKey      string
+	SubmissionIntentAt time.Time
+	ProviderRequestID  string
+	ExternalTaskID     string
+	SubmittedAt        time.Time
+	UnknownAt          time.Time
+	UnknownReason      string
 }
 
-func ValidateAttempt(a AttemptSnapshot) error {
+type Attempt struct{ snapshot AttemptSnapshot }
+
+func validSubmissionKey(v string) bool {
+	if len(v) < 8 || len(v) > 200 {
+		return false
+	}
+	for _, c := range v {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '-' || c == '.' || c == ':') {
+			return false
+		}
+	}
+	return true
+}
+
+func validProviderValue(v string, required bool) bool {
+	if v == "" {
+		return !required
+	}
+	if len(v) > 512 || !utf8.ValidString(v) {
+		return false
+	}
+	for _, c := range v {
+		if c < 0x20 || c == 0x7f {
+			return false
+		}
+	}
+	return true
+}
+
+func validUnknownReason(v string) bool {
+	return v != "" && len(v) <= 500 && utf8.ValidString(v)
+}
+
+func RestoreAttempt(a AttemptSnapshot) (Attempt, error) {
 	if !a.WorkspaceID.IsValid() || !a.RunID.IsValid() || a.AttemptNo == 0 || uint64(a.AttemptNo) != a.LeaseGeneration || !validID(a.LeaseOwner) || !validJobTime(a.LeasedAt) || !validJobTime(a.LeaseUntil) || !a.LeaseUntil.After(a.LeasedAt) {
-		return ErrInvalidJob
+		return Attempt{}, ErrInvalidJob
 	}
 	switch a.State {
 	case AttemptLeased:
-		if !a.FinishedAt.IsZero() {
-			return ErrInvalidJob
+		if !a.FinishedAt.IsZero() || a.SubmissionKey != "" || !a.SubmissionIntentAt.IsZero() || a.ProviderRequestID != "" || a.ExternalTaskID != "" || !a.SubmittedAt.IsZero() || !a.UnknownAt.IsZero() || a.UnknownReason != "" {
+			return Attempt{}, ErrInvalidJob
 		}
 	case AttemptReleased, AttemptExpired:
-		if !validJobTime(a.FinishedAt) || a.FinishedAt.Before(a.LeasedAt) {
-			return ErrInvalidJob
+		if !validJobTime(a.FinishedAt) || a.FinishedAt.Before(a.LeasedAt) || a.SubmissionKey != "" || !a.SubmissionIntentAt.IsZero() || a.ProviderRequestID != "" || a.ExternalTaskID != "" || !a.SubmittedAt.IsZero() || !a.UnknownAt.IsZero() || a.UnknownReason != "" {
+			return Attempt{}, ErrInvalidJob
+		}
+	case AttemptSubmitting:
+		if !validSubmissionKey(a.SubmissionKey) || !validJobTime(a.SubmissionIntentAt) || a.SubmissionIntentAt.Before(a.LeasedAt) || !a.SubmissionIntentAt.Before(a.LeaseUntil) || a.ProviderRequestID != "" || a.ExternalTaskID != "" || !a.SubmittedAt.IsZero() || !a.UnknownAt.IsZero() || a.UnknownReason != "" || !a.FinishedAt.IsZero() {
+			return Attempt{}, ErrInvalidJob
+		}
+	case AttemptSubmitted:
+		if !validSubmissionKey(a.SubmissionKey) || !validJobTime(a.SubmissionIntentAt) || a.SubmissionIntentAt.Before(a.LeasedAt) || !a.SubmissionIntentAt.Before(a.LeaseUntil) || !validProviderValue(a.ProviderRequestID, true) || !validProviderValue(a.ExternalTaskID, false) || !validJobTime(a.SubmittedAt) || a.SubmittedAt.Before(a.SubmissionIntentAt) || !a.SubmittedAt.Before(a.LeaseUntil) || !a.UnknownAt.IsZero() || a.UnknownReason != "" || !a.FinishedAt.IsZero() {
+			return Attempt{}, ErrInvalidJob
+		}
+	case AttemptUnknown:
+		if !validSubmissionKey(a.SubmissionKey) || !validJobTime(a.SubmissionIntentAt) || a.SubmissionIntentAt.Before(a.LeasedAt) || !a.SubmissionIntentAt.Before(a.LeaseUntil) || !validProviderValue(a.ProviderRequestID, false) || !validProviderValue(a.ExternalTaskID, false) || (!a.SubmittedAt.IsZero() && (!validJobTime(a.SubmittedAt) || a.SubmittedAt.Before(a.SubmissionIntentAt) || !a.SubmittedAt.Before(a.LeaseUntil))) || !validJobTime(a.UnknownAt) || a.UnknownAt.Before(a.SubmissionIntentAt) || !validUnknownReason(a.UnknownReason) || !a.FinishedAt.Equal(a.UnknownAt) {
+			return Attempt{}, ErrInvalidJob
 		}
 	default:
-		return ErrInvalidJob
+		return Attempt{}, ErrInvalidJob
 	}
+	a.LeasedAt = a.LeasedAt.UTC()
+	a.LeaseUntil = a.LeaseUntil.UTC()
+	if !a.FinishedAt.IsZero() {
+		a.FinishedAt = a.FinishedAt.UTC()
+	}
+	if !a.SubmissionIntentAt.IsZero() {
+		a.SubmissionIntentAt = a.SubmissionIntentAt.UTC()
+	}
+	if !a.SubmittedAt.IsZero() {
+		a.SubmittedAt = a.SubmittedAt.UTC()
+	}
+	if !a.UnknownAt.IsZero() {
+		a.UnknownAt = a.UnknownAt.UTC()
+	}
+	return Attempt{snapshot: a}, nil
+}
+
+func ValidateAttempt(a AttemptSnapshot) error {
+	_, err := RestoreAttempt(a)
+	return err
+}
+
+func (a Attempt) Snapshot() AttemptSnapshot { return a.snapshot }
+
+func (a *Attempt) matches(token LeaseToken) bool {
+	return token.WorkspaceID == a.snapshot.WorkspaceID && token.RunID == a.snapshot.RunID && token.WorkerID == a.snapshot.LeaseOwner && token.Generation == a.snapshot.LeaseGeneration
+}
+
+func (a *Attempt) checkActive(token LeaseToken, at time.Time) error {
+	if !a.matches(token) {
+		return ErrLeaseLost
+	}
+	if !validJobTime(at) || at.Before(a.snapshot.LeasedAt) {
+		return ErrInvalidJobTime
+	}
+	if !at.Before(a.snapshot.LeaseUntil) {
+		return ErrLeaseExpired
+	}
+	return nil
+}
+
+func (a *Attempt) BeginSubmission(token LeaseToken, at time.Time, key string) error {
+	if err := a.checkActive(token, at); err != nil {
+		return err
+	}
+	if !validSubmissionKey(key) {
+		return ErrInvalidSubmission
+	}
+	if a.snapshot.State == AttemptSubmitting && a.snapshot.SubmissionKey == key {
+		return nil
+	}
+	if a.snapshot.State != AttemptLeased {
+		return ErrSubmissionState
+	}
+	a.snapshot.State = AttemptSubmitting
+	a.snapshot.SubmissionKey = key
+	a.snapshot.SubmissionIntentAt = at.UTC()
+	return nil
+}
+
+func (a *Attempt) MarkSubmitted(token LeaseToken, at time.Time, key, providerRequestID, externalTaskID string) error {
+	if err := a.checkActive(token, at); err != nil {
+		return err
+	}
+	if !validSubmissionKey(key) || !validProviderValue(providerRequestID, true) || !validProviderValue(externalTaskID, false) {
+		return ErrInvalidSubmission
+	}
+	if a.snapshot.State == AttemptSubmitted && a.snapshot.SubmissionKey == key && a.snapshot.ProviderRequestID == providerRequestID && a.snapshot.ExternalTaskID == externalTaskID {
+		return nil
+	}
+	if a.snapshot.State != AttemptSubmitting || a.snapshot.SubmissionKey != key || at.Before(a.snapshot.SubmissionIntentAt) {
+		return ErrSubmissionState
+	}
+	a.snapshot.State = AttemptSubmitted
+	a.snapshot.ProviderRequestID = providerRequestID
+	a.snapshot.ExternalTaskID = externalTaskID
+	a.snapshot.SubmittedAt = at.UTC()
+	return nil
+}
+
+func (a *Attempt) MarkUnknown(token LeaseToken, at time.Time, key, reason string) error {
+	if err := a.checkActive(token, at); err != nil {
+		return err
+	}
+	if !validSubmissionKey(key) || !validUnknownReason(reason) {
+		return ErrInvalidSubmission
+	}
+	if (a.snapshot.State != AttemptSubmitting && a.snapshot.State != AttemptSubmitted) || a.snapshot.SubmissionKey != key || at.Before(a.snapshot.SubmissionIntentAt) {
+		return ErrSubmissionState
+	}
+	a.snapshot.State = AttemptUnknown
+	a.snapshot.UnknownAt = at.UTC()
+	a.snapshot.UnknownReason = reason
+	a.snapshot.FinishedAt = at.UTC()
+	return nil
+}
+
+func (a *Attempt) RecoverUnknown(at time.Time, reason string) error {
+	if !validJobTime(at) || at.Before(a.snapshot.LeaseUntil) || !validUnknownReason(reason) {
+		return ErrInvalidSubmission
+	}
+	if a.snapshot.State != AttemptSubmitting && a.snapshot.State != AttemptSubmitted {
+		return ErrSubmissionState
+	}
+	a.snapshot.State = AttemptUnknown
+	a.snapshot.UnknownAt = at.UTC()
+	a.snapshot.UnknownReason = reason
+	a.snapshot.FinishedAt = at.UTC()
 	return nil
 }

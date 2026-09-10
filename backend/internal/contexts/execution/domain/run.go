@@ -20,6 +20,16 @@ func validID(id string) bool {
 	return true
 }
 
+// MarkSubmissionUnconfirmed covers the crash/timeout boundary after a durable
+// submission intent but before Mender can prove whether the supplier accepted
+// the request. It never claims the Run reached running first.
+func (r *Run) MarkSubmissionUnconfirmed(at time.Time) error {
+	if r.state == Queued {
+		return r.move(Reconciling, at, Queued)
+	}
+	return r.MarkOutcomeUnconfirmed(at)
+}
+
 func (id RunID) IsValid() bool       { return validID(string(id)) }
 func (id WorkspaceID) IsValid() bool { return validID(string(id)) }
 

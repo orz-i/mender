@@ -41,6 +41,57 @@ func TestJobLeaseLifecycleUsesMonotonicFencing(t *testing.T) {
 	}
 }
 
+func TestSubmissionAttemptRequiresCurrentFenceAndPreservesUnknownOutcome(t *testing.T) {
+	at := time.Date(2026, 9, 10, 10, 0, 0, 0, time.UTC)
+	token := LeaseToken{WorkspaceID: "ws_a", RunID: "run_submit", WorkerID: "worker_a", Generation: 1}
+	attempt, err := RestoreAttempt(AttemptSnapshot{WorkspaceID: token.WorkspaceID, RunID: token.RunID, AttemptNo: 1, LeaseGeneration: 1, LeaseOwner: token.WorkerID, State: AttemptLeased, LeasedAt: at, LeaseUntil: at.Add(time.Minute)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = attempt.BeginSubmission(token, at.Add(time.Second), "submit.run_submit.1"); err != nil {
+		t.Fatal(err)
+	}
+	stale := token
+	stale.Generation = 2
+	if err = attempt.MarkSubmitted(stale, at.Add(2*time.Second), "submit.run_submit.1", "request/1", "task/1"); !errors.Is(err, ErrLeaseLost) {
+		t.Fatal("stale fence recorded provider identifiers", err)
+	}
+	if err = attempt.MarkSubmitted(token, at.Add(2*time.Second), "submit.run_submit.1", "request/1", "task/1"); err != nil {
+		t.Fatal(err)
+	}
+	if attempt.Snapshot().State != AttemptSubmitted || attempt.Snapshot().ProviderRequestID != "request/1" {
+		t.Fatal(attempt.Snapshot())
+	}
+	if err = attempt.MarkUnknown(token, at.Add(3*time.Second), "submit.run_submit.1", "response outcome unknown"); err != nil {
+		t.Fatal(err)
+	}
+	if s := attempt.Snapshot(); s.State != AttemptUnknown || s.UnknownReason == "" || !s.FinishedAt.Equal(s.UnknownAt) {
+		t.Fatal(s)
+	}
+
+	crashed, err := RestoreAttempt(AttemptSnapshot{WorkspaceID: token.WorkspaceID, RunID: "run_crashed", AttemptNo: 1, LeaseGeneration: 1, LeaseOwner: token.WorkerID, State: AttemptSubmitting, LeasedAt: at, LeaseUntil: at.Add(time.Minute), SubmissionKey: "submit.run_crashed.1", SubmissionIntentAt: at.Add(time.Second)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = crashed.RecoverUnknown(at.Add(time.Minute), "lease expired after submission intent"); err != nil || crashed.Snapshot().State != AttemptUnknown {
+		t.Fatal(crashed.Snapshot(), err)
+	}
+}
+
+func TestQueuedRunCanEnterReconciliationWithoutClaimingRunning(t *testing.T) {
+	at := time.Date(2026, 9, 10, 10, 0, 0, 0, time.UTC)
+	run, err := NewQueuedRun("run_unknown", "ws_a", at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = run.MarkSubmissionUnconfirmed(at.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if s := run.Snapshot(); s.State != Reconciling || s.Version != 2 {
+		t.Fatal(s)
+	}
+}
+
 func TestJobRefusesEarlyRecoveryAndExhaustionReblocks(t *testing.T) {
 	at := time.Date(2026, 9, 10, 8, 0, 0, 0, time.UTC)
 	job, err := NewBlockedJob("ws_a", "run_a", at, 1)

@@ -68,6 +68,8 @@ Worker 租约控制使用独立角色：先由管理员执行 `pnpm db:grant-wor
 
 从 0006 升级到 0007 时，除了新建/授权 worker role，还要对既有 admission role 再执行一次 `pnpm db:grant-admission --role <role>`，以收窄历史整表 Job INSERT ACL；不应只迁移 schema 后直接重启 StartRun API。
 
+应用 `0008_supplier_submission.sql` 后，已有 worker role 必须再次执行 `pnpm db:grant-worker --role <role>`。应用层此时具备 durable intent、accepted provider IDs、unknown/reconciling 与 lease-expiry no-blind-retry 协议，但 `cmd/worker` 仍不会 activation/lease，也没有 HTTP/MCP/Agent supplier adapter；详情见 [供应商提交协议](2026-09-10-supplier-submission.md)。
+
 ## 构建与检查
 
 ```sh

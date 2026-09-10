@@ -81,7 +81,7 @@ VALUES($1,$2,'sa_worker','fixture_key_worker',$2||'_idem',repeat('a',64),'res_'|
 			`SELECT canonical_arguments FROM execution.run_admissions`,
 			`SELECT * FROM identity.api_keys`,
 			`SELECT * FROM commerce.budget_periods`,
-			`UPDATE execution.runs SET state='running'`,
+			`UPDATE execution.runs SET id='forbidden_rewrite'`,
 			`UPDATE execution.jobs SET max_attempts=99`,
 			`DELETE FROM execution.run_attempts`,
 		} {
@@ -202,5 +202,121 @@ VALUES($1,$2,'sa_worker','fixture_key_worker',$2||'_idem',repeat('a',64),'res_'|
 		}
 	})
 
-	t.Log("real PostgreSQL worker control verified: deployment/workspace activation, SKIP LOCKED single winner, Attempt bundle, heartbeat, release, expiry recovery, monotonic fencing, stale-worker rejection and least-privilege role")
+	t.Run("submission intent is durable before acceptance and accepted leases never blind-requeue", func(t *testing.T) {
+		seed("ws_submit", "run_submit_accepted", "deploy_submit_accepted", 20)
+		clock.at = at.Add(2 * time.Minute)
+		count, e := control.Activate(ctx, "ws_submit", []string{"deploy_submit_accepted"}, 1)
+		must(t, e)
+		if count != 1 {
+			t.Fatal("submission fixture not activated", count)
+		}
+		lease, e := control.LeaseOne(ctx, "ws_submit", "worker_submit_a", 30*time.Second)
+		must(t, e)
+		clock.at = clock.at.Add(time.Second)
+		intent, e := control.BeginSubmission(ctx, lease, "submit.run_submit_accepted.1")
+		must(t, e)
+		var attemptState, submissionKey, runState string
+		var intentAt time.Time
+		must(t, owner.QueryRow(ctx, `SELECT state,submission_key,submission_intent_at FROM execution.run_attempts WHERE workspace_id='ws_submit' AND run_id='run_submit_accepted' AND attempt_no=1`).Scan(&attemptState, &submissionKey, &intentAt))
+		must(t, owner.QueryRow(ctx, `SELECT state FROM execution.runs WHERE workspace_id='ws_submit' AND id='run_submit_accepted'`).Scan(&runState))
+		if attemptState != "submitting" || submissionKey != intent.Key || !intentAt.Equal(intent.IntentAt) || runState != "queued" {
+			t.Fatal("pre-submit intent bundle is not durable", attemptState, submissionKey, intentAt, runState, intent)
+		}
+
+		clock.at = clock.at.Add(time.Second)
+		record, e := control.RecordSubmitted(ctx, intent, "provider/request-accepted", "external/task-accepted")
+		must(t, e)
+		if record.Run.State != "running" || record.Attempt.State != "submitted" {
+			t.Fatal("accepted submission not reflected", record)
+		}
+		clock.at = clock.at.Add(time.Second)
+		replayed, e := control.RecordSubmitted(ctx, intent, "provider/request-accepted", "external/task-accepted")
+		must(t, e)
+		if replayed.Run.Version != record.Run.Version || !replayed.Attempt.SubmittedAt.Equal(record.Attempt.SubmittedAt) {
+			t.Fatal("accepted submission replay mutated facts", replayed, record)
+		}
+
+		clock.at = lease.LeaseUntil
+		recovered, e := control.RecoverExpired(ctx, "ws_submit", 10)
+		must(t, e)
+		if recovered != 1 {
+			t.Fatal("submitted lease did not enter reconciliation", recovered)
+		}
+		var jobState, providerRequestID, externalTaskID, unknownReason string
+		must(t, owner.QueryRow(ctx, `SELECT r.state,j.state,a.state,a.provider_request_id,a.external_task_id,a.unknown_reason FROM execution.runs r JOIN execution.jobs j ON (j.workspace_id,j.run_id)=(r.workspace_id,r.id) JOIN execution.run_attempts a ON (a.workspace_id,a.run_id,a.lease_generation)=(j.workspace_id,j.run_id,j.lease_generation) WHERE r.workspace_id='ws_submit' AND r.id='run_submit_accepted'`).Scan(&runState, &jobState, &attemptState, &providerRequestID, &externalTaskID, &unknownReason))
+		if runState != "reconciling" || jobState != "reconciling" || attemptState != "unknown" || providerRequestID != "provider/request-accepted" || externalTaskID != "external/task-accepted" || unknownReason == "" {
+			t.Fatal("accepted submission was blind-requeued or lost provider facts", runState, jobState, attemptState, providerRequestID, externalTaskID, unknownReason)
+		}
+		clock.at = clock.at.Add(time.Second)
+		if _, e = control.RecordSubmitted(ctx, intent, "provider/stale", "external/stale"); !errors.Is(e, runapp.ErrWorkerLeaseLost) {
+			t.Fatal("expired fencing token recorded a new provider result", e)
+		}
+	})
+
+	t.Run("submission timeout and crash after intent both reconcile without retry", func(t *testing.T) {
+		seed("ws_submit", "run_submit_unknown", "deploy_submit_unknown", 10)
+		clock.at = at.Add(3 * time.Minute)
+		count, e := control.Activate(ctx, "ws_submit", []string{"deploy_submit_unknown"}, 1)
+		must(t, e)
+		if count != 1 {
+			t.Fatal(count)
+		}
+		lease, e := control.LeaseOne(ctx, "ws_submit", "worker_submit_b", 30*time.Second)
+		must(t, e)
+		clock.at = clock.at.Add(time.Second)
+		intent, e := control.BeginSubmission(ctx, lease, "submit.run_submit_unknown.1")
+		must(t, e)
+		clock.at = clock.at.Add(time.Second)
+		record, e := control.RecordSubmissionUnknown(ctx, intent, "timeout waiting for supplier acknowledgement")
+		must(t, e)
+		if record.Run.State != "reconciling" || record.Attempt.State != "unknown" {
+			t.Fatal(record)
+		}
+		if _, e = control.LeaseOne(ctx, "ws_submit", "worker_should_not_retry", 30*time.Second); !errors.Is(e, runapp.ErrNoWork) {
+			t.Fatal("unknown submission became leaseable", e)
+		}
+
+		seed("ws_submit", "run_submit_crash", "deploy_submit_crash", 5)
+		clock.at = at.Add(4 * time.Minute)
+		count, e = control.Activate(ctx, "ws_submit", []string{"deploy_submit_crash"}, 1)
+		must(t, e)
+		if count != 1 {
+			t.Fatal(count)
+		}
+		crashLease, e := control.LeaseOne(ctx, "ws_submit", "worker_submit_crash", 30*time.Second)
+		must(t, e)
+		clock.at = clock.at.Add(time.Second)
+		crashIntent, e := control.BeginSubmission(ctx, crashLease, "submit.run_submit_crash.1")
+		must(t, e)
+		clock.at = crashLease.LeaseUntil
+		recovered, e := control.RecoverExpired(ctx, "ws_submit", 10)
+		must(t, e)
+		if recovered != 1 {
+			t.Fatal("crashed submission intent was not reconciled", recovered)
+		}
+		var runState, jobState, attemptState string
+		must(t, owner.QueryRow(ctx, `SELECT r.state,j.state,a.state FROM execution.runs r JOIN execution.jobs j ON (j.workspace_id,j.run_id)=(r.workspace_id,r.id) JOIN execution.run_attempts a ON (a.workspace_id,a.run_id,a.lease_generation)=(j.workspace_id,j.run_id,j.lease_generation) WHERE r.workspace_id='ws_submit' AND r.id='run_submit_crash'`).Scan(&runState, &jobState, &attemptState))
+		if runState != "reconciling" || jobState != "reconciling" || attemptState != "unknown" {
+			t.Fatal("expired submission intent was requeued", runState, jobState, attemptState)
+		}
+		clock.at = clock.at.Add(time.Second)
+		if _, e = control.RecordSubmitted(ctx, crashIntent, "provider/late", ""); !errors.Is(e, runapp.ErrWorkerLeaseLost) {
+			t.Fatal("late worker overwrote reconciled submission", e)
+		}
+	})
+
+	t.Run("database rejects a running admission without submitted attempt proof", func(t *testing.T) {
+		seed("ws_submit", "run_submit_tamper", "deploy_submit_tamper", 1)
+		_, e := owner.Exec(ctx, `UPDATE execution.runs SET state='running',version=2,updated_at=clock_timestamp() WHERE workspace_id='ws_submit' AND id='run_submit_tamper'`)
+		if e == nil {
+			t.Fatal("run reached running without a submitted attempt bundle")
+		}
+		var state string
+		must(t, owner.QueryRow(ctx, `SELECT state FROM execution.runs WHERE workspace_id='ws_submit' AND id='run_submit_tamper'`).Scan(&state))
+		if state != "queued" {
+			t.Fatal("failed submission proof left partial Run state", state)
+		}
+	})
+
+	t.Log("real PostgreSQL worker control verified: deployment/workspace activation, SKIP LOCKED single winner, durable submission intent, accepted/unknown reconciliation, no blind retry, Attempt bundle, heartbeat, monotonic fencing, stale-worker rejection and least-privilege role")
 }

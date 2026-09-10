@@ -7,8 +7,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// WorkerRole validates a dedicated local lease-control role. Supplier execution
-// will require a separately reviewed capability surface in a later phase.
+// WorkerRole validates a dedicated execution-control role. It may persist the
+// fenced supplier-submission protocol, but it cannot access supplier credentials
+// or any non-execution business schema.
 func WorkerRole(ctx context.Context, pool *pgxpool.Pool) error {
 	if pool == nil {
 		return errors.New("worker database unavailable")
@@ -25,6 +26,7 @@ func WorkerRole(ctx context.Context, pool *pgxpool.Pool) error {
 	err = pool.QueryRow(ctx, `SELECT has_table_privilege(current_user,'mender_meta.schema_migrations','SELECT')
 	 AND has_table_privilege(current_user,'execution.jobs','SELECT')
 	 AND has_table_privilege(current_user,'execution.run_attempts','SELECT')
+	 AND has_table_privilege(current_user,'execution.runs','SELECT')
 	 AND has_column_privilege(current_user,'execution.run_admissions','workspace_id','SELECT')
 	 AND has_column_privilege(current_user,'execution.run_admissions','run_id','SELECT')
 	 AND has_column_privilege(current_user,'execution.run_admissions','deployment_revision','SELECT')
@@ -39,7 +41,18 @@ func WorkerRole(ctx context.Context, pool *pgxpool.Pool) error {
 	 AND has_table_privilege(current_user,'execution.run_attempts','INSERT')
 	 AND has_column_privilege(current_user,'execution.run_attempts','state','UPDATE')
 	 AND has_column_privilege(current_user,'execution.run_attempts','lease_until','UPDATE')
-	 AND has_column_privilege(current_user,'execution.run_attempts','finished_at','UPDATE')`).Scan(&ok)
+	 AND has_column_privilege(current_user,'execution.run_attempts','finished_at','UPDATE')
+	 AND has_column_privilege(current_user,'execution.run_attempts','submission_key','UPDATE')
+	 AND has_column_privilege(current_user,'execution.run_attempts','submission_intent_at','UPDATE')
+	 AND has_column_privilege(current_user,'execution.run_attempts','provider_request_id','UPDATE')
+	 AND has_column_privilege(current_user,'execution.run_attempts','external_task_id','UPDATE')
+	 AND has_column_privilege(current_user,'execution.run_attempts','submitted_at','UPDATE')
+	 AND has_column_privilege(current_user,'execution.run_attempts','unknown_at','UPDATE')
+	 AND has_column_privilege(current_user,'execution.run_attempts','unknown_reason','UPDATE')
+	 AND has_column_privilege(current_user,'execution.runs','state','UPDATE')
+	 AND has_column_privilege(current_user,'execution.runs','version','UPDATE')
+	 AND has_column_privilege(current_user,'execution.runs','updated_at','UPDATE')
+	 AND has_table_privilege(current_user,'execution.run_events','INSERT')`).Scan(&ok)
 	if err != nil || !ok {
 		return errors.New("worker role grants are invalid")
 	}
@@ -56,10 +69,16 @@ func WorkerRole(ctx context.Context, pool *pgxpool.Pool) error {
 			return errors.New("worker role exposes admission data")
 		}
 	}
-	for _, table := range []string{"execution.runs", "execution.run_events", "execution.outbox", "execution.run_cancellations"} {
+	for _, table := range []string{"execution.outbox", "execution.run_cancellations"} {
 		if err = pool.QueryRow(ctx, `SELECT has_table_privilege(current_user,$1,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') OR has_any_column_privilege(current_user,$1,'SELECT,INSERT,UPDATE')`, table).Scan(&unsafe); err != nil || unsafe {
 			return errors.New("worker role has unrelated data access: " + table)
 		}
+	}
+	if err = pool.QueryRow(ctx, `SELECT has_table_privilege(current_user,'execution.runs','INSERT,DELETE,TRUNCATE') OR has_column_privilege(current_user,'execution.runs','workspace_id','UPDATE') OR has_column_privilege(current_user,'execution.runs','id','UPDATE') OR has_column_privilege(current_user,'execution.runs','created_at','UPDATE')`).Scan(&unsafe); err != nil || unsafe {
+		return errors.New("worker role can rewrite immutable Run fields")
+	}
+	if err = pool.QueryRow(ctx, `SELECT NOT has_table_privilege(current_user,'execution.run_events','INSERT') OR has_table_privilege(current_user,'execution.run_events','SELECT,UPDATE,DELETE,TRUNCATE')`).Scan(&unsafe); err != nil || unsafe {
+		return errors.New("worker event grants are invalid")
 	}
 	for _, column := range []string{"priority", "max_attempts", "created_at", "stopped_at", "run_id", "workspace_id"} {
 		if err = pool.QueryRow(ctx, `SELECT has_column_privilege(current_user,'execution.jobs',$1,'UPDATE')`, column).Scan(&unsafe); err != nil || unsafe {
@@ -72,8 +91,8 @@ func WorkerRole(ctx context.Context, pool *pgxpool.Pool) error {
 		}
 	}
 	var rls int
-	err = pool.QueryRow(ctx, `SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='execution' AND c.relname IN('jobs','run_attempts','run_admissions') AND c.relrowsecurity AND c.relforcerowsecurity`).Scan(&rls)
-	if err != nil || rls != 3 {
+	err = pool.QueryRow(ctx, `SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='execution' AND c.relname IN('runs','run_events','jobs','run_attempts','run_admissions') AND c.relrowsecurity AND c.relforcerowsecurity`).Scan(&rls)
+	if err != nil || rls != 5 {
 		return errors.New("worker RLS safeguards missing")
 	}
 	return nil

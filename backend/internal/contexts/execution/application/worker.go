@@ -20,7 +20,21 @@ type WorkerRepository interface {
 	Acquire(context.Context, domain.WorkspaceID, string, time.Time, time.Time) (domain.JobSnapshot, error)
 	Renew(context.Context, domain.LeaseToken, time.Time, time.Time) (domain.JobSnapshot, error)
 	ReleaseBeforeSubmit(context.Context, domain.LeaseToken, time.Time, time.Time) (domain.JobSnapshot, error)
+	BeginSubmission(context.Context, domain.LeaseToken, string, time.Time) (domain.AttemptSnapshot, error)
+	RecordSubmitted(context.Context, domain.LeaseToken, string, string, string, time.Time) (domain.Snapshot, domain.AttemptSnapshot, error)
+	RecordSubmissionUnknown(context.Context, domain.LeaseToken, string, string, time.Time) (domain.Snapshot, domain.AttemptSnapshot, error)
 	RecoverExpired(context.Context, domain.WorkspaceID, time.Time) (domain.JobSnapshot, bool, error)
+}
+
+type SubmissionIntent struct {
+	Lease    Lease
+	Key      string
+	IntentAt time.Time
+}
+
+type SubmissionRecord struct {
+	Run     domain.Snapshot
+	Attempt domain.AttemptSnapshot
 }
 
 type WorkerClock interface{ Now() time.Time }
@@ -68,7 +82,7 @@ func normalizeWorkerError(err error) error {
 		return nil
 	case errors.Is(err, domain.ErrLeaseLost), errors.Is(err, domain.ErrLeaseExpired):
 		return ErrWorkerLeaseLost
-	case errors.Is(err, domain.ErrInvalidJob), errors.Is(err, domain.ErrInvalidJobTime), errors.Is(err, domain.ErrInvalidWorker), errors.Is(err, domain.ErrJobState), errors.Is(err, domain.ErrAttemptLimit):
+	case errors.Is(err, domain.ErrInvalidJob), errors.Is(err, domain.ErrInvalidJobTime), errors.Is(err, domain.ErrInvalidWorker), errors.Is(err, domain.ErrJobState), errors.Is(err, domain.ErrAttemptLimit), errors.Is(err, domain.ErrSubmissionState), errors.Is(err, domain.ErrInvalidSubmission):
 		return ErrInvalidWorker
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded), errors.Is(err, ErrNoWork):
 		return err
@@ -173,6 +187,73 @@ func (s *WorkerControl) ReleaseBeforeSubmit(ctx context.Context, lease Lease, de
 	}
 	_, err = s.repo.ReleaseBeforeSubmit(ctx, lease.Token(), at, at.Add(delay))
 	return normalizeWorkerError(err)
+}
+
+func validLeaseIdentity(lease Lease) bool {
+	return lease.WorkspaceID.IsValid() && lease.RunID.IsValid() && validControlID(lease.WorkerID) && lease.Generation > 0 && lease.AttemptNo > 0 && uint64(lease.AttemptNo) == lease.Generation
+}
+
+func (s *WorkerControl) BeginSubmission(ctx context.Context, lease Lease, submissionKey string) (SubmissionIntent, error) {
+	if err := ctx.Err(); err != nil {
+		return SubmissionIntent{}, err
+	}
+	if !validLeaseIdentity(lease) {
+		return SubmissionIntent{}, ErrInvalidWorker
+	}
+	at, err := now(s.clock)
+	if err != nil {
+		return SubmissionIntent{}, err
+	}
+	attempt, err := s.repo.BeginSubmission(ctx, lease.Token(), submissionKey, at)
+	if err != nil {
+		return SubmissionIntent{}, normalizeWorkerError(err)
+	}
+	if err = domain.ValidateAttempt(attempt); err != nil || attempt.State != domain.AttemptSubmitting || attempt.SubmissionKey != submissionKey || attempt.LeaseGeneration != lease.Generation || attempt.LeaseOwner != lease.WorkerID {
+		return SubmissionIntent{}, ErrWorkerUnavailable
+	}
+	return SubmissionIntent{Lease: lease, Key: submissionKey, IntentAt: attempt.SubmissionIntentAt}, nil
+}
+
+func (s *WorkerControl) RecordSubmitted(ctx context.Context, intent SubmissionIntent, providerRequestID, externalTaskID string) (SubmissionRecord, error) {
+	if err := ctx.Err(); err != nil {
+		return SubmissionRecord{}, err
+	}
+	if !validLeaseIdentity(intent.Lease) || intent.Key == "" || intent.IntentAt.IsZero() {
+		return SubmissionRecord{}, ErrInvalidWorker
+	}
+	at, err := now(s.clock)
+	if err != nil {
+		return SubmissionRecord{}, err
+	}
+	run, attempt, err := s.repo.RecordSubmitted(ctx, intent.Lease.Token(), intent.Key, providerRequestID, externalTaskID, at)
+	if err != nil {
+		return SubmissionRecord{}, normalizeWorkerError(err)
+	}
+	if err = domain.ValidateAttempt(attempt); err != nil || attempt.State != domain.AttemptSubmitted || attempt.SubmissionKey != intent.Key || attempt.ProviderRequestID != providerRequestID || attempt.ExternalTaskID != externalTaskID || run.State != domain.Running || run.WorkspaceID != intent.Lease.WorkspaceID || run.ID != intent.Lease.RunID {
+		return SubmissionRecord{}, ErrWorkerUnavailable
+	}
+	return SubmissionRecord{Run: run, Attempt: attempt}, nil
+}
+
+func (s *WorkerControl) RecordSubmissionUnknown(ctx context.Context, intent SubmissionIntent, reason string) (SubmissionRecord, error) {
+	if err := ctx.Err(); err != nil {
+		return SubmissionRecord{}, err
+	}
+	if !validLeaseIdentity(intent.Lease) || intent.Key == "" || intent.IntentAt.IsZero() {
+		return SubmissionRecord{}, ErrInvalidWorker
+	}
+	at, err := now(s.clock)
+	if err != nil {
+		return SubmissionRecord{}, err
+	}
+	run, attempt, err := s.repo.RecordSubmissionUnknown(ctx, intent.Lease.Token(), intent.Key, reason, at)
+	if err != nil {
+		return SubmissionRecord{}, normalizeWorkerError(err)
+	}
+	if err = domain.ValidateAttempt(attempt); err != nil || attempt.State != domain.AttemptUnknown || attempt.SubmissionKey != intent.Key || run.State != domain.Reconciling || run.WorkspaceID != intent.Lease.WorkspaceID || run.ID != intent.Lease.RunID {
+		return SubmissionRecord{}, ErrWorkerUnavailable
+	}
+	return SubmissionRecord{Run: run, Attempt: attempt}, nil
 }
 
 func (s *WorkerControl) RecoverExpired(ctx context.Context, workspace domain.WorkspaceID, limit int) (int, error) {

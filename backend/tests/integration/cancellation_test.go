@@ -244,10 +244,48 @@ func exerciseCancellation(t *testing.T, ctx context.Context, owner, runtime, wri
 	t.Run("unsafe running and reconciling outcomes never release quota", func(t *testing.T) {
 		for i, phase := range []string{"running", "reconciling"} {
 			r := create(fmt.Sprintf("cancel_unsafe_%d", i))
-			// Fixture time must not precede the persisted host-generated revision when
-			// Docker's clock is behind. Keep the production monotonic-time constraint.
-			_, e := owner.Exec(ctx, `UPDATE execution.runs SET state=$1,version=2,updated_at=GREATEST(updated_at,clock_timestamp()) WHERE workspace_id=$2 AND id=$3`, phase, r.WorkspaceID, r.RunID)
+			leaseAt := time.Now().UTC().Truncate(time.Microsecond).Add(time.Second)
+			leaseUntil := leaseAt.Add(time.Hour)
+			intentAt := leaseAt.Add(time.Second)
+			submittedAt := leaseAt.Add(2 * time.Second)
+			submissionKey := fmt.Sprintf("submit.cancel_unsafe_%d.1", i)
+			tx, e := owner.Begin(ctx)
 			must(t, e)
+			_, e = tx.Exec(ctx, `UPDATE execution.jobs SET state='leased',blocked_reason=NULL,available_at=$1,lease_owner='worker_cancel_fixture',lease_until=$2,lease_generation=1,attempt_count=1,updated_at=$1 WHERE workspace_id=$3 AND run_id=$4`, leaseAt, leaseUntil, r.WorkspaceID, r.RunID)
+			if e == nil {
+				_, e = tx.Exec(ctx, `INSERT INTO execution.run_attempts(workspace_id,run_id,attempt_no,lease_generation,lease_owner,state,leased_at,lease_until,submission_key,submission_intent_at,provider_request_id,submitted_at) VALUES($1,$2,1,1,'worker_cancel_fixture','submitted',$3,$4,$5,$6,$7,$8)`, r.WorkspaceID, r.RunID, leaseAt, leaseUntil, submissionKey, intentAt, fmt.Sprintf("fixture/request-%d", i), submittedAt)
+			}
+			if e == nil {
+				_, e = tx.Exec(ctx, `UPDATE execution.runs SET state='running',version=2,updated_at=$1 WHERE workspace_id=$2 AND id=$3`, submittedAt, r.WorkspaceID, r.RunID)
+			}
+			if e == nil {
+				_, e = tx.Exec(ctx, `INSERT INTO execution.run_events(workspace_id,run_id,version,state,subject_id,credential_id,occurred_at,reason) VALUES($1,$2,2,'running','worker_cancel_fixture','lease_1',$3,'supplier submission accepted')`, r.WorkspaceID, r.RunID, submittedAt)
+			}
+			if e != nil {
+				_ = tx.Rollback(ctx)
+				t.Fatal(e)
+			}
+			must(t, tx.Commit(ctx))
+			if phase == "reconciling" {
+				unknownAt := submittedAt.Add(time.Second)
+				tx, e = owner.Begin(ctx)
+				must(t, e)
+				_, e = tx.Exec(ctx, `UPDATE execution.run_attempts SET state='unknown',finished_at=$1,unknown_at=$1,unknown_reason='fixture submission outcome unknown' WHERE workspace_id=$2 AND run_id=$3 AND attempt_no=1`, unknownAt, r.WorkspaceID, r.RunID)
+				if e == nil {
+					_, e = tx.Exec(ctx, `UPDATE execution.jobs SET state='reconciling',blocked_reason='submission_outcome_unknown',lease_owner=NULL,lease_until=NULL,updated_at=$1 WHERE workspace_id=$2 AND run_id=$3`, unknownAt, r.WorkspaceID, r.RunID)
+				}
+				if e == nil {
+					_, e = tx.Exec(ctx, `UPDATE execution.runs SET state='reconciling',version=3,updated_at=$1 WHERE workspace_id=$2 AND id=$3`, unknownAt, r.WorkspaceID, r.RunID)
+				}
+				if e == nil {
+					_, e = tx.Exec(ctx, `INSERT INTO execution.run_events(workspace_id,run_id,version,state,subject_id,credential_id,occurred_at,reason) VALUES($1,$2,3,'reconciling','worker_cancel_fixture','lease_1',$3,'fixture submission outcome unknown')`, r.WorkspaceID, r.RunID, unknownAt)
+				}
+				if e != nil {
+					_ = tx.Rollback(ctx)
+					t.Fatal(e)
+				}
+				must(t, tx.Commit(ctx))
+			}
 			before := state(r)
 			v, e := cancelService.Cancel(ctx, caller, r.RunID, "must not release")
 			if !errors.Is(e, admit.ErrCancelUnsafe) || v.Found {

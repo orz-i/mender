@@ -16,10 +16,54 @@ func (c *workerClock) Now() time.Time { return c.at }
 
 type workerRepoFake struct {
 	job             domain.Job
+	run             domain.Run
+	attempt         *domain.Attempt
 	activateMatches int
 	lastRevisions   []string
 	recoveries      int
 	forceRenewErr   error
+}
+
+func TestWorkerControlPersistsSubmissionBoundaryBeforeOutcome(t *testing.T) {
+	control, repo, clock := newWorkerFixture(t)
+	if _, err := control.Activate(context.Background(), "ws_a", []string{"deploy_v1"}, 1); err != nil {
+		t.Fatal(err)
+	}
+	clock.at = clock.at.Add(time.Second)
+	lease, err := control.LeaseOne(context.Background(), "ws_a", "worker_a", 30*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock.at = clock.at.Add(time.Second)
+	intent, err := control.BeginSubmission(context.Background(), lease, "submit.run_a.1")
+	if err != nil || repo.attempt == nil || repo.attempt.Snapshot().State != domain.AttemptSubmitting {
+		t.Fatal(intent, err)
+	}
+	clock.at = clock.at.Add(time.Second)
+	record, err := control.RecordSubmitted(context.Background(), intent, "request/123", "task:abc")
+	if err != nil || record.Run.State != domain.Running || record.Attempt.State != domain.AttemptSubmitted {
+		t.Fatal(record, err)
+	}
+
+	control, repo, clock = newWorkerFixture(t)
+	if _, err = control.Activate(context.Background(), "ws_a", []string{"deploy_v1"}, 1); err != nil {
+		t.Fatal(err)
+	}
+	clock.at = clock.at.Add(time.Second)
+	lease, err = control.LeaseOne(context.Background(), "ws_a", "worker_b", 30*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock.at = clock.at.Add(time.Second)
+	intent, err = control.BeginSubmission(context.Background(), lease, "submit.run_a.2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock.at = clock.at.Add(time.Second)
+	record, err = control.RecordSubmissionUnknown(context.Background(), intent, "timeout waiting for supplier acknowledgement")
+	if err != nil || record.Run.State != domain.Reconciling || record.Attempt.State != domain.AttemptUnknown || repo.job.Snapshot().State != domain.JobReconciling {
+		t.Fatal(record, repo.job.Snapshot(), err)
+	}
 }
 
 func (r *workerRepoFake) ActivateOne(_ context.Context, _ domain.WorkspaceID, revisions []string, at time.Time) (bool, error) {
@@ -32,10 +76,17 @@ func (r *workerRepoFake) ActivateOne(_ context.Context, _ domain.WorkspaceID, re
 }
 
 func (r *workerRepoFake) Acquire(_ context.Context, _ domain.WorkspaceID, worker string, at, until time.Time) (domain.JobSnapshot, error) {
-	if _, err := r.job.Acquire(worker, at, until); err != nil {
+	token, err := r.job.Acquire(worker, at, until)
+	if err != nil {
 		return domain.JobSnapshot{}, err
 	}
-	return r.job.Snapshot(), nil
+	s := r.job.Snapshot()
+	attempt, err := domain.RestoreAttempt(domain.AttemptSnapshot{WorkspaceID: s.WorkspaceID, RunID: s.RunID, AttemptNo: s.AttemptCount, LeaseGeneration: token.Generation, LeaseOwner: worker, State: domain.AttemptLeased, LeasedAt: at, LeaseUntil: until})
+	if err != nil {
+		return domain.JobSnapshot{}, err
+	}
+	r.attempt = &attempt
+	return s, nil
 }
 
 func (r *workerRepoFake) Renew(_ context.Context, token domain.LeaseToken, at, until time.Time) (domain.JobSnapshot, error) {
@@ -46,6 +97,47 @@ func (r *workerRepoFake) Renew(_ context.Context, token domain.LeaseToken, at, u
 		return domain.JobSnapshot{}, err
 	}
 	return r.job.Snapshot(), nil
+}
+
+func (r *workerRepoFake) BeginSubmission(_ context.Context, token domain.LeaseToken, key string, at time.Time) (domain.AttemptSnapshot, error) {
+	if r.attempt == nil {
+		return domain.AttemptSnapshot{}, domain.ErrLeaseLost
+	}
+	if err := r.attempt.BeginSubmission(token, at, key); err != nil {
+		return domain.AttemptSnapshot{}, err
+	}
+	return r.attempt.Snapshot(), nil
+}
+
+func (r *workerRepoFake) RecordSubmitted(_ context.Context, token domain.LeaseToken, key, providerRequestID, externalTaskID string, at time.Time) (domain.Snapshot, domain.AttemptSnapshot, error) {
+	if r.attempt == nil {
+		return domain.Snapshot{}, domain.AttemptSnapshot{}, domain.ErrLeaseLost
+	}
+	if err := r.attempt.MarkSubmitted(token, at, key, providerRequestID, externalTaskID); err != nil {
+		return domain.Snapshot{}, domain.AttemptSnapshot{}, err
+	}
+	if r.run.Snapshot().State == domain.Queued {
+		if err := r.run.Start(at); err != nil {
+			return domain.Snapshot{}, domain.AttemptSnapshot{}, err
+		}
+	}
+	return r.run.Snapshot(), r.attempt.Snapshot(), nil
+}
+
+func (r *workerRepoFake) RecordSubmissionUnknown(_ context.Context, token domain.LeaseToken, key, reason string, at time.Time) (domain.Snapshot, domain.AttemptSnapshot, error) {
+	if r.attempt == nil {
+		return domain.Snapshot{}, domain.AttemptSnapshot{}, domain.ErrLeaseLost
+	}
+	if err := r.attempt.MarkUnknown(token, at, key, reason); err != nil {
+		return domain.Snapshot{}, domain.AttemptSnapshot{}, err
+	}
+	if err := r.job.MarkSubmissionUnknown(token, at); err != nil {
+		return domain.Snapshot{}, domain.AttemptSnapshot{}, err
+	}
+	if err := r.run.MarkSubmissionUnconfirmed(at); err != nil {
+		return domain.Snapshot{}, domain.AttemptSnapshot{}, err
+	}
+	return r.run.Snapshot(), r.attempt.Snapshot(), nil
 }
 
 func (r *workerRepoFake) ReleaseBeforeSubmit(_ context.Context, token domain.LeaseToken, at, availableAt time.Time) (domain.JobSnapshot, error) {
@@ -73,7 +165,11 @@ func newWorkerFixture(t *testing.T) (*application.WorkerControl, *workerRepoFake
 	if err != nil {
 		t.Fatal(err)
 	}
-	repo := &workerRepoFake{job: job, activateMatches: 1}
+	run, err := domain.NewQueuedRun("run_a", "ws_a", at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo := &workerRepoFake{job: job, run: run, activateMatches: 1}
 	clock := &workerClock{at: at.Add(time.Second)}
 	control, err := application.NewWorkerControl(repo, clock)
 	if err != nil {
