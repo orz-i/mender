@@ -7,19 +7,26 @@ import (
 	"net/http"
 	"os"
 	"time"
-
-	"github.com/orz-i/mender/backend/internal/platform/httpserver"
 )
 
-// RunAPI is the composition root for the API process. It exposes probes only.
+// RunAPI starts probes and only explicitly enabled, authenticated business routes.
 func RunAPI(ctx context.Context, logger *slog.Logger) error {
+	config, err := LoadAPIConfig(os.Getenv)
+	if err != nil {
+		return err
+	}
+	handler, closeResources, err := BuildAPI(ctx, config)
+	if err != nil {
+		return err
+	}
+	defer closeResources()
 	address := os.Getenv("MENDER_HTTP_ADDR")
 	if address == "" {
 		address = "127.0.0.1:18080"
 	}
 	server := &http.Server{
 		Addr:              address,
-		Handler:           httpserver.NewRouter(),
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,

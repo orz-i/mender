@@ -2,13 +2,20 @@
 
 ## 当前实现
 
+2026-09-10 更新：已新增带预留任务的协调取消与原周期额度释放。独立开关、取消角色、真实验证与当前边界以[阶段五收尾记录](2026-09-10-coordinated-cancellation.md)为准；下方早期记录不代表最新能力仍缺失。
+
+Docker／专用测试环境阻塞已解除：用户完成隔离 PostgreSQL 测试，本轮也在当前工作树复核通过。新增内部原子受理、commerce 额度预留，以及同事务 Run／blocked Job／Outbox，见 [原子受理记录](2026-09-09-atomic-admission.md)。没有公共创建、实际收费或 Worker 执行入口；Run 列表仍需独立开关和安全注入的签名密钥。
+
 - Go API 与 Worker，显式 bootstrap 和 8 个候选领域上下文。
 - Console、Admin 两个 React 入口，包含首页、服务状态查询、失败重试和未知路由恢复。
 - pnpm workspace，共享 UI、API client 和 TypeScript 配置；前后端使用固定工具链与依赖锁文件。
 - GitHub Actions 基础 CI，以及工具链、工作区、文档、合同、代码和构建检查。
+- Go／TypeScript 源码依赖边界检查接入 `pnpm check`，有正向和故意违规测试；尚不涵盖完整语义纯度或数据库所有权。
+- execution 的 Run 聚合、授权前置的查询／取消用例、消费方端口与仅测试编译的内存仓储。
+- identity 机器 Key／Workspace scope、PostgreSQL 出站仓储、迁移／操作员命令，以及显式开关启用的受保护 Run 查询／取消适配。
 - v1.1 产品设计、实施计划、工程规范、架构图与任务台账。
 
-API 的 `/healthz` 返回 `200`；`/readyz` 返回 `503 not_ready`；业务路由尚未开放。Worker 等待终止信号，任务消费尚未实现。
+默认 API 仍为 probes-only：`/healthz` 为 `200`、`/readyz` 为 `503`、业务路由为 `404`。开启 Run 子集需真实数据库、匹配迁移和受限角色；成功后的 readiness 仅覆盖已启用的查询能力，不代表商业平台就绪。真实数据库验证只在套件自有的临时资源上运行，未启用公网服务。Worker 仍未消费任务；未开启协调取消时，旧路径继续拒绝单独修改带预留任务；开启后仅对有完整未执行证据的任务原子取消与释放。
 
 ## 验证记录
 
@@ -24,7 +31,7 @@ API 的 `/healthz` 返回 `200`；`/readyz` 返回 `503 not_ready`；业务路�
 
 ## 待实现
 
-身份认证、租户隔离、能力目录、授权连接、Run、可靠任务队列、MCP / Agent 适配、计费、审计和数据库迁移按[实施计划](../planning/README.md)推进。
+人类登录／OIDC、成员管理、真实能力目录与授权连接、创建权限／计价适配、执行中任务的上游取消、可执行 Worker、Outbox 投递、MCP／Agent、账本／结算和完整审计按[实施计划](../planning/README.md)推进。内部原子受理已通过本机真实 PostgreSQL 子集测试，但不等于完整业务入口或商业验收。前期 [execution 切片](2026-09-09-execution-foundation.md) 与 [身份持久化记录](2026-09-09-identity-postgres.md) 中的环境限制保留为历史证据，最新状态见本轮记录。
 
 | 任务 | 已有基础 | 后续验收重点 |
 | --- | --- | --- |

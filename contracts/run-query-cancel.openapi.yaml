@@ -1,0 +1,98 @@
+openapi: 3.1.0
+info:
+  title: Mender authenticated Run query and cancellation
+  version: 0.3.0
+  description: >-
+    Implemented adapter subset; default disabled. Requires migrated PostgreSQL and
+    a restricted runtime role. No Run creation, billing, OAuth login or worker execution
+    is implemented by this contract. A 202 cancellation response is intent only.
+    Coordinated cancellation is separately disabled by default and requires
+    MENDER_RUN_COORDINATED_CANCEL_ENABLED plus a distinct restricted cancellation
+    role in the same database. With it enabled, a provably unexecuted admitted Run
+    is atomically canceled with its blocked Job, quota reservation and events.
+    Repeated cancellation replays the persisted result without a second release.
+    Without the coordinator, attempts to mutate admitted Runs remain guarded by
+    409 ADMISSION_CANCEL_UNAVAILABLE. Quota release is not a payment refund.
+servers:
+  - url: /api/v1
+security:
+  - MachineKey: []
+paths:
+  /workspaces/{workspace_id}/runs/{run_id}:
+    parameters:
+      - {name: workspace_id, in: path, required: true, schema: {type: string, pattern: '^[A-Za-z0-9_-]{1,128}$'}}
+      - {name: run_id, in: path, required: true, schema: {type: string, pattern: '^[A-Za-z0-9_-]{1,128}$'}}
+    get:
+      operationId: getPersistedRun
+      responses:
+        '200': {description: Run snapshot, content: {application/json: {schema: {$ref: '#/components/schemas/RunResponse'}}}}
+        '401': {description: 'Missing, invalid, expired or revoked machine credential'}
+        '403': {description: Workspace or scope denied before Run lookup}
+        '404': {description: Run absent in the authorized Workspace}
+        '503': {description: Required identity or storage service unavailable}
+        '504': {description: Request timeout}
+  /workspaces/{workspace_id}/runs/{run_id}/cancel:
+    parameters:
+      - {name: workspace_id, in: path, required: true, schema: {type: string, pattern: '^[A-Za-z0-9_-]{1,128}$'}}
+      - {name: run_id, in: path, required: true, schema: {type: string, pattern: '^[A-Za-z0-9_-]{1,128}$'}}
+    post:
+      operationId: requestPersistedRunCancellation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                reason: {type: string, maxLength: 500, pattern: '^[^\u0000]*$'}
+      responses:
+        '200': {description: Committed coordinated cancellation or authorized replay; alternatively a legacy local cancellation or unchanged terminal state, content: {application/json: {schema: {$ref: '#/components/schemas/RunResponse'}}}}
+        '202': {description: Cancellation intent persists; upstream completion not confirmed, content: {application/json: {schema: {$ref: '#/components/schemas/RunResponse'}}}}
+        '400': {description: 'Invalid object, unknown fields or invalid reason'}
+        '401': {description: Machine credential invalid}
+        '403': {description: Workspace or run:cancel scope denied}
+        '404': {description: Run absent}
+        '409': {description: 'VERSION_CONFLICT, OUTCOME_UNCONFIRMED, UNSAFE_CANCELLATION, or ADMISSION_CANCEL_UNAVAILABLE when coordinated mutation is disabled'}
+        '413': {description: Body exceeds 4096 bytes}
+        '415': {description: application/json required}
+        '503': {description: 'Dependency unavailable or CANCELLATION_COMMIT_UNCONFIRMED; no success claimed, retry cancellation for the same Run after recovery'}
+        '504': {description: Request timeout}
+components:
+  securitySchemes:
+    MachineKey: {type: http, scheme: bearer, description: High-entropy Mender machine key; never an unverified subject header or third-party token}
+  schemas:
+    RunResponse:
+      type: object
+      required: [data, meta]
+      additionalProperties: false
+      properties:
+        data:
+          type: object
+          required: [run_id, workspace_id, execution_state, version, created_at, updated_at]
+          additionalProperties: false
+          properties:
+            run_id: {type: string}
+            workspace_id: {type: string}
+            execution_state: {enum: [queued, running, waiting_input, cancel_requested, reconciling, succeeded, failed, canceled, timed_out]}
+            version: {type: string, pattern: '^[1-9][0-9]*$'}
+            created_at: {type: string, format: date-time}
+            updated_at: {type: string, format: date-time}
+        meta:
+          type: object
+          additionalProperties: false
+          required: [request_id]
+          properties:
+            request_id: {type: string, pattern: '^[a-f0-9]{32}$'}
+    ErrorResponse:
+      type: object
+      required: [error, meta]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties: {code: {type: string}, message: {type: string}}
+        meta:
+          type: object
+          required: [request_id]
+          properties: {request_id: {type: string}}

@@ -1,3 +1,3 @@
-// Package application reserves the identity application boundary.
-// Business behavior is pending implementation and G0 boundary review.
+// Package application authenticates scoped machine credentials through consumer-owned ports.
+// Every operation revalidates credential and workspace status; no positive cache is used.
 package application

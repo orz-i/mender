@@ -1,0 +1,101 @@
+openapi: 3.1.0
+info:
+  title: Mender authenticated Run list and finite timeline subset
+  version: 0.1.0
+  description: >-
+    Requires both Run API and Run read API feature flags plus a protected cursor key.
+    Machine run:read scope covers its Workspace. No admission, billing, SSE or Worker execution.
+    List order is created_at DESC, id COLLATE C DESC; mutable state filtering is a live view, not a cross-request MVCC snapshot.
+    Event cursors pin the first page's upper Run revision. Start a fresh traversal to observe newer events.
+    Cursors are signed, not encrypted, expire in 15 minutes and bind caller, credential, Workspace, query kind, state and limit.
+servers:
+  - url: http://127.0.0.1:18080
+security:
+  - MachineKey: []
+paths:
+  /api/v1/workspaces/{workspace_id}/runs:
+    parameters:
+      - {name: workspace_id, in: path, required: true, schema: {type: string, pattern: '^[A-Za-z0-9_-]{1,128}$'}}
+    get:
+      operationId: listAuthorizedRuns
+      parameters:
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+        - {name: cursor, in: query, schema: {type: string, minLength: 1, maxLength: 2048}}
+        - {name: state, in: query, schema: {type: string, enum: [queued, running, waiting_input, cancel_requested, reconciling, succeeded, failed, canceled, timed_out]}}
+      responses:
+        '200': {description: 'Array, including empty; null next_cursor ends traversal', content: {application/json: {schema: {$ref: '#/components/schemas/RunListResponse'}}}}
+        '400': {description: 'Invalid, duplicate or unknown query parameter; invalid, mismatched or expired cursor'}
+        '401': {description: Missing, invalid, expired or revoked credential}
+        '403': {description: Workspace or scope denied}
+        '503': {description: Dependency unavailable; no database or secret detail returned}
+        '504': {description: Request deadline exceeded}
+  /api/v1/workspaces/{workspace_id}/runs/{run_id}/events:
+    parameters:
+      - {name: workspace_id, in: path, required: true, schema: {type: string, pattern: '^[A-Za-z0-9_-]{1,128}$'}}
+      - {name: run_id, in: path, required: true, schema: {type: string, pattern: '^[A-Za-z0-9_-]{1,128}$'}}
+    get:
+      operationId: listAuthorizedRunEvents
+      parameters:
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+        - {name: cursor, in: query, schema: {type: string, minLength: 1, maxLength: 2048}}
+      responses:
+        '200': {description: 'Events in ascending Run revision order; an existing queued Run can have no events', content: {application/json: {schema: {$ref: '#/components/schemas/EventListResponse'}}}}
+        '400': {description: Invalid query or cursor; state filter not allowed}
+        '401': {description: Missing, invalid, expired or revoked credential}
+        '403': {description: Workspace or scope denied}
+        '404': {description: Run not found in authorized Workspace}
+        '503': {description: Dependency or stored projection unavailable}
+        '504': {description: Request deadline exceeded}
+components:
+  securitySchemes:
+    MachineKey: {type: http, scheme: bearer, description: 'Server-issued random machine API Key; never a client-provided subject identity'}
+  schemas:
+    RunItem: &RunItem
+      type: object
+      additionalProperties: false
+      required: [run_id, workspace_id, execution_state, version, created_at, updated_at]
+      properties:
+        run_id: {type: string}
+        workspace_id: {type: string}
+        execution_state: {type: string, enum: [queued, running, waiting_input, cancel_requested, reconciling, succeeded, failed, canceled, timed_out]}
+        version: {type: string, pattern: '^[1-9][0-9]*$'}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    EventItem: &EventItem
+      type: object
+      additionalProperties: false
+      required: [version, event_type, execution_state, occurred_at, subject_id, reason]
+      properties:
+        version: {type: string, pattern: '^[1-9][0-9]*$'}
+        event_type: {const: run.state_changed}
+        execution_state: {type: string, enum: [running, waiting_input, cancel_requested, reconciling, succeeded, failed, canceled, timed_out]}
+        occurred_at: {type: string, format: date-time}
+        subject_id: {type: string}
+        reason: {type: string, maxLength: 500}
+    RunListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {type: array, maxItems: 100, items: *RunItem}
+        meta:
+          type: object
+          additionalProperties: false
+          required: [request_id, next_cursor]
+          properties:
+            request_id: {type: string}
+            next_cursor: {type: [string, 'null'], maxLength: 2048}
+    EventListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {type: array, maxItems: 100, items: *EventItem}
+        meta:
+          type: object
+          additionalProperties: false
+          required: [request_id, next_cursor, through_version]
+          properties:
+            request_id: {type: string}
+            next_cursor: {type: [string, 'null'], maxLength: 2048}
+            through_version: {type: string, pattern: '^[1-9][0-9]*$'}

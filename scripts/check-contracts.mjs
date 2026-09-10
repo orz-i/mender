@@ -66,3 +66,48 @@ for (const [path, item] of Object.entries(api.paths)) {
 for (const [name, schema] of Object.entries(api.components.schemas)) assert.ok(ajv.validateSchema(schema), `${name}: ${ajv.errorsText()}`);
 console.log(`PASS: JSON Schemas / examples, artifact SHA-256, local refs and OpenAPI structure (${Object.keys(api.paths).length} paths / ${ids.size} operations)`);
 console.log('LIMIT: this validates design examples, not full OpenAPI conformance or implemented business endpoints.');
+
+const runAPI = parse(readFileSync(join(root, 'run-query-cancel.openapi.yaml'), 'utf8'));
+assert.equal(runAPI.openapi, '3.1.0');
+assert.equal(runAPI.info.version, '0.3.0');
+assert.equal(Object.keys(runAPI.paths).length, 2);
+validate(runAPI.components.schemas.RunResponse, {
+  data: { run_id: 'run_example', workspace_id: 'ws_example', execution_state: 'queued', version: '1', created_at: '2026-09-09T00:00:00Z', updated_at: '2026-09-09T00:00:00Z' },
+  meta: { request_id: '0123456789abcdef0123456789abcdef' },
+}, 'implemented Run response subset');
+for (const item of Object.values(runAPI.paths)) {
+  assert.equal(item.parameters.length, 2);
+  for (const operation of [item.get, item.post].filter(Boolean)) {
+    assert.ok(operation.operationId);
+    for (const response of Object.values(operation.responses)) {
+      assert.equal(typeof response.description, 'string');
+      for (const key of Object.keys(response)) {
+        assert.ok(['description', 'headers', 'content', 'links', '$ref'].includes(key) || key.startsWith('x-'), `Unexpected Run response key ${key}; quote comma-bearing YAML descriptions.`);
+      }
+    }
+  }
+}
+const cancelOperation = runAPI.paths['/workspaces/{workspace_id}/runs/{run_id}/cancel'].post;
+assert.match(cancelOperation.responses['409'].description, /UNSAFE_CANCELLATION/);
+assert.match(cancelOperation.responses['503'].description, /CANCELLATION_COMMIT_UNCONFIRMED/);
+validate(runAPI.components.schemas.RunResponse, {
+  data: { run_id: 'run_example', workspace_id: 'ws_example', execution_state: 'canceled', version: '2', created_at: '2026-09-09T00:00:00Z', updated_at: '2026-09-10T00:00:00Z' },
+  meta: { request_id: '0123456789abcdef0123456789abcdef' },
+}, 'coordinated cancellation response');
+console.log('PASS: authenticated Run query/cancel v0.3.0 schemas, cancellation errors and response examples; real database checks are pnpm test:integration.');
+
+const readAPI = parse(readFileSync(join(root, 'run-read.openapi.yaml'), 'utf8'));
+assert.equal(readAPI.openapi, '3.1.0');
+assert.equal(Object.keys(readAPI.paths).length, 2);
+const readIDs = new Set();
+for (const [path, item] of Object.entries(readAPI.paths)) {
+  const expected = [...path.matchAll(/\{([^}]+)\}/g)].map((match) => match[1]).sort();
+  assert.deepEqual(item.parameters.filter((p) => p.in === 'path' && p.required).map((p) => p.name).sort(), expected);
+  assert.ok(item.get.operationId && !readIDs.has(item.get.operationId)); readIDs.add(item.get.operationId);
+  const ref = item.get.responses['200'].content['application/json'].schema.$ref;
+  assert.ok(readAPI.components.schemas[ref.split('/').at(-1)]);
+}
+validate(readAPI.components.schemas.RunListResponse, { data: [], meta: { request_id: 'example', next_cursor: null } }, 'Run list empty response');
+validate(readAPI.components.schemas.RunListResponse, { data: [{ run_id: 'run_a', workspace_id: 'ws_a', execution_state: 'queued', version: '1', created_at: '2026-09-09T00:00:00Z', updated_at: '2026-09-09T00:00:00Z' }], meta: { request_id: 'example', next_cursor: 'opaque.example' } }, 'Run list response');
+validate(readAPI.components.schemas.EventListResponse, { data: [{ version: '2', event_type: 'run.state_changed', execution_state: 'canceled', occurred_at: '2026-09-09T00:00:00Z', subject_id: 'subject_a', reason: 'example only' }], meta: { request_id: 'example', next_cursor: null, through_version: '2' } }, 'Run event response');
+console.log('PASS: authorized Run list / finite event timeline schemas, local response refs and examples; no database execution claimed.');

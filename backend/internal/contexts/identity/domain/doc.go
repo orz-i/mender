@@ -1,3 +1,3 @@
-// Package domain reserves the identity domain boundary.
-// Business behavior is pending implementation and G0 boundary review.
+// Package domain defines machine credential, scope and validity invariants.
+// Human login, memberships, interactive sessions and OAuth remain outside this slice.
 package domain

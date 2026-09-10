@@ -1,5 +1,8 @@
 .anchor/
 
+# Runtime session lock is not an archive; keep index and Markdown versioned.
+docs/session/.session.lock
+
 # Dependencies and generated output
 node_modules/
 dist/

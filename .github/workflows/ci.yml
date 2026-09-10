@@ -1,4 +1,4 @@
-name: Initialization checks
+name: Mender checks
 
 on:
   push:
@@ -17,6 +17,20 @@ jobs:
     timeout-minutes: 15
     env:
       GOTOOLCHAIN: local
+    services:
+      postgres:
+        image: postgres:18.6
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: mender_ci_test_only
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -33,3 +47,8 @@ jobs:
       - run: go mod download
         working-directory: backend
       - run: pnpm check
+      - name: Real PostgreSQL migration, RLS, CAS and HTTP integration
+        run: pnpm test:integration
+        env:
+          MENDER_TEST_DATABASE_URL: postgres://postgres:mender_ci_test_only@127.0.0.1:5432/postgres?sslmode=disable
+          MENDER_TEST_ALLOW_CREATE_DATABASE: 'true'
