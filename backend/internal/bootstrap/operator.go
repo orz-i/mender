@@ -20,10 +20,10 @@ import (
 // Only issue-key intentionally prints a generated secret, once, after durable insertion.
 func RunOperator(ctx context.Context, args []string, getenv func(string) string, out, errOut io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("operator requires migrate, grant-runtime, grant-admission, grant-cancellation, grant-worker, issue-key or revoke-key")
+		return errors.New("operator requires migrate, grant-runtime, grant-admission, grant-cancellation, grant-worker, grant-executor, issue-key or revoke-key")
 	}
 	command := args[0]
-	if command != "migrate" && command != "grant-runtime" && command != "grant-admission" && command != "grant-cancellation" && command != "grant-worker" && command != "issue-key" && command != "revoke-key" {
+	if command != "migrate" && command != "grant-runtime" && command != "grant-admission" && command != "grant-cancellation" && command != "grant-worker" && command != "grant-executor" && command != "issue-key" && command != "revoke-key" {
 		return errors.New("unknown operator command")
 	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
@@ -77,6 +77,12 @@ func RunOperator(ctx context.Context, args []string, getenv func(string) string,
 		return err
 	}
 	switch command {
+	case "grant-executor":
+		if err = migrations.GrantExecutor(ctx, pool, *role); err != nil {
+			return err
+		}
+		_, err = io.WriteString(out, "Restricted executor-runtime grants applied; runtime startup must verify the target role before resolving supplier input.\n")
+		return err
 	case "grant-worker":
 		if err = migrations.GrantWorker(ctx, pool, *role); err != nil {
 			return err

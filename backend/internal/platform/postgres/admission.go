@@ -10,8 +10,8 @@ import (
 func AdmissionRole(ctx context.Context, pool *pgxpool.Pool) error {
 	var unsafe bool
 	e := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_roles r WHERE pg_has_role(current_user,r.oid,'MEMBER') AND (r.rolsuper OR r.rolbypassrls OR r.rolcreaterole OR r.rolcreatedb))
- OR EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN('identity','execution','commerce','catalog','distribution','connections','mender_meta') AND c.relkind='r' AND pg_has_role(current_user,c.relowner,'MEMBER'))
- OR EXISTS(SELECT 1 FROM pg_namespace n WHERE n.nspname IN('identity','execution','commerce','catalog','distribution','connections','mender_meta') AND (pg_has_role(current_user,n.nspowner,'MEMBER') OR has_schema_privilege(current_user,n.oid,'CREATE')))
+ OR EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN('identity','execution','commerce','catalog','distribution','connections','supply','mender_meta') AND c.relkind='r' AND pg_has_role(current_user,c.relowner,'MEMBER'))
+ OR EXISTS(SELECT 1 FROM pg_namespace n WHERE n.nspname IN('identity','execution','commerce','catalog','distribution','connections','supply','mender_meta') AND (pg_has_role(current_user,n.nspowner,'MEMBER') OR has_schema_privilege(current_user,n.oid,'CREATE')))
  OR has_database_privilege(current_user,current_database(),'CREATE')`).Scan(&unsafe)
 	if e != nil || unsafe {
 		return errors.New("admission role is privileged")
@@ -52,7 +52,7 @@ func AdmissionRole(ctx context.Context, pool *pgxpool.Pool) error {
 			return errors.New("admission role has unrelated write access")
 		}
 	}
-	for _, table := range []string{"catalog.tool_versions", "distribution.toolset_bindings", "connections.connections", "connections.connection_grants", "commerce.price_versions"} {
+	for _, table := range []string{"catalog.tool_versions", "distribution.toolset_bindings", "connections.connections", "connections.connection_grants", "commerce.price_versions", "supply.deployments"} {
 		if e = pool.QueryRow(ctx, `SELECT has_table_privilege(current_user,c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') OR has_any_column_privilege(current_user,c.oid,'SELECT,INSERT,UPDATE') FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname||'.'||c.relname=$1`, table).Scan(&unsafe); e != nil || unsafe {
 			return errors.New("admission writer can access plan source tables")
 		}

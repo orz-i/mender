@@ -60,8 +60,8 @@ func Open(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 func RuntimeRole(ctx context.Context, pool *pgxpool.Pool) error {
 	var unsafe bool
 	err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_roles r WHERE pg_has_role(current_user,r.oid,'MEMBER') AND (r.rolsuper OR r.rolbypassrls OR r.rolcreaterole OR r.rolcreatedb))
-	 OR EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN ('identity','execution','commerce','catalog','distribution','connections','mender_meta') AND c.relkind='r' AND pg_has_role(current_user,c.relowner,'MEMBER'))
-	 OR EXISTS(SELECT 1 FROM pg_namespace n WHERE n.nspname IN ('identity','execution','commerce','catalog','distribution','connections','mender_meta') AND pg_has_role(current_user,n.nspowner,'MEMBER'))`).Scan(&unsafe)
+	 OR EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN ('identity','execution','commerce','catalog','distribution','connections','supply','mender_meta') AND c.relkind='r' AND pg_has_role(current_user,c.relowner,'MEMBER'))
+	 OR EXISTS(SELECT 1 FROM pg_namespace n WHERE n.nspname IN ('identity','execution','commerce','catalog','distribution','connections','supply','mender_meta') AND pg_has_role(current_user,n.nspowner,'MEMBER'))`).Scan(&unsafe)
 	if err != nil || unsafe {
 		return errors.New("API database role is privileged or owns protected tables")
 	}
@@ -111,14 +111,15 @@ func RuntimeRole(ctx context.Context, pool *pgxpool.Pool) error {
 	 AND NOT has_column_privilege(current_user,'commerce.budget_periods','limit_micro','SELECT')
 	 AND NOT has_schema_privilege(current_user,'catalog','CREATE')
 	 AND NOT has_schema_privilege(current_user,'distribution','CREATE')
-	 AND NOT has_schema_privilege(current_user,'connections','CREATE')`).Scan(&grants); err != nil || !grants {
+	 AND NOT has_schema_privilege(current_user,'connections','CREATE')
+	 AND NOT has_schema_privilege(current_user,'supply','USAGE')`).Scan(&grants); err != nil || !grants {
 		return errors.New("API admission plan grants are invalid")
 	}
 	var planRLS int
 	if err = pool.QueryRow(ctx, `SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relrowsecurity AND c.relforcerowsecurity AND ((n.nspname='distribution' AND c.relname='toolset_bindings') OR (n.nspname='connections' AND c.relname IN('connections','connection_grants')) OR (n.nspname='commerce' AND c.relname='budget_periods'))`).Scan(&planRLS); err != nil || planRLS != 4 {
 		return errors.New("admission plan RLS safeguards missing")
 	}
-	for _, table := range []string{"commerce.budget_periods", "commerce.price_versions", "commerce.reservations", "catalog.tool_versions", "distribution.toolset_bindings", "connections.connections", "connections.connection_grants", "execution.run_admissions", "execution.jobs", "execution.run_attempts", "execution.outbox"} {
+	for _, table := range []string{"commerce.budget_periods", "commerce.price_versions", "commerce.reservations", "catalog.tool_versions", "distribution.toolset_bindings", "connections.connections", "connections.connection_grants", "supply.deployments", "execution.run_admissions", "execution.jobs", "execution.run_attempts", "execution.outbox"} {
 		if err = pool.QueryRow(ctx, `SELECT has_table_privilege(current_user,c.oid,'INSERT,UPDATE,DELETE,TRUNCATE') OR has_any_column_privilege(current_user,c.oid,'INSERT,UPDATE') FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname||'.'||c.relname=$1`, table).Scan(&unsafe); err != nil || unsafe {
 			return errors.New("query API cannot write admission or quota tables")
 		}

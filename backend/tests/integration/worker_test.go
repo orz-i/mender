@@ -81,6 +81,7 @@ VALUES($1,$2,'sa_worker','fixture_key_worker',$2||'_idem',repeat('a',64),'res_'|
 			`SELECT canonical_arguments FROM execution.run_admissions`,
 			`SELECT * FROM identity.api_keys`,
 			`SELECT * FROM commerce.budget_periods`,
+			`SELECT * FROM supply.deployments`,
 			`UPDATE execution.runs SET id='forbidden_rewrite'`,
 			`UPDATE execution.jobs SET max_attempts=99`,
 			`DELETE FROM execution.run_attempts`,

@@ -13,7 +13,7 @@ func CancellationRole(ctx context.Context, pool *pgxpool.Pool) error {
 		return errors.New("cancellation database unavailable")
 	}
 	var unsafe bool
-	e := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_roles r WHERE pg_has_role(current_user,r.oid,'MEMBER') AND (r.rolsuper OR r.rolbypassrls OR r.rolcreatedb OR r.rolcreaterole OR r.rolreplication)) OR EXISTS(SELECT 1 FROM pg_namespace n WHERE n.nspname IN('identity','execution','commerce','catalog','distribution','connections','mender_meta') AND (pg_has_role(current_user,n.nspowner,'MEMBER') OR has_schema_privilege(current_user,n.oid,'CREATE'))) OR EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN('identity','execution','commerce','catalog','distribution','connections','mender_meta') AND c.relkind IN('r','p') AND pg_has_role(current_user,c.relowner,'MEMBER')) OR has_database_privilege(current_user,current_database(),'CREATE')`).Scan(&unsafe)
+	e := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_roles r WHERE pg_has_role(current_user,r.oid,'MEMBER') AND (r.rolsuper OR r.rolbypassrls OR r.rolcreatedb OR r.rolcreaterole OR r.rolreplication)) OR EXISTS(SELECT 1 FROM pg_namespace n WHERE n.nspname IN('identity','execution','commerce','catalog','distribution','connections','supply','mender_meta') AND (pg_has_role(current_user,n.nspowner,'MEMBER') OR has_schema_privilege(current_user,n.oid,'CREATE'))) OR EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN('identity','execution','commerce','catalog','distribution','connections','supply','mender_meta') AND c.relkind IN('r','p') AND pg_has_role(current_user,c.relowner,'MEMBER')) OR has_database_privilege(current_user,current_database(),'CREATE')`).Scan(&unsafe)
 	if e != nil || unsafe {
 		return errors.New("cancellation role is privileged")
 	}
@@ -25,7 +25,7 @@ func CancellationRole(ctx context.Context, pool *pgxpool.Pool) error {
 		"execution.outbox":        {"delivery_state"},
 	}
 	inserts := map[string]bool{"execution.outbox": true, "execution.run_events": true, "execution.run_cancellations": true}
-	rows, e := pool.Query(ctx, `SELECT n.nspname||'.'||c.relname,c.oid::bigint FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN('identity','execution','commerce','catalog','distribution','connections','mender_meta') AND c.relkind IN('r','p')`)
+	rows, e := pool.Query(ctx, `SELECT n.nspname||'.'||c.relname,c.oid::bigint FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN('identity','execution','commerce','catalog','distribution','connections','supply','mender_meta') AND c.relkind IN('r','p')`)
 	if e != nil {
 		return errors.New("cancellation role metadata unavailable")
 	}
@@ -94,7 +94,7 @@ func CancellationRole(ctx context.Context, pool *pgxpool.Pool) error {
 			return errors.New("cancellation role exposes worker attempt details")
 		}
 	}
-	for _, name := range []string{"catalog.tool_versions", "distribution.toolset_bindings", "connections.connections", "connections.connection_grants", "commerce.price_versions"} {
+	for _, name := range []string{"catalog.tool_versions", "distribution.toolset_bindings", "connections.connections", "connections.connection_grants", "commerce.price_versions", "supply.deployments"} {
 		if e = pool.QueryRow(ctx, `SELECT has_table_privilege(current_user,$1::oid,'SELECT') OR has_any_column_privilege(current_user,$1::oid,'SELECT')`, tables[name]).Scan(&unsafe); e != nil || unsafe {
 			return errors.New("cancellation role exposes admission plan data")
 		}

@@ -16,8 +16,8 @@ func WorkerRole(ctx context.Context, pool *pgxpool.Pool) error {
 	}
 	var unsafe bool
 	err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_roles r WHERE pg_has_role(current_user,r.oid,'MEMBER') AND (r.rolsuper OR r.rolbypassrls OR r.rolcreatedb OR r.rolcreaterole OR r.rolreplication))
-	 OR EXISTS(SELECT 1 FROM pg_namespace n WHERE n.nspname IN('identity','execution','commerce','catalog','distribution','connections','mender_meta') AND (pg_has_role(current_user,n.nspowner,'MEMBER') OR has_schema_privilege(current_user,n.oid,'CREATE')))
-	 OR EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN('identity','execution','commerce','catalog','distribution','connections','mender_meta') AND c.relkind IN('r','p') AND pg_has_role(current_user,c.relowner,'MEMBER'))
+	 OR EXISTS(SELECT 1 FROM pg_namespace n WHERE n.nspname IN('identity','execution','commerce','catalog','distribution','connections','supply','mender_meta') AND (pg_has_role(current_user,n.nspowner,'MEMBER') OR has_schema_privilege(current_user,n.oid,'CREATE')))
+	 OR EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN('identity','execution','commerce','catalog','distribution','connections','supply','mender_meta') AND c.relkind IN('r','p') AND pg_has_role(current_user,c.relowner,'MEMBER'))
 	 OR has_database_privilege(current_user,current_database(),'CREATE')`).Scan(&unsafe)
 	if err != nil || unsafe {
 		return errors.New("worker role is privileged")
@@ -60,7 +60,8 @@ func WorkerRole(ctx context.Context, pool *pgxpool.Pool) error {
 	 OR has_schema_privilege(current_user,'commerce','USAGE')
 	 OR has_schema_privilege(current_user,'catalog','USAGE')
 	 OR has_schema_privilege(current_user,'distribution','USAGE')
-	 OR has_schema_privilege(current_user,'connections','USAGE')`).Scan(&unsafe)
+	 OR has_schema_privilege(current_user,'connections','USAGE')
+	 OR has_schema_privilege(current_user,'supply','USAGE')`).Scan(&unsafe)
 	if err != nil || unsafe {
 		return errors.New("worker role can reach non-execution business schemas")
 	}

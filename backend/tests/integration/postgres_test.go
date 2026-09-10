@@ -223,6 +223,9 @@ func TestPostgresRuntimeContract(t *testing.T) {
 	t.Run("worker lease fencing and crash recovery", func(t *testing.T) {
 		exerciseWorkerLeases(t, ctx, owner, runtime, runtimeURL.String())
 	})
+	t.Run("supplier execution input and credential broker isolation", func(t *testing.T) {
+		exerciseSupplyBroker(t, ctx, owner, runtime, runtimeURL.String())
+	})
 	t.Run("protected HTTP uses durable storage and rechecks key revocation", func(t *testing.T) {
 		h, closeAPI, e := bootstrap.BuildAPI(ctx, bootstrap.APIConfig{RunAPIEnabled: true, DatabaseURL: runtimeURL.String()})
 		must(t, e)
