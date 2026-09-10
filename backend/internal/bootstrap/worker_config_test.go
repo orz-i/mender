@@ -23,6 +23,8 @@ func TestWorkerControlIsDisabledByDefaultAndFailsClosed(t *testing.T) {
 		t.Fatal(cfg, err)
 	}
 	for _, change := range []map[string]string{
+		{"MENDER_WORKER_DISPATCH_ENABLED": "true"},
+		{"MENDER_WORKER_DISPATCH_ENABLED": "yes"},
 		{"MENDER_WORKER_CONTROL_ENABLED": "yes"},
 		{"MENDER_WORKER_DATABASE_URL": ""},
 		{"MENDER_WORKER_ID": "bad worker"},

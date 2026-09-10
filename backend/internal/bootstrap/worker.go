@@ -25,6 +25,13 @@ type WorkerConfig struct {
 
 func LoadWorkerConfig(getenv func(string) string) (WorkerConfig, error) {
 	c := WorkerConfig{PollInterval: time.Second}
+	switch getenv("MENDER_WORKER_DISPATCH_ENABLED") {
+	case "", "false":
+	case "true":
+		return WorkerConfig{}, errors.New("worker dispatch is not available: no production executor is configured")
+	default:
+		return WorkerConfig{}, errors.New("MENDER_WORKER_DISPATCH_ENABLED must be true or false")
+	}
 	switch getenv("MENDER_WORKER_CONTROL_ENABLED") {
 	case "", "false":
 		return c, nil
@@ -104,8 +111,8 @@ func BuildWorkerControl(ctx context.Context, c WorkerConfig) (*runapp.WorkerCont
 	return control, pool.Close, nil
 }
 
-// RunWorker currently runs only the local lease-recovery control plane. It never
-// acquires a fresh job or contacts a supplier until an executor dispatcher is added.
+// RunWorker currently runs only the local lease-recovery control plane. The
+// application Dispatcher exists, but no production executor is wired here.
 func RunWorker(ctx context.Context, logger *slog.Logger) error {
 	c, err := LoadWorkerConfig(os.Getenv)
 	if err != nil {

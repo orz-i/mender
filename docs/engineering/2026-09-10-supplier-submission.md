@@ -33,4 +33,4 @@ lease 到期时先锁 Run，再锁 Job/Attempt，与协调取消保持同一 Run
 
 领域/应用测试覆盖 submitting/submitted/unknown 状态、重复 accepted 幂等、invalid key/provider facts、queued/running→reconciling 和 stale fencing。真实隔离 PostgreSQL 套件验证：`0008` 与既有 StartRun/取消/lease 迁移共存；intent 在 Run 仍 queued 时先持久；accepted provider IDs 与 running Run 同 bundle；accepted replay 不改版本；显式 timeout 与 intent/submitted lease expiry 均进入 unknown/reconciling；provider IDs 在 recovery 后保留；旧 generation 的迟到 accepted 写入被拒；直接把受理 Run 改为 running 而没有 submitted Attempt proof 无法提交。测试容器由现有所有权标签机制清理。
 
-本阶段没有开启生产 dispatch，也没有真实供应商网络证据，因此不宣称端到端执行已经完成。下一阶段只应在此协议之上增加 Executor Dispatcher seam 与 deterministic fake executor，仍先保持真实 supplier adapter 关闭，之后再单独评审 HTTP/MCP/Agent 网络出口、credential 注入和供应商能力矩阵。
+后续已在此协议之上增加 Executor Dispatcher application seam 与 deterministic fake executor，但生产 dispatch 仍保持 fail-closed，也没有真实供应商网络证据，因此不宣称端到端执行已经完成。Dispatcher 的顺序、fencing 与仍缺失的 heartbeat/payload/credential/provider capability 边界见 [Executor Dispatcher 记录](2026-09-10-executor-dispatcher.md)。真实 HTTP/MCP/Agent 网络出口仍需单独评审。
