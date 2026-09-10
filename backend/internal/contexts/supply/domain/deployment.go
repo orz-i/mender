@@ -18,6 +18,15 @@ type Deployment struct {
 	CreatedAt                                                    time.Time
 }
 
+func reservedHTTPHeader(value string) bool {
+	switch strings.ToLower(value) {
+	case "host", "content-length", "content-type", "accept", "authorization", "transfer-encoding", "connection", "upgrade", "proxy-authorization", "proxy-connection", "te", "trailer":
+		return true
+	default:
+		return false
+	}
+}
+
 func validID(value string) bool {
 	if len(value) < 1 || len(value) > 128 {
 		return false
@@ -43,7 +52,7 @@ func validHeaderName(value string) bool {
 }
 
 func (d Deployment) Validate() error {
-	if !validID(d.Revision) || !validID(d.ProviderID) || d.TransportKind != "http" || d.HTTPMethod != "POST" || len(d.EndpointURL) < 1 || len(d.EndpointURL) > 2048 || !utf8.ValidString(d.EndpointURL) || (!strings.HasPrefix(d.EndpointURL, "https://") && !strings.HasPrefix(d.EndpointURL, "http://")) || !validHeaderName(d.IdempotencyHeader) || d.RequestTimeout < 100*time.Millisecond || d.RequestTimeout > 5*time.Minute || d.MaxRequestBytes < 1 || d.MaxRequestBytes > 1<<20 || d.MaxResponseBytes < 1 || d.MaxResponseBytes > 8<<20 || d.CreatedAt.IsZero() {
+	if !validID(d.Revision) || !validID(d.ProviderID) || d.TransportKind != "http" || d.HTTPMethod != "POST" || len(d.EndpointURL) < 1 || len(d.EndpointURL) > 2048 || !utf8.ValidString(d.EndpointURL) || (!strings.HasPrefix(d.EndpointURL, "https://") && !strings.HasPrefix(d.EndpointURL, "http://")) || !validHeaderName(d.IdempotencyHeader) || reservedHTTPHeader(d.IdempotencyHeader) || d.RequestTimeout < 100*time.Millisecond || d.RequestTimeout > 5*time.Minute || d.MaxRequestBytes < 1 || d.MaxRequestBytes > 1<<20 || d.MaxResponseBytes < 1 || d.MaxResponseBytes > 8<<20 || d.CreatedAt.IsZero() {
 		return ErrInvalidDeployment
 	}
 	switch d.State {
@@ -57,7 +66,7 @@ func (d Deployment) Validate() error {
 			return ErrInvalidDeployment
 		}
 	case "header":
-		if !validHeaderName(d.AuthHeaderName) {
+		if !validHeaderName(d.AuthHeaderName) || reservedHTTPHeader(d.AuthHeaderName) || strings.EqualFold(d.AuthHeaderName, d.IdempotencyHeader) {
 			return ErrInvalidDeployment
 		}
 	default:

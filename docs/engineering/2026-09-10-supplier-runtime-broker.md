@@ -31,4 +31,4 @@ Executor role 只获得 `execution`、`connections`、`supply`、`mender_meta` �
 
 真实隔离 PostgreSQL 套件覆盖 `0009`、operator `grant-executor`、ExecutorRole、Execution RuntimeInput RLS、Connections RuntimeCredential RLS、Supply Deployment、成功 Broker 组合、Connection revoke 后 secret provider 不再被调用，以及 executor/worker/runtime 等角色互不替代。第一次真实库运行暴露 privilege-helper 会报告“底层 ACL 但 schema 不可达”的误判；修正为有效权限模型后同一验证键重跑通过并 supersede 失败，测试容器已清理。
 
-本阶段没有真实供应商网络调用，也没有 secret-store 实现。下一切片在此 Broker 输出上实现 hardened HTTP transport，并只使用本地受控 HTTP server 验证 SSRF/redirect/size/timeout/idempotency 行为；生产外部 egress 继续关闭。
+本阶段没有 secret-store 实现。后续 HTTP Executor 已在此 Broker 输出上实现，但验证只使用本地受控 HTTP server 和合成 resolver/dialer；生产外部 egress 仍未接入 Worker bootstrap。HTTP 网络边界与证据见 [Hardened HTTP Executor](2026-09-10-http-executor.md)。
