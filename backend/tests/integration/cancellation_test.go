@@ -206,6 +206,41 @@ func exerciseCancellation(t *testing.T, ctx context.Context, owner, runtime, wri
 			t.Fatal("new period modified")
 		}
 	})
+	t.Run("activated queued job with no lease history cancels and releases quota", func(t *testing.T) {
+		r := create("cancel_activated_queued")
+		tag, e := owner.Exec(ctx, `UPDATE execution.jobs SET state='queued',blocked_reason=NULL WHERE workspace_id=$1 AND run_id=$2 AND state='blocked' AND attempt_count=0 AND lease_generation=0`, r.WorkspaceID, r.RunID)
+		must(t, e)
+		if tag.RowsAffected() != 1 {
+			t.Fatal("fixture activation failed")
+		}
+		v, e := cancelService.Cancel(ctx, caller, r.RunID, "cancel before lease")
+		must(t, e)
+		if !v.Found || v.Run.Replayed || v.Run.State != "canceled" {
+			t.Fatal(v)
+		}
+		assertCanceled(r)
+		var attempts int
+		must(t, owner.QueryRow(ctx, `SELECT count(*) FROM execution.run_attempts WHERE workspace_id=$1 AND run_id=$2`, r.WorkspaceID, r.RunID).Scan(&attempts))
+		if attempts != 0 {
+			t.Fatal("safe cancellation unexpectedly had an attempt")
+		}
+	})
+	t.Run("previous lease history makes immediate quota release unsafe", func(t *testing.T) {
+		r := create("cancel_previous_lease")
+		leasedAt := time.Now().UTC().Truncate(time.Microsecond)
+		_, e := owner.Exec(ctx, `UPDATE execution.jobs SET state='queued',blocked_reason=NULL,lease_generation=1,attempt_count=1 WHERE workspace_id=$1 AND run_id=$2`, r.WorkspaceID, r.RunID)
+		must(t, e)
+		_, e = owner.Exec(ctx, `INSERT INTO execution.run_attempts(workspace_id,run_id,attempt_no,lease_generation,lease_owner,state,leased_at,lease_until,finished_at) VALUES($1,$2,1,1,'worker_fixture','released',$3,$4,$5)`, r.WorkspaceID, r.RunID, leasedAt, leasedAt.Add(time.Minute), leasedAt.Add(time.Second))
+		must(t, e)
+		before := state(r)
+		v, e := cancelService.Cancel(ctx, caller, r.RunID, "must reconcile after lease")
+		if !errors.Is(e, admit.ErrCancelUnsafe) || v.Found {
+			t.Fatal("previously leased job used safe release", v, e)
+		}
+		if state(r) != before {
+			t.Fatal("unsafe previous-lease cancellation wrote state")
+		}
+	})
 	t.Run("unsafe running and reconciling outcomes never release quota", func(t *testing.T) {
 		for i, phase := range []string{"running", "reconciling"} {
 			r := create(fmt.Sprintf("cancel_unsafe_%d", i))

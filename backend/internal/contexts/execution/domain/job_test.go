@@ -90,3 +90,43 @@ func TestAttemptValidationMatchesLeaseFacts(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestCancelNeverLeasedAllowsBlockedOrActivatedQueuedOnly(t *testing.T) {
+	at := time.Date(2026, 9, 10, 8, 0, 0, 0, time.UTC)
+	blocked, err := NewBlockedJob("ws_a", "run_cancel_blocked", at, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = blocked.CancelNeverLeased(at.Add(time.Second)); err != nil || blocked.Snapshot().State != JobCanceled {
+		t.Fatal(err, blocked.Snapshot())
+	}
+
+	queued, err := NewBlockedJob("ws_a", "run_cancel_queued", at, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = queued.Activate(at.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if err = queued.CancelNeverLeased(at.Add(2 * time.Second)); err != nil || queued.Snapshot().State != JobCanceled || queued.Snapshot().BlockedReason != "" {
+		t.Fatal(err, queued.Snapshot())
+	}
+
+	previouslyLeased, err := NewBlockedJob("ws_a", "run_cancel_released", at, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = previouslyLeased.Activate(at.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	token, err := previouslyLeased.Acquire("worker_a", at.Add(2*time.Second), at.Add(time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = previouslyLeased.ReleaseBeforeSubmit(token, at.Add(3*time.Second), at.Add(4*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if err = previouslyLeased.CancelNeverLeased(at.Add(5 * time.Second)); !errors.Is(err, ErrJobState) {
+		t.Fatal("previously leased job accepted for safe release", err)
+	}
+}

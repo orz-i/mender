@@ -7,7 +7,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/orz-i/mender/backend/internal/contexts/execution/application"
 	"github.com/orz-i/mender/backend/internal/contexts/execution/domain"
-	"time"
 )
 
 // Cancellations only writes execution-owned facts. Lifetime and quota release
@@ -43,13 +42,16 @@ func (r *Cancellations) LoadCancellation(ctx context.Context, q application.Canc
 	if e != nil {
 		return d, application.ErrCancellationStorage
 	}
-	var stopped *time.Time
-	e = r.tx.QueryRow(ctx, `SELECT state,blocked_reason,created_at,stopped_at FROM execution.jobs WHERE workspace_id=$1 AND run_id=$2 FOR UPDATE`, q.WorkspaceID, q.RunID).Scan(&d.JobState, &d.BlockedReason, &d.JobCreatedAt, &stopped)
+	jobSnapshot, e := scanJob(r.tx.QueryRow(ctx, `SELECT `+jobColumns+` FROM execution.jobs j WHERE workspace_id=$1 AND run_id=$2 FOR UPDATE`, q.WorkspaceID, q.RunID))
 	if e != nil {
 		return d, application.ErrCancellationStorage
 	}
-	if stopped != nil {
-		d.StoppedAt = *stopped
+	d.Job, e = domain.RestoreJob(jobSnapshot)
+	if e != nil {
+		return d, application.ErrCancellationStorage
+	}
+	if e = r.tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM execution.run_attempts WHERE workspace_id=$1 AND run_id=$2)`, q.WorkspaceID, q.RunID).Scan(&d.HasAttempts); e != nil {
+		return d, application.ErrCancellationStorage
 	}
 	e = r.tx.QueryRow(ctx, `SELECT delivery_state FROM execution.outbox WHERE workspace_id=$1 AND run_id=$2 AND event_type='run.admitted' FOR UPDATE`, q.WorkspaceID, q.RunID).Scan(&d.AdmissionDelivery)
 	if e != nil {
@@ -75,12 +77,17 @@ func (r *Cancellations) LoadCancellation(ctx context.Context, q application.Canc
 	}
 	return d, nil
 }
-func (r *Cancellations) SaveCancellation(ctx context.Context, q application.CancellationRef, run domain.Run, expected uint64, ch application.CancellationChange) error {
+func (r *Cancellations) SaveCancellation(ctx context.Context, q application.CancellationRef, run domain.Run, expected uint64, beforeJob domain.JobSnapshot, job domain.Job, ch application.CancellationChange) error {
 	s := run.Snapshot()
-	if expected != 1 || s.Version != 2 || s.State != domain.Canceled || string(s.ID) != q.RunID || string(s.WorkspaceID) != q.WorkspaceID {
+	j := job.Snapshot()
+	if expected != 1 || s.Version != 2 || s.State != domain.Canceled || string(s.ID) != q.RunID || string(s.WorkspaceID) != q.WorkspaceID || j.State != domain.JobCanceled || j.AttemptCount != 0 || j.LeaseGeneration != 0 || j.RunID != s.ID || j.WorkspaceID != s.WorkspaceID || beforeJob.AttemptCount != 0 || beforeJob.LeaseGeneration != 0 {
 		return application.ErrUnsafeCancellation
 	}
-	tag, e := r.tx.Exec(ctx, `UPDATE execution.jobs SET state='canceled',stopped_at=$1 WHERE workspace_id=$2 AND run_id=$3 AND state='blocked' AND blocked_reason='executor_not_configured' AND stopped_at IS NULL`, ch.At, q.WorkspaceID, q.RunID)
+	tag, e := r.tx.Exec(ctx, `UPDATE execution.jobs SET state='canceled',stopped_at=$1,updated_at=$1
+	 WHERE workspace_id=$2 AND run_id=$3 AND state=$4 AND lease_generation=0 AND attempt_count=0 AND updated_at=$5
+	 AND stopped_at IS NULL AND lease_owner IS NULL AND lease_until IS NULL
+	 AND ((state='blocked' AND blocked_reason='executor_not_configured') OR (state='queued' AND blocked_reason IS NULL))
+	 AND NOT EXISTS(SELECT 1 FROM execution.run_attempts a WHERE a.workspace_id=$2 AND a.run_id=$3)`, ch.At, q.WorkspaceID, q.RunID, string(beforeJob.State), beforeJob.UpdatedAt)
 	if e != nil || tag.RowsAffected() != 1 {
 		return application.ErrCancellationStorage
 	}

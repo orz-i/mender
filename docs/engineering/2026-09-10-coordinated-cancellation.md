@@ -13,6 +13,8 @@ commerce 在原预算期释放 held 预留；execution 在同一事务停止 blo
 | 场景 | 行为 |
 | --- | --- |
 | queued v1、blocked／executor_not_configured、held 预留、pending 受理事件 | 全部取消／释放事实原子提交后返回成功 |
+| queued v1、Job 已显式 activation 为 queued，但 `attempt_count=0`、`lease_generation=0` 且不存在 Run Attempt | 与原 blocked 路径相同，锁定 Job 并再次证明从未被 Worker lease 后原子取消／释放 |
+| Job 曾产生任意 lease／Attempt，即使之后回到 queued | 失败关闭；不再使用“确认未执行”的即时额度释放路径 |
 | 重复取消 | 重新授权并核对回执与释放证据，返回原结果；不重复释放，不覆盖首次原因 |
 | running、reconciling 或状态不一致 | 失败关闭，额度保持不变 |
 | 原预算期过期或 inactive | 只释放原预留，不增加新周期额度 |
@@ -35,6 +37,8 @@ commerce 在原预算期释放 held 预留；execution 在同一事务停止 blo
 | 503 CANCELLATION_COMMIT_UNCONFIRMED | 提交未确认，恢复后重试同一个 Run |
 
 默认关闭。需显式设置 `MENDER_RUN_API_ENABLED=true` 和 `MENDER_RUN_COORDINATED_CANCEL_ENABLED=true`，并安全注入读角色 `MENDER_DATABASE_URL` 与取消角色 `MENDER_CANCELLATION_DATABASE_URL`。两连接配置须为同一数据库端点／库名、不同受限角色。启动验证迁移和权限，失败不降级。取消角色不能创建 Run、读取受理参数或修改身份。
+
+在 `0007_worker_leases.sql` 已应用的环境升级到本扩展后，应再次运行 `pnpm db:grant-cancellation --role <原取消角色>`。取消角色只新增读取 `run_attempts.workspace_id/run_id/attempt_no` 的证明权限和更新 Job `updated_at` 的权限；它不获得 Attempt lease owner、generation、状态或时间字段读取权。取消事务通过 Job 行锁与 Worker 的 `SKIP LOCKED` 领取互斥：取消先锁定时 Worker 跳过该 Job；Worker 先完成 lease/Attempt 后，取消读取到历史证明并拒绝释放额度。
 
 ```sh
 pnpm db:migrate

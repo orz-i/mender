@@ -122,6 +122,34 @@ func (j *Job) Activate(at time.Time) error {
 	return nil
 }
 
+// CancelNeverLeased is the only local Job cancellation eligible for immediate
+// reservation release. A non-zero lease generation means a Worker has owned an
+// attempt, so the caller must use a later submission-aware cancellation path.
+func (j *Job) CancelNeverLeased(at time.Time) error {
+	if err := j.checkTime(at); err != nil {
+		return err
+	}
+	if j.snapshot.AttemptCount != 0 || j.snapshot.LeaseGeneration != 0 || j.snapshot.LeaseOwner != "" || !j.snapshot.LeaseUntil.IsZero() {
+		return ErrJobState
+	}
+	switch j.snapshot.State {
+	case JobBlocked:
+		if j.snapshot.BlockedReason != BlockExecutorNotConfigured {
+			return ErrJobState
+		}
+	case JobQueued:
+		if j.snapshot.BlockedReason != "" {
+			return ErrJobState
+		}
+	default:
+		return ErrJobState
+	}
+	j.snapshot.State = JobCanceled
+	j.snapshot.StoppedAt = at.UTC()
+	j.snapshot.UpdatedAt = at.UTC()
+	return nil
+}
+
 func (j *Job) Acquire(worker string, at, until time.Time) (LeaseToken, error) {
 	if err := j.checkTime(at); err != nil {
 		return LeaseToken{}, err

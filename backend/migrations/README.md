@@ -16,4 +16,6 @@ Worker 控制角色使用 `pnpm db:grant-worker --role mender_worker`。它只�
 
 已有环境应用 `0007` 后还应重新执行 `pnpm db:grant-admission --role <原 admission role>`。该命令会主动撤销旧的 `execution.jobs` 整表 INSERT，再只授予 StartRun 所需的 workspace/run/state/blocked_reason/available_at/created_at/updated_at 列，防止旧 admission role 因新列出现而获得 priority、lease、fencing 或 attempt 配置写入能力。
 
+启用“已 activation 但从未 lease 的 queued Job”协调取消后，也应重新执行 `pnpm db:grant-cancellation --role <原 cancellation role>`。该授权仅增加 `run_attempts` 的 workspace/run/attempt_no 三列读取用于证明 Attempt 不存在，并允许同步 Job `updated_at`；任何已有 Attempt 的 Job 都不会走即时额度释放路径。
+
 真实数据库验证入口为 `pnpm test:integration`，缺少配置明确失败；本机自有临时资源入口为 `pnpm test:integration:docker`。截至协调取消收尾，Docker 环境阻塞已解除，扩展真实套件已通过；历史环境限制保留在[身份持久化记录](../../docs/engineering/2026-09-09-identity-postgres.md)，当前证据见[协调取消记录](../../docs/engineering/2026-09-10-coordinated-cancellation.md)。

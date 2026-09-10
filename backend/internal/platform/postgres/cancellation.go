@@ -21,7 +21,7 @@ func CancellationRole(ctx context.Context, pool *pgxpool.Pool) error {
 		"commerce.budget_periods": {"reserved_micro", "revision"},
 		"commerce.reservations":   {"state", "released_at"},
 		"execution.runs":          {"state", "version", "updated_at"},
-		"execution.jobs":          {"state", "stopped_at"},
+		"execution.jobs":          {"state", "stopped_at", "updated_at"},
 		"execution.outbox":        {"delivery_state"},
 	}
 	inserts := map[string]bool{"execution.outbox": true, "execution.run_events": true, "execution.run_cancellations": true}
@@ -77,6 +77,21 @@ func CancellationRole(ctx context.Context, pool *pgxpool.Pool) error {
 	for _, col := range []string{"canonical_arguments", "credential_id", "idempotency_key", "request_hash"} {
 		if e = pool.QueryRow(ctx, `SELECT has_column_privilege(current_user,$1::oid,$2,'SELECT')`, tables["execution.run_admissions"], col).Scan(&unsafe); e != nil || unsafe {
 			return errors.New("cancellation role exposes admission input")
+		}
+	}
+	attemptOID, found := tables["execution.run_attempts"]
+	if !found {
+		return errors.New("cancellation schema missing")
+	}
+	for _, col := range []string{"workspace_id", "run_id", "attempt_no"} {
+		var ok bool
+		if e = pool.QueryRow(ctx, `SELECT has_column_privilege(current_user,$1::oid,$2,'SELECT')`, attemptOID, col).Scan(&ok); e != nil || !ok {
+			return errors.New("cancellation attempt-proof permission missing")
+		}
+	}
+	for _, col := range []string{"lease_generation", "lease_owner", "state", "leased_at", "lease_until", "finished_at"} {
+		if e = pool.QueryRow(ctx, `SELECT has_column_privilege(current_user,$1::oid,$2,'SELECT')`, attemptOID, col).Scan(&unsafe); e != nil || unsafe {
+			return errors.New("cancellation role exposes worker attempt details")
 		}
 	}
 	for _, name := range []string{"catalog.tool_versions", "distribution.toolset_bindings", "connections.connections", "connections.connection_grants", "commerce.price_versions"} {

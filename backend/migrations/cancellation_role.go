@@ -27,10 +27,11 @@ func GrantCancellation(ctx context.Context, pool *pgxpool.Pool, role string) err
 		"GRANT USAGE ON SCHEMA execution,commerce,mender_meta TO " + id,
 		"GRANT SELECT ON mender_meta.schema_migrations,commerce.budget_periods,commerce.reservations,execution.runs,execution.jobs,execution.outbox,execution.run_events,execution.run_cancellations TO " + id,
 		"GRANT SELECT(workspace_id,run_id,reservation_id,budget_id,period_id,currency,reserved_micro) ON execution.run_admissions TO " + id,
+		"GRANT SELECT(workspace_id,run_id,attempt_no) ON execution.run_attempts TO " + id,
 		"GRANT UPDATE(reserved_micro,revision) ON commerce.budget_periods TO " + id,
 		"GRANT UPDATE(state,released_at) ON commerce.reservations TO " + id,
 		"GRANT UPDATE(state,version,updated_at) ON execution.runs TO " + id,
-		"GRANT UPDATE(state,stopped_at) ON execution.jobs TO " + id,
+		"GRANT UPDATE(state,stopped_at,updated_at) ON execution.jobs TO " + id,
 		"GRANT UPDATE(delivery_state) ON execution.outbox TO " + id,
 		"GRANT INSERT ON execution.run_cancellations,execution.run_events,execution.outbox TO " + id,
 	} {

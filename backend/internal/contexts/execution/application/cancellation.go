@@ -28,8 +28,9 @@ type CancellationState struct {
 }
 type CancellationData struct {
 	Run                                              domain.Run
-	JobState, BlockedReason, AdmissionDelivery       string
-	JobCreatedAt, StoppedAt                          time.Time
+	Job                                              domain.Job
+	AdmissionDelivery                                string
+	HasAttempts                                      bool
 	HasReceipt                                       bool
 	ReceiptRef                                       CancellationRef
 	ReceiptVersion                                   uint64
@@ -40,7 +41,7 @@ type CancellationData struct {
 type CancellationRepository interface {
 	FindReference(context.Context, string, string) (CancellationRef, bool, error)
 	LoadCancellation(context.Context, CancellationRef) (CancellationData, error)
-	SaveCancellation(context.Context, CancellationRef, domain.Run, uint64, CancellationChange) error
+	SaveCancellation(context.Context, CancellationRef, domain.Run, uint64, domain.JobSnapshot, domain.Job, CancellationChange) error
 }
 type CancellationService struct{ repo CancellationRepository }
 
@@ -63,15 +64,19 @@ func (s *CancellationService) load(ctx context.Context, ref CancellationRef) (Ca
 		return d, e
 	}
 	v := d.Run.Snapshot()
-	if v.ID != domain.RunID(ref.RunID) || v.WorkspaceID != domain.WorkspaceID(ref.WorkspaceID) || !d.JobCreatedAt.Equal(v.CreatedAt) || d.BlockedReason != "executor_not_configured" {
+	j := d.Job.Snapshot()
+	if v.ID != domain.RunID(ref.RunID) || v.WorkspaceID != domain.WorkspaceID(ref.WorkspaceID) || j.RunID != v.ID || j.WorkspaceID != v.WorkspaceID || !j.CreatedAt.Equal(v.CreatedAt) || j.AttemptCount != 0 || j.LeaseGeneration != 0 || d.HasAttempts {
 		return d, ErrUnsafeCancellation
 	}
 	if d.HasReceipt {
-		if d.ReceiptRef != ref || v.State != domain.Canceled || v.Version != d.ReceiptVersion || v.Version != 2 || !d.StoppedAt.Equal(v.UpdatedAt) || !d.ReceiptAt.Equal(v.UpdatedAt) || d.AdmissionDelivery != "suppressed" || d.JobState != "canceled" || !d.CanceledEventMatches {
+		if d.ReceiptRef != ref || v.State != domain.Canceled || v.Version != d.ReceiptVersion || v.Version != 2 || !j.StoppedAt.Equal(v.UpdatedAt) || !d.ReceiptAt.Equal(v.UpdatedAt) || d.AdmissionDelivery != "suppressed" || j.State != domain.JobCanceled || !d.CanceledEventMatches {
 			return d, ErrUnsafeCancellation
 		}
-	} else if v.State != domain.Queued || v.Version != 1 || d.JobState != "blocked" || !d.StoppedAt.IsZero() || d.AdmissionDelivery != "pending" || d.CanceledEventMatches {
-		return d, ErrUnsafeCancellation
+	} else {
+		safeJob := j.State == domain.JobBlocked && j.BlockedReason == domain.BlockExecutorNotConfigured || j.State == domain.JobQueued && j.BlockedReason == ""
+		if v.State != domain.Queued || v.Version != 1 || !safeJob || !j.StoppedAt.IsZero() || d.AdmissionDelivery != "pending" || d.CanceledEventMatches {
+			return d, ErrUnsafeCancellation
+		}
 	}
 	return d, nil
 }
@@ -94,6 +99,7 @@ func (s *CancellationService) Cancel(ctx context.Context, ref CancellationRef, c
 		return CancellationState{}, ErrUnsafeCancellation
 	}
 	v := d.Run.Snapshot()
+	beforeJob := d.Job.Snapshot()
 	if ch.At.IsZero() || ch.At.Year() > 9999 {
 		return CancellationState{}, ErrUnsafeCancellation
 	}
@@ -101,7 +107,10 @@ func (s *CancellationService) Cancel(ctx context.Context, ref CancellationRef, c
 	if e != nil || !changed || d.Run.Snapshot().State != domain.Canceled {
 		return CancellationState{}, ErrUnsafeCancellation
 	}
-	if e = s.repo.SaveCancellation(ctx, ref, d.Run, v.Version, ch); e != nil {
+	if e = d.Job.CancelNeverLeased(ch.At); e != nil {
+		return CancellationState{}, ErrUnsafeCancellation
+	}
+	if e = s.repo.SaveCancellation(ctx, ref, d.Run, v.Version, beforeJob, d.Job, ch); e != nil {
 		return CancellationState{}, e
 	}
 	d.HasReceipt = false
