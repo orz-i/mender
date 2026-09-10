@@ -4,9 +4,9 @@
     "ses_157ff4de793941e59da1cd925b5484b5": {
       "path": "docs/session/ses_157ff4de793941e59da1cd925b5484b5.md",
       "title": "Continue next Mender development phase",
-      "status": "paused",
+      "status": "active",
       "created_at": "unix:1789026310",
-      "updated_at": "unix:1789030672"
+      "updated_at": "unix:1789031211"
     },
     "ses_8e2a42283ec744f5940c1dc762d2e187": {
       "path": "docs/session/ses_8e2a42283ec744f5940c1dc762d2e187.md",
