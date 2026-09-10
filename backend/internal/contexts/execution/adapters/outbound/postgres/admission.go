@@ -41,7 +41,7 @@ func (a *Admissions) InsertRun(ctx context.Context, r application.AdmissionRecor
 	return nil
 }
 func (a *Admissions) InsertJob(ctx context.Context, r application.AdmissionRecord) error {
-	_, e := a.tx.Exec(ctx, `INSERT INTO execution.jobs(workspace_id,run_id,state,blocked_reason,created_at) VALUES($1,$2,'blocked','executor_not_configured',$3)`, r.WorkspaceID, r.RunID, r.CreatedAt)
+	_, e := a.tx.Exec(ctx, `INSERT INTO execution.jobs(workspace_id,run_id,state,blocked_reason,available_at,created_at,updated_at) VALUES($1,$2,'blocked','executor_not_configured',$3,$3,$3)`, r.WorkspaceID, r.RunID, r.CreatedAt)
 	if e != nil {
 		return application.ErrAdmissionStorage
 	}

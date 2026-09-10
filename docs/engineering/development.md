@@ -45,10 +45,12 @@ pnpm dev:api
 | 路径 | 当前行为 |
 | --- | --- |
 | `GET /healthz` | `200`，`{"service":"mender-api","status":"ok","stage":"bootstrap"}` |
-| `GET /readyz` | 默认 `503 not_ready`；显式启用且数据库／权限核验成功后仅 Run 查询取消子集就绪 |
+| `GET /readyz` | 默认 `503 not_ready`；显式启用的 Run 能力及其数据库／权限核验成功后就绪 |
+| `POST /api/v1/workspaces/{workspace_id}/runs` | 默认未注册；启用后要求机器 Key 与 `run:create`，从已发布 Toolset/ToolVersion、主体 Connection 授权、PriceVersion 与当前 Budget period 解析不可变计划，再复用原子受理事务；当前 Job 仍保持 blocked |
 | `GET /api/v1/workspaces/{workspace_id}/runs/{run_id}` | 默认未注册；启用后要求机器 Key 与 run:read scope |
 | `POST /api/v1/workspaces/{workspace_id}/runs/{run_id}/cancel` | 默认未注册；要求 run:cancel；可选协调取消可原子停止未执行受理任务并释放原预留，其他路径保持本地取消／意图语义 |
-| 新建 Run、MCP 等其他业务路径 | 尚未开放 |
+| Worker SQL 租约控制 | 已实现 Job/Attempt、lease/heartbeat/expiry/fencing 基础；默认 worker idle，显式启用后当前进程只恢复过期 lease，不领取新任务、不调用供应商 |
+| MCP、真实 Worker 供应商执行等其他业务路径 | 尚未开放 |
 
 前端 `/` 是初始化介绍，`/status` 发送真实健康请求；网络失败或响应不合法时显示恢复入口。未知前端路由提供 404 和返回首页。服务状态只确认 API 进程连通，不表示 Worker、认证、存储或业务链路健康。
 
@@ -58,7 +60,13 @@ pnpm dev:api
 
 `pnpm test:integration` 独立执行真实数据库套件；要求配置专用回环测试管理连接并设置 `MENDER_TEST_ALLOW_CREATE_DATABASE=true`，测试创建及清理自己的临时库／角色。缺少环境明确失败，不 Skip。也可在本机 Docker 已就绪时执行 `pnpm test:integration:docker`；该隔离套件已在协调取消收尾实际通过并清理自有资源。CI 服务已配置，但本轮不推送或宣称远程 CI 已运行。
 
+公开 StartRun 还需 `MENDER_RUN_START_API_ENABLED=true` 和同库独立受限的 `MENDER_ADMISSION_DATABASE_URL`。已有角色使用 `pnpm db:grant-admission --role mender_admission` 授权；机器 Key 必须显式包含 `run:create`。API 读角色只读计划事实且不能读取 `connections.credential_version_ref` 或预算金额列；admission 写角色不能读取 Catalog/Connection/Price 源表。完整边界和测试证据见 [StartRun 收尾记录](2026-09-10-public-start-run.md)。
+
 协调取消还需 `MENDER_RUN_COORDINATED_CANCEL_ENABLED=true` 和同库独立受限的 `MENDER_CANCELLATION_DATABASE_URL`。已有角色使用 `pnpm db:grant-cancellation --role mender_cancel` 授权，完整安全配置见[协调取消收尾记录](2026-09-10-coordinated-cancellation.md)。不要将管理连接或读角色复用为取消角色。
+
+Worker 租约控制使用独立角色：先由管理员执行 `pnpm db:grant-worker --role mender_worker`，再给 Worker 进程配置 `MENDER_WORKER_DATABASE_URL`、稳定且非秘密的 `MENDER_WORKER_ID` 与显式 `MENDER_WORKER_WORKSPACES`。只有 `MENDER_WORKER_CONTROL_ENABLED=true` 才连接数据库；当前启动后的循环只执行 lease expiry recovery，`lease_dispatch_enabled=false`。应用层已经有按 deployment revision 激活 Job、领取 lease、heartbeat 和提交前 release 的端口及 PostgreSQL 实现，但在真实 executor dispatcher 接入前 bootstrap 不调用这些入口。完整边界和测试证据见 [Worker 租约记录](2026-09-10-worker-leases.md)。
+
+从 0006 升级到 0007 时，除了新建/授权 worker role，还要对既有 admission role 再执行一次 `pnpm db:grant-admission --role <role>`，以收窄历史整表 Job INSERT ACL；不应只迁移 schema 后直接重启 StartRun API。
 
 ## 构建与检查
 
@@ -78,7 +86,7 @@ go build -o bin/ ./cmd/api ./cmd/worker
 
 ## 常见情况
 
-- 默认 `/readyz` 返回 503 是预期状态；启用后的 200 也只表示 Run 查询／取消依赖可用，不代表整个平台就绪。
+- 默认 `/readyz` 返回 503 是预期状态；启用后的 200 只表示已配置的 API Run 查询／创建／取消依赖可用。Worker 使用独立启动与数据库角色核验，不纳入 API readiness；两者都不代表供应商或支付链路就绪。
 - 页面连接失败时先检查 API 终端、监听端口和代理目标，再点“重新检查”。
 - 端口冲突会直接报错，不自动切到其他端口。修改配置或结束自己启动的旧进程。
 - 工具链检查失败时安装清单指定版本；升级需一起调整配置、真实锁文件与验证证据。

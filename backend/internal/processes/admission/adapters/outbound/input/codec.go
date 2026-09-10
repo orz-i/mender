@@ -137,10 +137,10 @@ func (Codec) Prepare(q application.Request) (application.Prepared, error) {
 	}
 	// Stable structured fields, not delimiter concatenation. Version makes future rules explicit.
 	content, e := json.Marshal(struct {
-		Version                                                  int
-		Tool, Toolset, Connection, Budget, Period, Currency, Cap string
-		Arguments                                                json.RawMessage
-	}{1, q.ToolVersionID, q.ToolsetVersionID, q.ConnectionID, q.BudgetID, q.PeriodID, q.Currency, q.MaxChargeMicro, canonical})
+		Version                                                 int
+		ToolID, ToolVersion, Toolset, Connection, Currency, Cap string
+		Arguments                                               json.RawMessage
+	}{2, q.ToolID, q.ToolVersion, q.ToolsetVersionID, q.ConnectionID, q.Currency, q.MaxChargeMicro, canonical})
 	if e != nil {
 		return application.Prepared{}, application.ErrInvalid
 	}

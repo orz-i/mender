@@ -14,10 +14,10 @@ var moment = time.Date(2026, 9, 9, 12, 0, 0, 0, time.UTC)
 var who = application.Caller{WorkspaceID: "ws_a", SubjectID: "sa_a", CredentialID: "key_a"}
 
 func request() application.Request {
-	return application.Request{IdempotencyKey: "request_0001", ToolVersionID: "tool_v1", ToolsetVersionID: "set_v1", ConnectionID: "conn_a", BudgetID: "budget_a", PeriodID: "period_a", Currency: "USD", MaxChargeMicro: "100", Arguments: []byte(`{"n":9007199254740993,"text":"data"}`)}
+	return application.Request{IdempotencyKey: "request_0001", ToolID: "tool_a", ToolVersion: "1.0.0", ToolsetVersionID: "set_v1", ConnectionID: "conn_a", Currency: "USD", MaxChargeMicro: "100", Arguments: []byte(`{"n":9007199254740993,"text":"data"}`)}
 }
 func plan(q application.Request) application.Plan {
-	return application.Plan{ToolVersionID: q.ToolVersionID, ToolsetVersionID: q.ToolsetVersionID, ConnectionID: q.ConnectionID, PriceVersionID: "price_v1", DeploymentRevision: "deploy_v1", Currency: q.Currency, ReserveMicro: 50, ValidUntil: moment.Add(time.Hour)}
+	return application.Plan{ToolID: q.ToolID, ToolVersion: q.ToolVersion, ToolVersionID: "tool_v1", ToolsetVersionID: q.ToolsetVersionID, ConnectionID: q.ConnectionID, PriceVersionID: "price_v1", DeploymentRevision: "deploy_v1", BudgetID: "budget_a", PeriodID: "period_a", Currency: q.Currency, ReserveMicro: 50, ValidUntil: moment.Add(time.Hour)}
 }
 
 type authFunc func(context.Context, application.Caller, application.Request) error
@@ -112,6 +112,16 @@ func TestAdmissionOrderStableRequestAndNoFalseSuccess(t *testing.T) {
 	if e != nil || !r.Replayed || len(u.scope.ops) != 1 {
 		t.Fatal("replay mutated", r, e)
 	}
+	// Server-side period rotation is not part of the caller's logical request.
+	s = build(t, u, allow, func(_ context.Context, _ application.Caller, q application.Request, _ string) (application.Plan, error) {
+		p := plan(q)
+		p.PeriodID = "period_b"
+		return p, nil
+	})
+	r, e = s.Admit(context.Background(), who, request())
+	if e != nil || !r.Replayed || r.RunID != "run_test" {
+		t.Fatal("server plan rotation broke replay", r, e)
+	}
 	q := request()
 	q.MaxChargeMicro = "101"
 	if _, e = s.Admit(context.Background(), who, q); !errors.Is(e, application.ErrConflict) {
@@ -136,7 +146,7 @@ func TestDeniedRevokedAndInvalidPlansNeverEnterTransaction(t *testing.T) {
 	if _, e := s.Admit(context.Background(), who, request()); !errors.Is(e, application.ErrForbidden) || u.calls != 0 {
 		t.Fatal(e)
 	}
-	for _, modify := range []func(*application.Plan){func(p *application.Plan) { p.ToolVersionID = "other" }, func(p *application.Plan) { p.Currency = "EUR" }, func(p *application.Plan) { p.ReserveMicro = 101 }, func(p *application.Plan) { p.ReserveMicro = -1 }, func(p *application.Plan) { p.ValidUntil = moment }, func(p *application.Plan) { p.PriceVersionID = "" }} {
+	for _, modify := range []func(*application.Plan){func(p *application.Plan) { p.ToolID = "other" }, func(p *application.Plan) { p.ToolVersion = "2.0.0" }, func(p *application.Plan) { p.ToolVersionID = "" }, func(p *application.Plan) { p.Currency = "EUR" }, func(p *application.Plan) { p.ReserveMicro = 101 }, func(p *application.Plan) { p.ReserveMicro = -1 }, func(p *application.Plan) { p.ValidUntil = moment }, func(p *application.Plan) { p.PriceVersionID = "" }, func(p *application.Plan) { p.BudgetID = "" }, func(p *application.Plan) { p.PeriodID = "" }} {
 		u = &unit{scope: &scope{}}
 		s = build(t, u, allow, func(c context.Context, w application.Caller, q application.Request, a string) (application.Plan, error) {
 			p := plan(q)
@@ -173,7 +183,7 @@ func TestCanonicalJSONRejectsAmbiguityAndBindsEveryRequestField(t *testing.T) {
 			t.Fatalf("accepted ambiguous input %q", raw[:min(len(raw), 80)])
 		}
 	}
-	mutations := []func(*application.Request){func(q *application.Request) { q.ToolVersionID = "tool_v2" }, func(q *application.Request) { q.ToolsetVersionID = "set_v2" }, func(q *application.Request) { q.ConnectionID = "conn_b" }, func(q *application.Request) { q.BudgetID = "budget_b" }, func(q *application.Request) { q.PeriodID = "period_b" }, func(q *application.Request) { q.Currency = "EUR" }, func(q *application.Request) { q.MaxChargeMicro = "101" }, func(q *application.Request) { q.Arguments = []byte(`{"n":9007199254740992,"text":"data"}`) }}
+	mutations := []func(*application.Request){func(q *application.Request) { q.ToolID = "tool_b" }, func(q *application.Request) { q.ToolVersion = "2.0.0" }, func(q *application.Request) { q.ToolsetVersionID = "set_v2" }, func(q *application.Request) { q.ConnectionID = "conn_b" }, func(q *application.Request) { q.Currency = "EUR" }, func(q *application.Request) { q.MaxChargeMicro = "101" }, func(q *application.Request) { q.Arguments = []byte(`{"n":9007199254740992,"text":"data"}`) }}
 	for _, change := range mutations {
 		q = request()
 		change(&q)

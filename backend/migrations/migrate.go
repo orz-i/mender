@@ -18,7 +18,7 @@ import (
 
 //go:embed *.sql
 var files embed.FS
-var names = []string{"0001_identity.sql", "0002_execution.sql", "0003_execution_read_indexes.sql", "0004_atomic_admission.sql", "0005_coordinated_cancellation.sql"}
+var names = []string{"0001_identity.sql", "0002_execution.sql", "0003_execution_read_indexes.sql", "0004_atomic_admission.sql", "0005_coordinated_cancellation.sql", "0006_start_run_plan.sql", "0007_worker_leases.sql"}
 
 func migrationBody(name string) ([]byte, error) {
 	body, err := files.ReadFile(name)
@@ -106,11 +106,15 @@ func GrantRuntime(ctx context.Context, pool *pgxpool.Pool, role string) error {
 	}
 	defer rollback(tx)
 	for _, sql := range []string{
-		"GRANT USAGE ON SCHEMA identity,execution,mender_meta TO " + id,
+		"GRANT USAGE ON SCHEMA identity,execution,mender_meta,catalog,distribution,connections,commerce TO " + id,
 		"GRANT SELECT ON identity.workspaces,identity.service_accounts,identity.api_keys,mender_meta.schema_migrations,execution.runs TO " + id,
 		"GRANT UPDATE (state,version,updated_at) ON execution.runs TO " + id,
 		"GRANT SELECT,INSERT ON execution.run_events TO " + id,
 		"GRANT SELECT (workspace_id,run_id) ON execution.run_admissions TO " + id,
+		"GRANT SELECT ON catalog.tool_versions,distribution.toolset_bindings,commerce.price_versions TO " + id,
+		"GRANT SELECT (workspace_id,id,provider_id,state,revision,created_at,expires_at) ON connections.connections TO " + id,
+		"GRANT SELECT (workspace_id,connection_id,subject_id,active,created_at,expires_at) ON connections.connection_grants TO " + id,
+		"GRANT SELECT (workspace_id,budget_id,period_id,currency,starts_at,ends_at,active) ON commerce.budget_periods TO " + id,
 	} {
 		if _, err = tx.Exec(ctx, sql); err != nil {
 			return errors.New("runtime grant failed")

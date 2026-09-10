@@ -1,6 +1,13 @@
 {
   "version": 3,
   "sessions": {
+    "ses_157ff4de793941e59da1cd925b5484b5": {
+      "path": "docs/session/ses_157ff4de793941e59da1cd925b5484b5.md",
+      "title": "Continue next Mender development phase",
+      "status": "paused",
+      "created_at": "unix:1789026310",
+      "updated_at": "unix:1789030672"
+    },
     "ses_8e2a42283ec744f5940c1dc762d2e187": {
       "path": "docs/session/ses_8e2a42283ec744f5940c1dc762d2e187.md",
       "title": "Mender 工程落地：检查初始化并实现首个可验证切片",
@@ -10,6 +17,7 @@
     }
   },
   "host_scopes": {
+    "host-session:5d530fd57ba79b8268af02d30478bff4dce88969f5bf7445b588a5903cdd379a": "ses_157ff4de793941e59da1cd925b5484b5",
     "host-session:c53bc646420f50ff80a09d952e02f152a0df5b2ff8de8ca08ba0290a7c708939": "ses_8e2a42283ec744f5940c1dc762d2e187"
   }
 }

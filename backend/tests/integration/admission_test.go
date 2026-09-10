@@ -42,7 +42,11 @@ func (admissionResolver) Resolve(ctx context.Context, _ admit.Caller, q admit.Re
 	if e := ctx.Err(); e != nil {
 		return admit.Plan{}, e
 	}
-	return admit.Plan{ToolVersionID: q.ToolVersionID, ToolsetVersionID: q.ToolsetVersionID, ConnectionID: q.ConnectionID, PriceVersionID: "price_v1", DeploymentRevision: "deployment_v1", Currency: q.Currency, ReserveMicro: 60, ValidUntil: time.Now().Add(time.Hour)}, nil
+	budget := strings.TrimPrefix(q.ToolsetVersionID, "set_")
+	if budget == q.ToolsetVersionID {
+		budget = "budget_ok"
+	}
+	return admit.Plan{ToolID: q.ToolID, ToolVersion: q.ToolVersion, ToolVersionID: "tool_v1", ToolsetVersionID: q.ToolsetVersionID, ConnectionID: q.ConnectionID, PriceVersionID: "price_v1", DeploymentRevision: "deployment_v1", BudgetID: budget, PeriodID: "p1", Currency: q.Currency, ReserveMicro: 60, ValidUntil: time.Now().Add(time.Hour)}, nil
 }
 
 func exerciseAdmission(t *testing.T, ctx context.Context, owner, runtime *pgxpool.Pool, runtimeDSN, keyA string) {
@@ -92,7 +96,7 @@ func exerciseAdmission(t *testing.T, ctx context.Context, owner, runtime *pgxpoo
 	}
 	caller := admit.Caller{WorkspaceID: "ws_a", SubjectID: "sa_a", CredentialID: "fixture_key"}
 	req := func(key, budget string) admit.Request {
-		return admit.Request{IdempotencyKey: key, ToolVersionID: "tool_v1", ToolsetVersionID: "set_v1", ConnectionID: "conn_a", BudgetID: budget, PeriodID: "p1", Currency: "USD", MaxChargeMicro: "100", Arguments: []byte(`{"n":9007199254740993,"secret":"fixture-not-a-real-secret"}`)}
+		return admit.Request{IdempotencyKey: key, ToolID: "tool_a", ToolVersion: "1.0.0", ToolsetVersionID: "set_" + budget, ConnectionID: "conn_a", Currency: "USD", MaxChargeMicro: "100", Arguments: []byte(`{"n":9007199254740993,"secret":"fixture-not-a-real-secret"}`)}
 	}
 	counts := func() string {
 		var s strings.Builder
@@ -314,7 +318,7 @@ func exerciseAdmission(t *testing.T, ctx context.Context, owner, runtime *pgxpoo
 				t.Fatal("pooled workspace leaked", table)
 			}
 		}
-		for _, sql := range []string{`UPDATE commerce.budget_periods SET limit_micro=1000000`, `DELETE FROM commerce.reservations`, `UPDATE execution.jobs SET state='blocked'`, `UPDATE execution.runs SET state='canceled'`, `DELETE FROM execution.outbox`} {
+		for _, sql := range []string{`UPDATE commerce.budget_periods SET limit_micro=1000000`, `DELETE FROM commerce.reservations`, `UPDATE execution.jobs SET state='blocked'`, `INSERT INTO execution.jobs(workspace_id,run_id,state,available_at,priority,lease_owner,lease_until,lease_generation,attempt_count,max_attempts,created_at,updated_at) VALUES('ws_a','forbidden_worker_job','leased',now(),99,'worker_bad',now()+interval '1 minute',1,1,3,now(),now())`, `UPDATE execution.runs SET state='canceled'`, `DELETE FROM execution.outbox`} {
 			if _, e := writer.Exec(ctx, sql); e == nil {
 				t.Fatal("ungranted writer operation accepted", sql)
 			}

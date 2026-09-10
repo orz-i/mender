@@ -20,17 +20,17 @@ import (
 // Only issue-key intentionally prints a generated secret, once, after durable insertion.
 func RunOperator(ctx context.Context, args []string, getenv func(string) string, out, errOut io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("operator requires migrate, grant-runtime, grant-cancellation, issue-key or revoke-key")
+		return errors.New("operator requires migrate, grant-runtime, grant-admission, grant-cancellation, grant-worker, issue-key or revoke-key")
 	}
 	command := args[0]
-	if command != "migrate" && command != "grant-runtime" && command != "grant-cancellation" && command != "issue-key" && command != "revoke-key" {
+	if command != "migrate" && command != "grant-runtime" && command != "grant-admission" && command != "grant-cancellation" && command != "grant-worker" && command != "issue-key" && command != "revoke-key" {
 		return errors.New("unknown operator command")
 	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	flags.SetOutput(errOut)
 	workspace := flags.String("workspace", "", "Workspace ID")
 	subject := flags.String("subject", "", "service account ID")
-	scopes := flags.String("scopes", "run:read", "comma-separated run:read,run:cancel")
+	scopes := flags.String("scopes", "run:read", "comma-separated run:read,run:cancel,run:create")
 	ttl := flags.Duration("ttl", 24*time.Hour, "credential lifetime (1 minute to 90 days)")
 	role := flags.String("role", "", "existing restricted PostgreSQL login role")
 	id := flags.String("id", "", "key ID to revoke (never the raw secret)")
@@ -77,6 +77,18 @@ func RunOperator(ctx context.Context, args []string, getenv func(string) string,
 		return err
 	}
 	switch command {
+	case "grant-worker":
+		if err = migrations.GrantWorker(ctx, pool, *role); err != nil {
+			return err
+		}
+		_, err = io.WriteString(out, "Restricted worker-control grants applied; worker startup verifies the target role before enabling control.\n")
+		return err
+	case "grant-admission":
+		if err = migrations.GrantAdmission(ctx, pool, *role); err != nil {
+			return err
+		}
+		_, err = io.WriteString(out, "Restricted admission grants applied; StartRun startup verifies the target role before enabling the feature.\n")
+		return err
 	case "grant-cancellation":
 		if err = migrations.GrantCancellation(ctx, pool, *role); err != nil {
 			return err

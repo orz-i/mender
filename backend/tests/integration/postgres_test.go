@@ -103,7 +103,8 @@ func TestPostgresRuntimeContract(t *testing.T) {
 		must(t, ids.Provision(ctx, identitydomain.Credential{ID: id, WorkspaceID: workspace, SubjectID: subject, Digest: digest, Scopes: scopes, CreatedAt: at, ExpiresAt: at.Add(time.Hour)}))
 		return raw, id
 	}
-	keyA, idA := issue("ws_a", "sa_a", []string{"run:read", "run:cancel"})
+	keyA, idA := issue("ws_a", "sa_a", []string{"run:read", "run:cancel", "run:create"})
+	keyReadOnlyA, _ := issue("ws_a", "sa_read", []string{"run:read"})
 	keyB, _ := issue("ws_b", "sa_b", []string{"run:read"})
 	seed := func(workspace, id string) {
 		_, e := owner.Exec(ctx, "INSERT INTO execution.runs(workspace_id,id,state,version,created_at,updated_at) VALUES($1,$2,'queued',1,$3,$3)", workspace, id, at)
@@ -215,6 +216,12 @@ func TestPostgresRuntimeContract(t *testing.T) {
 	})
 	t.Run("atomic admission across commerce and execution", func(t *testing.T) {
 		exerciseAdmission(t, ctx, owner, runtime, runtimeURL.String(), keyA)
+	})
+	t.Run("public StartRun resolves owned plan facts and admits atomically", func(t *testing.T) {
+		exercisePublicStartRun(t, ctx, owner, runtime, runtimeURL.String(), keyA, keyReadOnlyA)
+	})
+	t.Run("worker lease fencing and crash recovery", func(t *testing.T) {
+		exerciseWorkerLeases(t, ctx, owner, runtime, runtimeURL.String())
 	})
 	t.Run("protected HTTP uses durable storage and rechecks key revocation", func(t *testing.T) {
 		h, closeAPI, e := bootstrap.BuildAPI(ctx, bootstrap.APIConfig{RunAPIEnabled: true, DatabaseURL: runtimeURL.String()})

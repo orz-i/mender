@@ -87,7 +87,7 @@ func exerciseCancellation(t *testing.T, ctx context.Context, owner, runtime, wri
 		t.Fatal("missing authority silently supplied")
 	}
 	request := func(key, budget string) admit.Request {
-		return admit.Request{IdempotencyKey: key, ToolVersionID: "tool_v1", ToolsetVersionID: "set_v1", ConnectionID: "conn_a", BudgetID: budget, PeriodID: "p1", Currency: "USD", MaxChargeMicro: "100", Arguments: []byte(`{"query":"cancel-test"}`)}
+		return admit.Request{IdempotencyKey: key, ToolID: "tool_a", ToolVersion: "1.0.0", ToolsetVersionID: "set_" + budget, ConnectionID: "conn_a", Currency: "USD", MaxChargeMicro: "100", Arguments: []byte(`{"query":"cancel-test"}`)}
 	}
 	create := func(key string) admit.Receipt {
 		r, e := admissions.Admit(ctx, creationCaller, request(key, "budget_ok"))

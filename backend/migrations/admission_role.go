@@ -8,8 +8,8 @@ import (
 	"regexp"
 )
 
-// GrantAdmission is deliberately not exposed by the operator CLI or API.
-// An explicit future provisioning path must keep this role separate from query/cancel.
+// GrantAdmission is an operator-only provisioning capability. The target role
+// must remain separate from query/cancel roles and is revalidated at API startup.
 func GrantAdmission(ctx context.Context, pool *pgxpool.Pool, role string) error {
 	if !regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`).MatchString(role) {
 		return errors.New("invalid admission role")
@@ -28,7 +28,11 @@ func GrantAdmission(ctx context.Context, pool *pgxpool.Pool, role string) error 
 		"GRANT USAGE ON SCHEMA execution,commerce,mender_meta TO " + id,
 		"GRANT SELECT ON mender_meta.schema_migrations,commerce.budget_periods,commerce.reservations,execution.run_admissions TO " + id,
 		"GRANT UPDATE (reserved_micro,revision) ON commerce.budget_periods TO " + id,
-		"GRANT INSERT ON commerce.reservations,execution.runs,execution.run_admissions,execution.jobs,execution.outbox TO " + id,
+		// Tighten roles provisioned before worker columns existed. A table-level INSERT
+		// would implicitly include future lease/fencing columns added by 0007.
+		"REVOKE INSERT ON execution.jobs FROM " + id,
+		"GRANT INSERT ON commerce.reservations,execution.runs,execution.run_admissions,execution.outbox TO " + id,
+		"GRANT INSERT (workspace_id,run_id,state,blocked_reason,available_at,created_at,updated_at) ON execution.jobs TO " + id,
 	} {
 		if _, e = tx.Exec(ctx, sql); e != nil {
 			return errors.New("admission grant failed")

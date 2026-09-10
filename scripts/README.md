@@ -36,7 +36,7 @@ race 检查要求对应宿主工具链支持；它不等于数据库或分布式
 
 本轮可增加 `./tests/identity ./tests/httpapi ./internal/platform/postgres ./internal/bootstrap` 的定向验证。`pnpm check` 不需要数据库；CI 在其后使用专用 PostgreSQL 服务单独运行 `pnpm test:integration`，未完成真实套件不得声称持久化已验收。
 
-操作员写命令：`pnpm db:migrate`、`pnpm db:grant-runtime --role <role>`、`pnpm key:issue --workspace <workspace> --subject <service-account>`、`pnpm key:revoke --id <key-id>`。这些不是检查命令，需要安全注入管理连接；不要在普通 CI 或未授权数据库运行。发行 Key 只在持久提交后打印一次秘密，不能公开日志。详见 [身份与 PostgreSQL 记录](../docs/engineering/2026-09-09-identity-postgres.md)。
+操作员写命令：`pnpm db:migrate`、`pnpm db:grant-runtime --role <role>`、`pnpm db:grant-admission --role <role>`、`pnpm db:grant-cancellation --role <role>`、`pnpm db:grant-worker --role <role>`、`pnpm key:issue --workspace <workspace> --subject <service-account> --scopes run:read,run:create`、`pnpm key:revoke --id <key-id>`。这些不是检查命令，需要安全注入管理连接；不要在普通 CI 或未授权数据库运行。Worker 角色当前只负责 execution Job/Attempt 的本地租约控制，不读取参数、身份、预算、Connection 或价格事实。发行 Key 只在持久提交后打印一次秘密，不能公开日志。详见 [身份与 PostgreSQL 记录](../docs/engineering/2026-09-09-identity-postgres.md)、[StartRun 收尾记录](../docs/engineering/2026-09-10-public-start-run.md)和 [Worker 租约记录](../docs/engineering/2026-09-10-worker-leases.md)。
 
 `backend.mjs` 只使用无 shell 的子进程调用 Go，便于 Windows 与 Linux 共享命令；它不运行安装器，也不自动切换 Go 版本。
 

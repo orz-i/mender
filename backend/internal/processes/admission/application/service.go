@@ -11,6 +11,7 @@ import (
 
 var (
 	ErrInvalid           = errors.New("invalid admission request or plan")
+	ErrUnauthenticated   = errors.New("admission requires authentication")
 	ErrForbidden         = errors.New("admission forbidden")
 	ErrConflict          = errors.New("idempotency key reused with different request")
 	ErrBudgetExceeded    = errors.New("admission allowance exceeded")
@@ -21,16 +22,32 @@ var (
 
 type Caller struct{ WorkspaceID, SubjectID, CredentialID string }
 type Request struct {
-	IdempotencyKey, ToolVersionID, ToolsetVersionID, ConnectionID, BudgetID, PeriodID, Currency, MaxChargeMicro string
-	Arguments                                                                                                   []byte
+	IdempotencyKey, ToolID, ToolVersion, ToolsetVersionID, ConnectionID, Currency, MaxChargeMicro string
+	Arguments                                                                                     []byte
+}
+
+func validVersion(s string) bool {
+	if len(s) < 1 || len(s) > 128 {
+		return false
+	}
+	for i, c := range s {
+		if i == 0 && !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9') {
+			return false
+		}
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '.' || c == '_' || c == ':' || c == '+' || c == '-') {
+			return false
+		}
+	}
+	return true
 }
 
 // Resolver must supply a published, immutable, authorized plan with a reliable cost cap.
-// No production resolver is installed by this slice; no public creation API is registered.
+// Public HTTP wiring remains outside this use case and is explicitly feature-gated by bootstrap.
 type Plan struct {
-	ToolVersionID, ToolsetVersionID, ConnectionID, PriceVersionID, DeploymentRevision, Currency string
-	ReserveMicro                                                                                int64
-	ValidUntil                                                                                  time.Time
+	ToolID, ToolVersion, ToolVersionID, ToolsetVersionID, ConnectionID, PriceVersionID, DeploymentRevision string
+	BudgetID, PeriodID, Currency                                                                           string
+	ReserveMicro                                                                                           int64
+	ValidUntil                                                                                             time.Time
 }
 type Prepared struct{ CanonicalArguments, RequestHash string }
 type Record struct {
@@ -47,6 +64,9 @@ type Receipt struct {
 }
 type Authorizer interface {
 	Authorize(context.Context, Caller, Request) error
+}
+type Authenticator interface {
+	Authenticate(context.Context, string) (Caller, error)
 }
 type Resolver interface {
 	Resolve(context.Context, Caller, Request, string) (Plan, error)
@@ -125,13 +145,13 @@ func (s *Service) Admit(ctx context.Context, c Caller, q Request) (Receipt, erro
 	if err := ctx.Err(); err != nil {
 		return Receipt{}, err
 	}
-	for _, id := range []string{c.WorkspaceID, c.SubjectID, c.CredentialID, q.ToolVersionID, q.ToolsetVersionID, q.ConnectionID, q.BudgetID, q.PeriodID} {
+	for _, id := range []string{c.WorkspaceID, c.SubjectID, c.CredentialID, q.ToolID, q.ToolsetVersionID, q.ConnectionID} {
 		if !ValidID(id) {
 			return Receipt{}, ErrInvalid
 		}
 	}
 	cap, err := amount(q.MaxChargeMicro)
-	if err != nil || !validKey(q.IdempotencyKey) || len(q.Currency) != 3 || strings.Trim(q.Currency, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") != "" {
+	if err != nil || !validKey(q.IdempotencyKey) || !validVersion(q.ToolVersion) || len(q.Currency) != 3 || strings.Trim(q.Currency, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") != "" {
 		return Receipt{}, ErrInvalid
 	}
 	// Every attempt, including replays, requires current authorization before any durable lookup.
@@ -149,7 +169,7 @@ func (s *Service) Admit(ctx context.Context, c Caller, q Request) (Receipt, erro
 	if err != nil {
 		return Receipt{}, err
 	}
-	if plan.ToolVersionID != q.ToolVersionID || plan.ToolsetVersionID != q.ToolsetVersionID || plan.ConnectionID != q.ConnectionID || plan.Currency != q.Currency || !ValidID(plan.PriceVersionID) || !ValidID(plan.DeploymentRevision) || plan.ReserveMicro < 0 || plan.ReserveMicro > cap {
+	if plan.ToolID != q.ToolID || plan.ToolVersion != q.ToolVersion || !ValidID(plan.ToolVersionID) || plan.ToolsetVersionID != q.ToolsetVersionID || plan.ConnectionID != q.ConnectionID || plan.Currency != q.Currency || !ValidID(plan.PriceVersionID) || !ValidID(plan.DeploymentRevision) || !ValidID(plan.BudgetID) || !ValidID(plan.PeriodID) || plan.ReserveMicro < 0 || plan.ReserveMicro > cap {
 		return Receipt{}, ErrInvalid
 	}
 	now := s.clock.Now().UTC().Truncate(time.Microsecond)
@@ -163,7 +183,7 @@ func (s *Service) Admit(ctx context.Context, c Caller, q Request) (Receipt, erro
 	if !ValidID(runID) || len(runID) > 120 {
 		return Receipt{}, ErrInvalid
 	}
-	r := Record{WorkspaceID: c.WorkspaceID, SubjectID: c.SubjectID, CredentialID: c.CredentialID, IdempotencyKey: q.IdempotencyKey, RequestHash: p.RequestHash, RunID: runID, ReservationID: "res_" + runID, ToolVersionID: plan.ToolVersionID, ToolsetVersionID: plan.ToolsetVersionID, ConnectionID: plan.ConnectionID, PriceVersionID: plan.PriceVersionID, DeploymentRevision: plan.DeploymentRevision, BudgetID: q.BudgetID, PeriodID: q.PeriodID, Currency: q.Currency, CanonicalArguments: p.CanonicalArguments, ReservedMicro: plan.ReserveMicro, CreatedAt: now}
+	r := Record{WorkspaceID: c.WorkspaceID, SubjectID: c.SubjectID, CredentialID: c.CredentialID, IdempotencyKey: q.IdempotencyKey, RequestHash: p.RequestHash, RunID: runID, ReservationID: "res_" + runID, ToolVersionID: plan.ToolVersionID, ToolsetVersionID: plan.ToolsetVersionID, ConnectionID: plan.ConnectionID, PriceVersionID: plan.PriceVersionID, DeploymentRevision: plan.DeploymentRevision, BudgetID: plan.BudgetID, PeriodID: plan.PeriodID, Currency: q.Currency, CanonicalArguments: p.CanonicalArguments, ReservedMicro: plan.ReserveMicro, CreatedAt: now}
 	var result Receipt
 	err = s.uow.Within(ctx, c.WorkspaceID, func(tx Scope) error {
 		old, found, e := tx.FindReplay(ctx, c.SubjectID, q.IdempotencyKey)
@@ -177,7 +197,7 @@ func (s *Service) Admit(ctx context.Context, c Caller, q Request) (Receipt, erro
 			if old.RequestHash != p.RequestHash {
 				return ErrConflict
 			}
-			if !ValidID(old.RunID) || !ValidID(old.ReservationID) || old.ToolVersionID != q.ToolVersionID || old.ToolsetVersionID != q.ToolsetVersionID || old.ConnectionID != q.ConnectionID || old.BudgetID != q.BudgetID || old.PeriodID != q.PeriodID || old.Currency != q.Currency || old.ReservedMicro < 0 || old.ReservedMicro > cap || old.CreatedAt.IsZero() {
+			if !ValidID(old.RunID) || !ValidID(old.ReservationID) || !ValidID(old.ToolVersionID) || !ValidID(old.ToolsetVersionID) || !ValidID(old.ConnectionID) || !ValidID(old.BudgetID) || !ValidID(old.PeriodID) || old.ToolsetVersionID != q.ToolsetVersionID || old.ConnectionID != q.ConnectionID || old.Currency != q.Currency || old.ReservedMicro < 0 || old.ReservedMicro > cap || old.CreatedAt.IsZero() {
 				return ErrUnavailable
 			}
 			result = receipt(old, true)

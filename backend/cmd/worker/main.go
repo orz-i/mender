@@ -14,5 +14,8 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	bootstrap.RunWorker(ctx, logger)
+	if err := bootstrap.RunWorker(ctx, logger); err != nil {
+		logger.Error("worker stopped with error", "error", err.Error())
+		os.Exit(1)
+	}
 }

@@ -20,7 +20,9 @@ func ValidID(value string) bool {
 	return true
 }
 
-func ValidScope(scope string) bool { return scope == "run:read" || scope == "run:cancel" }
+func ValidScope(scope string) bool {
+	return scope == "run:read" || scope == "run:cancel" || scope == "run:create"
+}
 
 // Credential is a detached authorization record. It never stores the raw secret.
 type Credential struct {
