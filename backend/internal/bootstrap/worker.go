@@ -5,9 +5,11 @@ import (
 	"errors"
 	"log/slog"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/heartbeat"
 	runpg "github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/postgres"
 	runapp "github.com/orz-i/mender/backend/internal/contexts/execution/application"
 	rundomain "github.com/orz-i/mender/backend/internal/contexts/execution/domain"
@@ -16,24 +18,32 @@ import (
 )
 
 type WorkerConfig struct {
-	ControlEnabled bool
-	DatabaseURL    string
-	WorkerID       string
-	Workspaces     []rundomain.WorkspaceID
-	PollInterval   time.Duration
+	ControlEnabled      bool
+	DispatchEnabled     bool
+	DatabaseURL         string
+	WorkerID            string
+	Workspaces          []rundomain.WorkspaceID
+	DeploymentRevisions []string
+	PollInterval        time.Duration
+	LeaseTTL            time.Duration
+	HeartbeatInterval   time.Duration
+	ActivationLimit     int
 }
 
 func LoadWorkerConfig(getenv func(string) string) (WorkerConfig, error) {
-	c := WorkerConfig{PollInterval: time.Second}
+	c := WorkerConfig{PollInterval: time.Second, LeaseTTL: 30 * time.Second, HeartbeatInterval: 10 * time.Second, ActivationLimit: 10}
 	switch getenv("MENDER_WORKER_DISPATCH_ENABLED") {
 	case "", "false":
 	case "true":
-		return WorkerConfig{}, errors.New("worker dispatch is not available: no production executor is configured")
+		c.DispatchEnabled = true
 	default:
 		return WorkerConfig{}, errors.New("MENDER_WORKER_DISPATCH_ENABLED must be true or false")
 	}
 	switch getenv("MENDER_WORKER_CONTROL_ENABLED") {
 	case "", "false":
+		if c.DispatchEnabled {
+			return WorkerConfig{}, errors.New("worker dispatch requires worker control")
+		}
 		return c, nil
 	case "true":
 		c.ControlEnabled = true
@@ -68,6 +78,45 @@ func LoadWorkerConfig(getenv func(string) string) (WorkerConfig, error) {
 			return WorkerConfig{}, errors.New("worker poll interval must be between 100ms and 1m")
 		}
 		c.PollInterval = interval
+	}
+	if c.DispatchEnabled {
+		rawRevisions := strings.Split(getenv("MENDER_WORKER_DEPLOYMENT_REVISIONS"), ",")
+		if len(rawRevisions) == 0 || len(rawRevisions) > 64 {
+			return WorkerConfig{}, errors.New("worker dispatch requires 1-64 deployment revisions")
+		}
+		seenRevisions := map[string]bool{}
+		for _, raw := range rawRevisions {
+			value := strings.TrimSpace(raw)
+			if !validWorkerID(value) || seenRevisions[value] {
+				return WorkerConfig{}, errors.New("invalid or duplicate worker deployment revision")
+			}
+			seenRevisions[value] = true
+			c.DeploymentRevisions = append(c.DeploymentRevisions, value)
+		}
+		if raw := getenv("MENDER_WORKER_LEASE_TTL"); raw != "" {
+			value, err := time.ParseDuration(raw)
+			if err != nil || value < 5*time.Second || value > 5*time.Minute {
+				return WorkerConfig{}, errors.New("worker lease TTL must be between 5s and 5m")
+			}
+			c.LeaseTTL = value
+		}
+		if raw := getenv("MENDER_WORKER_HEARTBEAT_INTERVAL"); raw != "" {
+			value, err := time.ParseDuration(raw)
+			if err != nil || value < 100*time.Millisecond {
+				return WorkerConfig{}, errors.New("worker heartbeat interval must be at least 100ms")
+			}
+			c.HeartbeatInterval = value
+		}
+		if c.HeartbeatInterval >= c.LeaseTTL/2 {
+			return WorkerConfig{}, errors.New("worker heartbeat interval must be less than half the lease TTL")
+		}
+		if raw := getenv("MENDER_WORKER_ACTIVATION_LIMIT"); raw != "" {
+			value, err := strconv.Atoi(raw)
+			if err != nil || value < 1 || value > 100 {
+				return WorkerConfig{}, errors.New("worker activation limit must be between 1 and 100")
+			}
+			c.ActivationLimit = value
+		}
 	}
 	return c, nil
 }
@@ -111,12 +160,44 @@ func BuildWorkerControl(ctx context.Context, c WorkerConfig) (*runapp.WorkerCont
 	return control, pool.Close, nil
 }
 
-// RunWorker currently runs only the local lease-recovery control plane. The
-// application Dispatcher exists, but no production executor is wired here.
-func RunWorker(ctx context.Context, logger *slog.Logger) error {
-	c, err := LoadWorkerConfig(os.Getenv)
+// ReviewedDispatchRuntime is intentionally constructed from an already-reviewed
+// execution adapter. The default worker entrypoint never invents a secret source
+// or supplier egress policy from ambient process state.
+type ReviewedDispatchRuntime struct {
+	executor runapp.Executor
+}
+
+func NewReviewedDispatchRuntime(executor runapp.Executor) (*ReviewedDispatchRuntime, error) {
+	if executor == nil {
+		return nil, errors.New("reviewed dispatch runtime requires an executor")
+	}
+	return &ReviewedDispatchRuntime{executor: executor}, nil
+}
+
+func BuildDispatchSupervisor(control *runapp.WorkerControl, c WorkerConfig, runtime *ReviewedDispatchRuntime) (*runapp.DispatchSupervisor, error) {
+	if control == nil || !c.DispatchEnabled || runtime == nil || runtime.executor == nil {
+		return nil, errors.New("worker dispatch requires an explicitly reviewed executor runtime")
+	}
+	dispatcher, err := runapp.NewDispatcher(control, runtime.executor)
+	if err != nil {
+		return nil, err
+	}
+	return runapp.NewDispatchSupervisor(control, dispatcher, heartbeat.New(), runapp.SupervisorConfig{
+		WorkerID: c.WorkerID, LeaseTTL: c.LeaseTTL, HeartbeatInterval: c.HeartbeatInterval, ActivationLimit: c.ActivationLimit,
+	})
+}
+
+func nonFatalDispatchError(err error) bool {
+	return errors.Is(err, runapp.ErrNoWork) || errors.Is(err, runapp.ErrExecutorOutcomeUnknown) || errors.Is(err, runapp.ErrInvalidExecutorResponse) || errors.Is(err, runapp.ErrWorkerLeaseLost)
+}
+
+func runWorker(ctx context.Context, logger *slog.Logger, getenv func(string) string, runtime *ReviewedDispatchRuntime) error {
+	c, err := LoadWorkerConfig(getenv)
 	if err != nil {
 		return err
+	}
+	if c.DispatchEnabled && runtime == nil {
+		return errors.New("worker dispatch requires an explicitly reviewed executor runtime")
 	}
 	if !c.ControlEnabled {
 		logger.Info("worker started", "mode", "idle", "task_processing_enabled", false)
@@ -129,10 +210,17 @@ func RunWorker(ctx context.Context, logger *slog.Logger) error {
 		return err
 	}
 	defer closeResources()
-	logger.Info("worker control started", "worker_id", c.WorkerID, "workspace_count", len(c.Workspaces), "lease_dispatch_enabled", false)
+	var supervisor *runapp.DispatchSupervisor
+	if c.DispatchEnabled {
+		supervisor, err = BuildDispatchSupervisor(control, c, runtime)
+		if err != nil {
+			return err
+		}
+	}
+	logger.Info("worker control started", "worker_id", c.WorkerID, "workspace_count", len(c.Workspaces), "lease_dispatch_enabled", c.DispatchEnabled)
 	ticker := time.NewTicker(c.PollInterval)
 	defer ticker.Stop()
-	recover := func() error {
+	cycle := func() error {
 		for _, workspace := range c.Workspaces {
 			count, e := control.RecoverExpired(ctx, workspace, 100)
 			if e != nil {
@@ -142,9 +230,28 @@ func RunWorker(ctx context.Context, logger *slog.Logger) error {
 				logger.Info("expired worker leases recovered", "workspace_id", string(workspace), "count", count)
 			}
 		}
+		if supervisor != nil {
+			// The first production-safe policy is deliberately serial: at most one
+			// supplier submission is active in this process. Throughput can be raised
+			// only after an explicit bounded-concurrency review.
+			for _, workspace := range c.Workspaces {
+				result, e := supervisor.DispatchOne(ctx, workspace, c.DeploymentRevisions)
+				if e == nil {
+					logger.Info("supplier submission accepted", "workspace_id", string(workspace), "run_id", string(result.Run.ID), "submission_key", result.SubmissionKey)
+					continue
+				}
+				if nonFatalDispatchError(e) {
+					if !errors.Is(e, runapp.ErrNoWork) {
+						logger.Warn("supplier submission requires no immediate retry", "workspace_id", string(workspace), "error", e.Error())
+					}
+					continue
+				}
+				return e
+			}
+		}
 		return nil
 	}
-	if err = recover(); err != nil {
+	if err = cycle(); err != nil {
 		if ctx.Err() != nil && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
 			logger.Info("worker control stopped gracefully")
 			return nil
@@ -157,7 +264,7 @@ func RunWorker(ctx context.Context, logger *slog.Logger) error {
 			logger.Info("worker control stopped gracefully")
 			return nil
 		case <-ticker.C:
-			if err = recover(); err != nil {
+			if err = cycle(); err != nil {
 				if ctx.Err() != nil && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
 					logger.Info("worker control stopped gracefully")
 					return nil
@@ -166,4 +273,15 @@ func RunWorker(ctx context.Context, logger *slog.Logger) error {
 			}
 		}
 	}
+}
+
+// RunWorker keeps supplier dispatch fail-closed because no production secret
+// provider is wired by the default command. A future reviewed composition may
+// call RunWorkerWithReviewedRuntime with an explicitly constructed runtime.
+func RunWorker(ctx context.Context, logger *slog.Logger) error {
+	return runWorker(ctx, logger, os.Getenv, nil)
+}
+
+func RunWorkerWithReviewedRuntime(ctx context.Context, logger *slog.Logger, runtime *ReviewedDispatchRuntime) error {
+	return runWorker(ctx, logger, os.Getenv, runtime)
 }

@@ -64,7 +64,7 @@ pnpm dev:api
 
 协调取消还需 `MENDER_RUN_COORDINATED_CANCEL_ENABLED=true` 和同库独立受限的 `MENDER_CANCELLATION_DATABASE_URL`。已有角色使用 `pnpm db:grant-cancellation --role mender_cancel` 授权，完整安全配置见[协调取消收尾记录](2026-09-10-coordinated-cancellation.md)。不要将管理连接或读角色复用为取消角色。
 
-Worker 租约控制使用独立角色：先由管理员执行 `pnpm db:grant-worker --role mender_worker`，再给 Worker 进程配置 `MENDER_WORKER_DATABASE_URL`、稳定且非秘密的 `MENDER_WORKER_ID` 与显式 `MENDER_WORKER_WORKSPACES`。只有 `MENDER_WORKER_CONTROL_ENABLED=true` 才连接数据库；当前启动后的循环只执行 lease expiry recovery，`lease_dispatch_enabled=false`。应用层已有 activation/lease/heartbeat/submission protocol 和 Executor Dispatcher seam，但 bootstrap 不调用领取/dispatch 路径。`MENDER_WORKER_DISPATCH_ENABLED=true` 当前会失败关闭，因为仓库没有 production executor。完整边界见 [Worker 租约记录](2026-09-10-worker-leases.md)与 [Executor Dispatcher 记录](2026-09-10-executor-dispatcher.md)。
+Worker 租约控制使用独立角色：先由管理员执行 `pnpm db:grant-worker --role mender_worker`，再给 Worker 进程配置 `MENDER_WORKER_DATABASE_URL`、稳定且非秘密的 `MENDER_WORKER_ID` 与显式 `MENDER_WORKER_WORKSPACES`。`MENDER_WORKER_CONTROL_ENABLED=true` 才连接控制数据库。若要求 dispatch，还需显式 deployment revisions、lease TTL、heartbeat interval 与 activation limit；但默认 `cmd/worker` 不提供 SecretProvider/reviewed supplier runtime，所以 `MENDER_WORKER_DISPATCH_ENABLED=true` 会在数据库/网络前失败关闭。受审调用方可以通过独立 executor DB 角色、egress allowlist、SecretProvider 组合 `BuildSupplierHTTPExecutor`，再显式注入 `RunWorkerWithReviewedRuntime`。当前 supervisor 单进程最多一个活动 submission。完整边界见 [Worker 租约记录](2026-09-10-worker-leases.md)、[HTTP Executor](2026-09-10-http-executor.md)与 [Supplier Dispatch Supervisor](2026-09-10-dispatch-supervisor.md)。
 
 从 0006 升级到 0007 时，除了新建/授权 worker role，还要对既有 admission role 再执行一次 `pnpm db:grant-admission --role <role>`，以收窄历史整表 Job INSERT ACL；不应只迁移 schema 后直接重启 StartRun API。
 

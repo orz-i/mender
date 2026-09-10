@@ -51,4 +51,4 @@ go test -count=1 ./tests/supply -run ^TestHTTPExecutor
 
 ## 仍未开放
 
-该 adapter 尚未装入 `cmd/worker`。生产 `MENDER_WORKER_DISPATCH_ENABLED=true` 仍失败关闭。下一切片会增加 lease/heartbeat/Dispatcher supervisor，并保持生产 runtime 必须同时具备显式 executor DB、egress policy 与 secret-provider 能力才能启动；本任务不提供真实 secret-store，也不执行真实外部供应商调用。
+后续切片已经增加 lease/heartbeat/Dispatcher supervisor，但该 adapter 仍未由默认 `cmd/worker` 自动装配。`MENDER_WORKER_DISPATCH_ENABLED=true` 只有在调用方显式注入 `ReviewedDispatchRuntime` 后才可能执行；默认入口缺少 SecretProvider，因此仍在 DB/网络前失败关闭。详见 [Supplier Dispatch Supervisor](2026-09-10-dispatch-supervisor.md)。本任务不提供真实 secret-store，也不执行真实外部供应商调用。
