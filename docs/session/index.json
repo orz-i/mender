@@ -4,9 +4,9 @@
     "ses_8e2a42283ec744f5940c1dc762d2e187": {
       "path": "docs/session/ses_8e2a42283ec744f5940c1dc762d2e187.md",
       "title": "Mender 工程落地：检查初始化并实现首个可验证切片",
-      "status": "active",
+      "status": "paused",
       "created_at": "unix:1788947826",
-      "updated_at": "unix:1789024409"
+      "updated_at": "unix:1789024698"
     }
   },
   "host_scopes": {
