@@ -100,6 +100,22 @@ func saveProviderRun(ctx context.Context, tx pgx.Tx, before domain.Snapshot, run
 	return nil
 }
 
+func insertProviderResultArtifact(ctx context.Context, tx pgx.Tx, observation domain.ProviderObservation) error {
+	if observation.State != domain.ProviderSucceeded {
+		return nil
+	}
+	artifact, err := domain.ArtifactForProviderResult(observation)
+	if err != nil {
+		return application.ErrProviderResultConflict
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO execution.artifacts(workspace_id,run_id,id,kind,media_type,source_observation_id,content_json,created_at)
+	 VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$8)`, string(artifact.WorkspaceID), string(artifact.RunID), artifact.ID, string(artifact.Kind), artifact.MediaType, artifact.SourceObservationID, artifact.ContentJSON, artifact.CreatedAt)
+	if err != nil {
+		return application.ErrProviderResultUnavailable
+	}
+	return nil
+}
+
 func insertSettlementJob(ctx context.Context, tx pgx.Tx, o domain.ProviderObservation) error {
 	if !o.IsTerminal() {
 		return application.ErrProviderResultConflict
@@ -223,6 +239,9 @@ func (r *ProviderResults) RecordProviderObservation(ctx context.Context, observa
 		return application.ProviderResultRecord{}, err
 	}
 	if err = insertProviderObservation(ctx, tx, observation); err != nil {
+		return application.ProviderResultRecord{}, err
+	}
+	if err = insertProviderResultArtifact(ctx, tx, observation); err != nil {
 		return application.ProviderResultRecord{}, err
 	}
 	if err = insertSettlementJob(ctx, tx, observation); err != nil {
