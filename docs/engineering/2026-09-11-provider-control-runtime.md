@@ -44,7 +44,9 @@ executor role 负责读取 immutable admission/deployment 与当前 Connection c
 
 默认 `cmd/worker` 与 API **没有**从环境变量构造 Provider Control Runtime，也没有生产 SecretProvider；因此本阶段新增的 runtime library 不会让默认进程突然访问供应商。`backend/.env.example` 明确保留这一边界。生产 host／SecretProvider、Provider-specific response mapping、callback/webhook 仍是后续独立评审项。
 
-新增 integration fixture 已编译，并设计为在现有 isolated PostgreSQL 套件中创建独立 worker/executor/reconciler/cancellation 角色，配合 `httptest.Server` 验证真实 RLS/ACL、Broker secret boundary、status→success 与 cancel→fulfilled 的端到端收敛。HTTP 只绑定 loopback；请求体断言不含 Workspace、Run canonical arguments 或 secret。当前宿主 Docker daemon 在 Stage 1 试跑时不可用，因此这项 real PostgreSQL fixture 只有在最终 `provider-control-phase-postgres` gate 实际成功后才能记为通过。
+新增 integration fixture 会在现有 isolated PostgreSQL 套件中创建独立 worker/executor/reconciler/cancellation 角色，配合 `httptest.Server` 验证真实 RLS/ACL、Broker secret boundary、status→success 与 cancel→fulfilled 的端到端收敛。HTTP 只绑定 loopback；请求体断言不含 Workspace、Run canonical arguments 或 secret。Docker 可用后的首次真实执行暴露了一个测试 fixture 问题：Connection/Grant 使用固定 2026-09-11 07:00 UTC 基准，实际执行时间已超过其一小时有效期，因此 Broker 正确地在网络调用前拒绝凭据并返回 `provider status unavailable`。fixture 已改为相对当前测试时间创建仍有效的授权；生产凭据校验逻辑未放宽。
+
+最终 `pnpm test:integration:docker` 通过：隔离 PostgreSQL 完整 migration/RLS/CAS/query/atomic-admission 套件以及 reviewed HTTP provider-control runtime 均成功，测试自有容器正常清理。该证据确认真实数据库角色隔离、当前凭据复核、固定 control endpoint、loopback HTTP status/cancel 和 terminal convergence 可以在同一集成链路中成立。
 
 ## 本阶段完成后仍不包含
 

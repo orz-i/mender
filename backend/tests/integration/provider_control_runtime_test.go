@@ -100,7 +100,10 @@ func exerciseProviderHTTPControlRuntime(t *testing.T, ctx context.Context, owner
 	u, err := url.Parse(server.URL)
 	must(t, err)
 
-	base := time.Date(2026, 9, 11, 7, 0, 0, 0, time.UTC)
+	// Keep connection/grant validity relative to the actual integration run.
+	// A fixed wall-clock fixture can silently expire and make the Provider
+	// control path fail at Broker credential revalidation before any HTTP call.
+	base := time.Now().UTC().Truncate(time.Microsecond).Add(-time.Minute)
 	_, err = owner.Exec(ctx, `INSERT INTO supply.deployments(revision,provider_id,transport_kind,endpoint_url,http_method,status_endpoint_url,status_http_method,cancel_endpoint_url,cancel_http_method,auth_mode,auth_header_name,idempotency_header,request_timeout_ms,max_request_bytes,max_response_bytes,state,created_at)
 VALUES('deploy_control_runtime','provider_control_runtime','http',$1,'POST',$2,'POST',$3,'POST','bearer',NULL,'Idempotency-Key',1000,4096,8192,'active',$4)`, server.URL+"/submit", server.URL+"/status", server.URL+"/cancel", base)
 	must(t, err)
