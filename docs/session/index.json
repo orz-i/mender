@@ -19,9 +19,9 @@
     "ses_6a0f3473bbe642a18d2f7b2ee99dc037": {
       "path": "docs/session/ses_6a0f3473bbe642a18d2f7b2ee99dc037.md",
       "title": "Mender Artifact / Result Foundation",
-      "status": "active",
+      "status": "completed",
       "created_at": "unix:1789118530",
-      "updated_at": "unix:1789120041",
+      "updated_at": "unix:1789120234",
       "parent_session_id": "ses_1f6e4bf2d4d84a08ab178696f116d189"
     },
     "ses_8e2a42283ec744f5940c1dc762d2e187": {
