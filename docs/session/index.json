@@ -4,9 +4,9 @@
     "ses_0522c54fe991488e95259e466cb638d1": {
       "path": "docs/session/ses_0522c54fe991488e95259e466cb638d1.md",
       "title": "Mender Fixed Toolset MCP Distribution",
-      "status": "active",
+      "status": "completed",
       "created_at": "unix:1789124675",
-      "updated_at": "unix:1789132251",
+      "updated_at": "unix:1789132399",
       "parent_session_id": "ses_62a1ebea37544a1a9eb3d95cec77deaf"
     },
     "ses_157ff4de793941e59da1cd925b5484b5": {
