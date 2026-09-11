@@ -65,5 +65,12 @@ type CoordinatedCanceler interface {
 	CancelAdmission(context.Context, Caller, domain.RunID, string) (domain.Snapshot, bool, error)
 }
 
+// ProviderCancelRequester is optional and is consulted only after coordinated
+// cancellation proves the admitted Run has already crossed the supplier boundary.
+// It records a non-terminal cancel_requested intent; it never releases quota.
+type ProviderCancelRequester interface {
+	RequestProviderCancellation(context.Context, Caller, domain.RunID, string) (domain.Snapshot, bool, error)
+}
+
 var ErrUnsafeCancel = errors.New("admission is not safely cancelable")
 var ErrCancelCommitUnconfirmed = errors.New("cancellation commit unconfirmed")

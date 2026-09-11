@@ -208,6 +208,9 @@ func (r *ProviderResults) RecordProviderObservation(ctx context.Context, observa
 	if err != nil {
 		return application.ProviderResultRecord{}, application.ErrProviderResultConflict
 	}
+	if err = resolveCancelIntentForObservation(ctx, tx, observation); err != nil {
+		return application.ProviderResultRecord{}, err
+	}
 	if err = insertProviderObservation(ctx, tx, observation); err != nil {
 		return application.ProviderResultRecord{}, err
 	}

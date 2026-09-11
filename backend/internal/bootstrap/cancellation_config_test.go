@@ -46,3 +46,33 @@ func TestCoordinatedCancelConfigurationIsExplicitAndFailsClosed(t *testing.T) {
 		t.Fatal("default mutation route enabled", w.Code)
 	}
 }
+
+func TestProviderCancelConfigurationRequiresCoordinatedCancellation(t *testing.T) {
+	valid := map[string]string{
+		"MENDER_RUN_API_ENABLED":                "true",
+		"MENDER_DATABASE_URL":                   "postgres://not-connected-reader",
+		"MENDER_RUN_COORDINATED_CANCEL_ENABLED": "true",
+		"MENDER_RUN_PROVIDER_CANCEL_ENABLED":    "true",
+		"MENDER_CANCELLATION_DATABASE_URL":      "postgres://not-connected-canceler",
+	}
+	c, err := LoadAPIConfig(func(k string) string { return valid[k] })
+	if err != nil || !c.ProviderCancelEnabled || !c.CoordinatedCancelEnabled {
+		t.Fatal(c, err)
+	}
+	for _, override := range []map[string]string{
+		{"MENDER_RUN_PROVIDER_CANCEL_ENABLED": "yes"},
+		{"MENDER_RUN_COORDINATED_CANCEL_ENABLED": "false"},
+		{"MENDER_CANCELLATION_DATABASE_URL": ""},
+		{"MENDER_RUN_API_ENABLED": "false"},
+	} {
+		_, err = LoadAPIConfig(func(k string) string {
+			if value, ok := override[k]; ok {
+				return value
+			}
+			return valid[k]
+		})
+		if err == nil {
+			t.Fatal("unsafe provider-cancel configuration accepted", override)
+		}
+	}
+}

@@ -41,7 +41,7 @@ func (r *ProviderReconciliation) NextProviderTarget(ctx context.Context, workspa
  JOIN execution.run_attempts a ON (a.workspace_id,a.run_id,a.lease_generation)=(j.workspace_id,j.run_id,j.lease_generation)
  WHERE j.workspace_id=$1
    AND j.state IN ('provider_waiting','reconciling')
-   AND r.state IN ('running','reconciling')
+   AND r.state IN ('running','reconciling','cancel_requested')
    AND a.state IN ('submitted','unknown')
    AND a.provider_id IS NOT NULL AND a.provider_request_id IS NOT NULL
    AND NOT EXISTS(SELECT 1 FROM execution.provider_observations p WHERE p.workspace_id=j.workspace_id AND p.run_id=j.run_id AND p.state IN ('succeeded','failed','canceled'))

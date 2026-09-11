@@ -15,6 +15,51 @@ type coordinatedFunc func(context.Context, ports.Caller, domain.RunID, string) (
 func (f coordinatedFunc) CancelAdmission(c context.Context, p ports.Caller, id domain.RunID, r string) (domain.Snapshot, bool, error) {
 	return f(c, p, id, r)
 }
+
+func TestUnsafeCoordinatedCancellationFallsBackToProviderIntentOnly(t *testing.T) {
+	run := fixture(t, "ws_a")
+	saved, providerCalls := 0, 0
+	repo := repositoryStub{find: func(context.Context, domain.WorkspaceID, domain.RunID) (domain.Run, error) { return run, nil }, save: func(context.Context, domain.Run, uint64) error { saved++; return nil }}
+	provider := providerCancelRequestFunc(func(_ context.Context, got ports.Caller, id domain.RunID, reason string) (domain.Snapshot, bool, error) {
+		providerCalls++
+		if got.WorkspaceID != caller.WorkspaceID || id != "run_1" || reason != "stop upstream" {
+			t.Fatal(got, id, reason)
+		}
+		snapshot := run.Snapshot()
+		snapshot.State = domain.CancelRequested
+		snapshot.Version = 2
+		snapshot.UpdatedAt = snapshot.CreatedAt.Add(time.Second)
+		return snapshot, true, nil
+	})
+	unsafe := coordinatedFunc(func(context.Context, ports.Caller, domain.RunID, string) (domain.Snapshot, bool, error) {
+		return domain.Snapshot{}, false, ports.ErrUnsafeCancel
+	})
+	s, err := app.NewServiceWithCancellationAndProvider(repo, allow(), fixedClock{at.Add(time.Second)}, unsafe, provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	view, err := s.CancelRunWithReason(context.Background(), caller, "run_1", "stop upstream")
+	if err != nil || view.State != domain.CancelRequested || providerCalls != 1 || saved != 0 {
+		t.Fatal(view, err, providerCalls, saved)
+	}
+
+	commitUnknown := coordinatedFunc(func(context.Context, ports.Caller, domain.RunID, string) (domain.Snapshot, bool, error) {
+		return domain.Snapshot{}, false, ports.ErrCancelCommitUnconfirmed
+	})
+	s, err = app.NewServiceWithCancellationAndProvider(repo, allow(), fixedClock{at.Add(time.Second)}, commitUnknown, provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.CancelRun(context.Background(), caller, "run_1"); !errors.Is(err, ports.ErrCancelCommitUnconfirmed) || providerCalls != 1 || saved != 0 {
+		t.Fatal(err, providerCalls, saved)
+	}
+}
+
+type providerCancelRequestFunc func(context.Context, ports.Caller, domain.RunID, string) (domain.Snapshot, bool, error)
+
+func (f providerCancelRequestFunc) RequestProviderCancellation(c context.Context, p ports.Caller, id domain.RunID, r string) (domain.Snapshot, bool, error) {
+	return f(c, p, id, r)
+}
 func TestManagedCancellationDoesNotFallBackOnErrorsOrInvalidReceipts(t *testing.T) {
 	for _, mode := range []string{"success", "unsafe", "commit_unknown", "invalid_receipt"} {
 		t.Run(mode, func(t *testing.T) {

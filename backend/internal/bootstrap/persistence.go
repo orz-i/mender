@@ -34,6 +34,7 @@ type APIConfig struct {
 	DatabaseURL              string
 	CursorSigningKey         []byte
 	CoordinatedCancelEnabled bool
+	ProviderCancelEnabled    bool
 	CancellationDatabaseURL  string
 	StartRunAPIEnabled       bool
 	AdmissionDatabaseURL     string
@@ -59,6 +60,16 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	default:
 		return c, errors.New("MENDER_RUN_COORDINATED_CANCEL_ENABLED must be true or false")
 	}
+	switch getenv("MENDER_RUN_PROVIDER_CANCEL_ENABLED") {
+	case "", "false":
+	case "true":
+		c.ProviderCancelEnabled = true
+	default:
+		return c, errors.New("MENDER_RUN_PROVIDER_CANCEL_ENABLED must be true or false")
+	}
+	if c.ProviderCancelEnabled && !c.CoordinatedCancelEnabled {
+		return c, errors.New("provider cancellation requires coordinated cancellation")
+	}
 	if c.CoordinatedCancelEnabled {
 		c.CancellationDatabaseURL = getenv("MENDER_CANCELLATION_DATABASE_URL")
 		if c.CancellationDatabaseURL == "" {
@@ -74,7 +85,7 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	}
 	switch getenv("MENDER_RUN_API_ENABLED") {
 	case "", "false":
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.StartRunAPIEnabled {
+		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled {
 			return APIConfig{}, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return c, nil
@@ -108,7 +119,7 @@ func (systemClock) Now() time.Time { return time.Now().UTC().Truncate(time.Micro
 // BuildAPI never migrates, seeds data or falls back to a test repository.
 func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	if !c.RunAPIEnabled {
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.StartRunAPIEnabled {
+		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled {
 			return nil, nil, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return httpserver.NewRouter(), func() {}, nil
@@ -171,7 +182,16 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 		if err != nil {
 			return failed(err)
 		}
-		runs, err = runapp.NewServiceWithCancellation(repository, access, systemClock{}, coordinatedcancel.New(cancelfacade.New(cancellation)))
+		coordinator := coordinatedcancel.New(cancelfacade.New(cancellation))
+		if c.ProviderCancelEnabled {
+			providerRequests, buildErr := runapp.NewProviderCancelRequests(runpg.NewProviderCancelRequests(cancelPool), systemClock{})
+			if buildErr != nil {
+				return failed(buildErr)
+			}
+			runs, err = runapp.NewServiceWithCancellationAndProvider(repository, access, systemClock{}, coordinator, providerRequests)
+		} else {
+			runs, err = runapp.NewServiceWithCancellation(repository, access, systemClock{}, coordinator)
+		}
 		if err != nil {
 			return failed(err)
 		}

@@ -32,4 +32,4 @@ Supply public 发布 `ProviderStatusReader`，输入仅为 provider identity/req
 
 单元测试覆盖：无候选不调用 provider；invalid target/status 不落库；provider unavailable 不落库；pending/succeeded/failed 映射；unknown provider identity 不 fallback。真实隔离 PostgreSQL + fake reader 验证：accepted Attempt 持久 provider_id；candidate 按该 identity 路由；pending 保持 running/provider_waiting；下一 observation success 原子收敛为 succeeded/finished；终态后候选消失；两次 polling 后 Attempt 数量仍为 1；provider status unavailable 时 Run version、Job、Attempt 与 observation 数量全部不变。`0010` 的 replay/乱序/terminal bundle 测试同时继续通过。
 
-下一切片处理 provider cancellation intent/outcome 与“取消确认 vs 迟到成功/失败”的 terminal convergence；仍只使用 fake/local provider，并保持默认 production wiring fail-closed。
+后续切片已增加 provider cancellation intent/outcome 与“取消确认 vs 迟到成功/失败”的 terminal convergence，详见 [Provider Cancellation](2026-09-10-provider-cancellation.md)。Provider status reconciliation 在 Run=`cancel_requested` 时仍继续工作，因此 cancel network outcome unknown 可以通过既有 status reader 最终收敛；仍未启用 production provider 网络 adapter。

@@ -28,10 +28,11 @@ func GrantReconciler(ctx context.Context, pool *pgxpool.Pool, role string) error
 	defer rollback(tx)
 	for _, sql := range []string{
 		"GRANT USAGE ON SCHEMA execution,mender_meta TO " + id,
-		"GRANT SELECT ON mender_meta.schema_migrations,execution.runs,execution.jobs,execution.run_attempts,execution.provider_observations TO " + id,
+		"GRANT SELECT ON mender_meta.schema_migrations,execution.runs,execution.jobs,execution.run_attempts,execution.provider_observations,execution.provider_cancel_intents TO " + id,
 		"GRANT INSERT ON execution.provider_observations,execution.run_events TO " + id,
 		"GRANT UPDATE (state,version,updated_at) ON execution.runs TO " + id,
 		"GRANT UPDATE (state,blocked_reason,updated_at,stopped_at) ON execution.jobs TO " + id,
+		"GRANT UPDATE (state,sending_at,resolved_at,outcome_observation_id,unknown_reason) ON execution.provider_cancel_intents TO " + id,
 	} {
 		if _, err = tx.Exec(ctx, sql); err != nil {
 			return errors.New("reconciler grant failed")

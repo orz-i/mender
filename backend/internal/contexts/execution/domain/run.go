@@ -20,6 +20,20 @@ func validID(id string) bool {
 	return true
 }
 
+// RequestProviderCancel records user intent for a Run that has crossed the
+// supplier boundary. It is non-terminal: only trusted provider evidence may
+// later confirm canceled/succeeded/failed.
+func (r *Run) RequestProviderCancel(at time.Time) (bool, error) {
+	if err := r.checkTime(at); err != nil {
+		return false, err
+	}
+	if r.state.IsTerminal() || r.state == CancelRequested {
+		return false, nil
+	}
+	err := r.move(CancelRequested, at, Running, Reconciling)
+	return err == nil, err
+}
+
 // MarkSubmissionUnconfirmed covers the crash/timeout boundary after a durable
 // submission intent but before Mender can prove whether the supplier accepted
 // the request. It never claims the Run reached running first.

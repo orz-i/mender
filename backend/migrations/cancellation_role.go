@@ -25,9 +25,10 @@ func GrantCancellation(ctx context.Context, pool *pgxpool.Pool, role string) err
 	defer rollback(tx)
 	for _, sql := range []string{
 		"GRANT USAGE ON SCHEMA execution,commerce,mender_meta TO " + id,
-		"GRANT SELECT ON mender_meta.schema_migrations,commerce.budget_periods,commerce.reservations,execution.runs,execution.jobs,execution.outbox,execution.run_events,execution.run_cancellations TO " + id,
+		"GRANT SELECT ON mender_meta.schema_migrations,commerce.budget_periods,commerce.reservations,execution.runs,execution.jobs,execution.outbox,execution.run_events,execution.run_cancellations,execution.provider_cancel_intents TO " + id,
 		"GRANT SELECT(workspace_id,run_id,reservation_id,budget_id,period_id,currency,reserved_micro) ON execution.run_admissions TO " + id,
-		"GRANT SELECT(workspace_id,run_id,attempt_no) ON execution.run_attempts TO " + id,
+		"GRANT SELECT(workspace_id,run_id,attempt_no,state,provider_id,provider_request_id,external_task_id,submission_intent_at,submitted_at) ON execution.run_attempts TO " + id,
+		"GRANT INSERT(workspace_id,run_id,attempt_no,cancel_key,provider_id,provider_request_id,external_task_id,requested_by_subject,requested_by_credential,reason,state,requested_at) ON execution.provider_cancel_intents TO " + id,
 		"GRANT UPDATE(reserved_micro,revision) ON commerce.budget_periods TO " + id,
 		"GRANT UPDATE(state,released_at) ON commerce.reservations TO " + id,
 		"GRANT UPDATE(state,version,updated_at) ON execution.runs TO " + id,

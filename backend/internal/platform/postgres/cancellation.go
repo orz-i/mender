@@ -24,7 +24,7 @@ func CancellationRole(ctx context.Context, pool *pgxpool.Pool) error {
 		"execution.jobs":          {"state", "stopped_at", "updated_at"},
 		"execution.outbox":        {"delivery_state"},
 	}
-	inserts := map[string]bool{"execution.outbox": true, "execution.run_events": true, "execution.run_cancellations": true}
+	inserts := map[string]bool{"execution.outbox": true, "execution.run_events": true, "execution.run_cancellations": true, "execution.provider_cancel_intents": true}
 	rows, e := pool.Query(ctx, `SELECT n.nspname||'.'||c.relname,c.oid::bigint FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN('identity','execution','commerce','catalog','distribution','connections','supply','mender_meta') AND c.relkind IN('r','p')`)
 	if e != nil {
 		return errors.New("cancellation role metadata unavailable")
@@ -58,7 +58,7 @@ func CancellationRole(ctx context.Context, pool *pgxpool.Pool) error {
 			}
 		}
 	}
-	for _, name := range []string{"commerce.budget_periods", "commerce.reservations", "execution.runs", "execution.jobs", "execution.outbox", "execution.run_events", "execution.run_cancellations", "mender_meta.schema_migrations"} {
+	for _, name := range []string{"commerce.budget_periods", "commerce.reservations", "execution.runs", "execution.jobs", "execution.outbox", "execution.run_events", "execution.run_cancellations", "execution.provider_cancel_intents", "mender_meta.schema_migrations"} {
 		var ok bool
 		oid, found := tables[name]
 		if !found {
@@ -83,13 +83,13 @@ func CancellationRole(ctx context.Context, pool *pgxpool.Pool) error {
 	if !found {
 		return errors.New("cancellation schema missing")
 	}
-	for _, col := range []string{"workspace_id", "run_id", "attempt_no"} {
+	for _, col := range []string{"workspace_id", "run_id", "attempt_no", "state", "provider_id", "provider_request_id", "external_task_id", "submission_intent_at", "submitted_at"} {
 		var ok bool
 		if e = pool.QueryRow(ctx, `SELECT has_column_privilege(current_user,$1::oid,$2,'SELECT')`, attemptOID, col).Scan(&ok); e != nil || !ok {
 			return errors.New("cancellation attempt-proof permission missing")
 		}
 	}
-	for _, col := range []string{"lease_generation", "lease_owner", "state", "leased_at", "lease_until", "finished_at"} {
+	for _, col := range []string{"lease_generation", "lease_owner", "leased_at", "lease_until", "finished_at", "submission_key", "unknown_at", "unknown_reason"} {
 		if e = pool.QueryRow(ctx, `SELECT has_column_privilege(current_user,$1::oid,$2,'SELECT')`, attemptOID, col).Scan(&unsafe); e != nil || unsafe {
 			return errors.New("cancellation role exposes worker attempt details")
 		}
@@ -104,9 +104,24 @@ func CancellationRole(ctx context.Context, pool *pgxpool.Pool) error {
 	} else if e = pool.QueryRow(ctx, `SELECT has_table_privilege(current_user,$1::oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') OR has_any_column_privilege(current_user,$1::oid,'SELECT,INSERT,UPDATE')`, oid).Scan(&unsafe); e != nil || unsafe {
 		return errors.New("cancellation role exposes provider results")
 	}
+	if oid, found := tables["execution.provider_cancel_intents"]; !found {
+		return errors.New("cancellation schema missing")
+	} else {
+		for _, col := range []string{"workspace_id", "run_id", "attempt_no", "cancel_key", "provider_id", "provider_request_id", "external_task_id", "requested_by_subject", "requested_by_credential", "reason", "state", "requested_at"} {
+			var ok bool
+			if e = pool.QueryRow(ctx, `SELECT has_column_privilege(current_user,$1::oid,$2,'INSERT')`, oid, col).Scan(&ok); e != nil || !ok {
+				return errors.New("cancellation provider-intent insert permission missing")
+			}
+		}
+		for _, col := range []string{"sending_at", "resolved_at", "outcome_observation_id", "unknown_reason"} {
+			if e = pool.QueryRow(ctx, `SELECT has_column_privilege(current_user,$1::oid,$2,'INSERT,UPDATE')`, oid, col).Scan(&unsafe); e != nil || unsafe {
+				return errors.New("cancellation role can forge provider cancel outcome")
+			}
+		}
+	}
 	var count int
-	e = pool.QueryRow(ctx, `SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relrowsecurity AND c.relforcerowsecurity AND ((n.nspname='execution' AND c.relname IN('runs','run_admissions','jobs','outbox','run_events','run_cancellations')) OR(n.nspname='commerce' AND c.relname IN('budget_periods','reservations')))`).Scan(&count)
-	if e != nil || count != 8 {
+	e = pool.QueryRow(ctx, `SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relrowsecurity AND c.relforcerowsecurity AND ((n.nspname='execution' AND c.relname IN('runs','run_admissions','jobs','outbox','run_events','run_cancellations','provider_cancel_intents')) OR(n.nspname='commerce' AND c.relname IN('budget_periods','reservations')))`).Scan(&count)
+	if e != nil || count != 9 {
 		return errors.New("cancellation RLS protection missing")
 	}
 	return nil

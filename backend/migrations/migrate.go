@@ -18,7 +18,7 @@ import (
 
 //go:embed *.sql
 var files embed.FS
-var names = []string{"0001_identity.sql", "0002_execution.sql", "0003_execution_read_indexes.sql", "0004_atomic_admission.sql", "0005_coordinated_cancellation.sql", "0006_start_run_plan.sql", "0007_worker_leases.sql", "0008_supplier_submission.sql", "0009_supplier_runtime.sql", "0010_provider_results.sql", "0011_provider_reconciliation.sql"}
+var names = []string{"0001_identity.sql", "0002_execution.sql", "0003_execution_read_indexes.sql", "0004_atomic_admission.sql", "0005_coordinated_cancellation.sql", "0006_start_run_plan.sql", "0007_worker_leases.sql", "0008_supplier_submission.sql", "0009_supplier_runtime.sql", "0010_provider_results.sql", "0011_provider_reconciliation.sql", "0012_provider_cancellation.sql"}
 
 func migrationBody(name string) ([]byte, error) {
 	body, err := files.ReadFile(name)

@@ -1,6 +1,6 @@
 # 数据迁移
 
-当前迁移为 `0001–0011`。`0011_provider_reconciliation.sql` 把实际接受 submission 的 `provider_id` 固化到 Attempt，并要求新 ProviderObservation 同时携带相同 provider identity，使多 Provider 状态查询不依赖 request-id 猜测；pre-0011 缺 provider identity 的历史 submitted rows 保留可读但不会被自动轮询。`0010_provider_results.sql` 新增 append-only `execution.provider_observations`、`provider_waiting/finished` Job 状态和 provider-result deferred bundle；accepted submission 在同一事务释放本地 Worker lease，异步供应商处理由独立 Reconciler 收敛。应用既有库迁移仍由操作员显式执行，不在 API/Worker 启动时自动执行。
+当前迁移为 `0001–0012`。`0012_provider_cancellation.sql` 新增 durable `execution.provider_cancel_intents`、`running/reconciling → cancel_requested` 的 provider-cancel bundle，以及 `fulfilled/superseded` 与 ProviderObservation terminal 的双向约束；取消网络调用在 durable `sending` 后不会自动重发，unknown 只能靠既有 provider status reconciliation 收敛。`0011_provider_reconciliation.sql` 把实际接受 submission 的 `provider_id` 固化到 Attempt/新 observation，使多 Provider 状态查询不依赖 request-id 猜测；`0010_provider_results.sql` 建立 append-only result evidence 与 `provider_waiting/finished`。应用既有库迁移仍由操作员显式执行，不在 API/Worker 启动时自动执行。
 
 本轮新增 `0004_atomic_admission.sql`：commerce 预算期／额度预留和 execution 受理／blocked Job／Outbox，含 FORCE RLS 与延迟额度总和约束。0001–0003 内容不变。已有开发数据库应用新增迁移后须重新执行 `pnpm db:grant-runtime --role <查询运行角色>`，仅补充受理关联的两列读取权；不能将 admission writer 或迁移所有者混入查询 API。详情及真实故障注入结果见 [内部原子受理](../../docs/engineering/2026-09-09-atomic-admission.md)。
 
@@ -26,8 +26,10 @@ Provider result 使用第三个独立执行角色：`pnpm db:grant-reconciler --
 
 应用 `0011` 后，对既有 worker role 再执行 `pnpm db:grant-worker --role <worker role>`，以增加 `run_attempts.provider_id` 这一列的受限 UPDATE；这是 `RecordSubmitted` 固化实际 provider identity 所需的唯一新 Worker 写能力。Reconciler 已拥有 `run_attempts`／`provider_observations` 的表级只读／append 权限，不需要 Supply/Connections schema USAGE，也不能通过这些上下文反查路由。完整路由与轮询边界见 [Provider Reconciliation](../../docs/engineering/2026-09-10-provider-reconciliation.md)。
 
+应用 `0012` 后，既有 cancellation role 与 reconciler role 都需要重新授权：分别执行 `pnpm db:grant-cancellation --role <cancellation role>` 和 `pnpm db:grant-reconciler --role <reconciler role>`。Cancellation role 只能读取/插入用户 provider-cancel intent 和读取必要 Attempt provider handles，不能写 `sending/resolved/outcome/unknown` 结果列；Reconciler role 只能 claim/resolve 已有 intent，不能伪造用户取消请求。Runtime/Worker/Admission/Executor 继续被启动自检要求无法访问 `provider_cancel_intents`。完整边界见 [Provider Cancellation](../../docs/engineering/2026-09-10-provider-cancellation.md)。
+
 已有环境应用 `0007` 后还应重新执行 `pnpm db:grant-admission --role <原 admission role>`。该命令会主动撤销旧的 `execution.jobs` 整表 INSERT，再只授予 StartRun 所需的 workspace/run/state/blocked_reason/available_at/created_at/updated_at 列，防止旧 admission role 因新列出现而获得 priority、lease、fencing 或 attempt 配置写入能力。
 
 启用“已 activation 但从未 lease 的 queued Job”协调取消后，也应重新执行 `pnpm db:grant-cancellation --role <原 cancellation role>`。该授权仅增加 `run_attempts` 的 workspace/run/attempt_no 三列读取用于证明 Attempt 不存在，并允许同步 Job `updated_at`；任何已有 Attempt 的 Job 都不会走即时额度释放路径。
 
-真实数据库验证入口为 `pnpm test:integration`，缺少配置明确失败；本机自有临时资源入口为 `pnpm test:integration:docker`。`0011` 已随隔离 PostgreSQL 套件验证，包括 provider identity submission/observation bundle、按 provider 精确状态路由、pending→terminal 收敛、provider unavailable 无状态变化与 Attempt 不重建；`0010` 的 replay/乱序/第二终态和旧取消兼容也继续通过。
+真实数据库验证入口为 `pnpm test:integration`，缺少配置明确失败；本机自有临时资源入口为 `pnpm test:integration:docker`。`0012` 已随隔离 PostgreSQL 套件验证：旧 safe-cancel/CAS 继续通过；provider cancel intent/replay、sending-before-call、ACK→canceled、success 抢先→superseded、cancel unknown 不重发、status polling 后 fulfilled、Attempt 不重建及角色越权拒绝全部成立。`0010–0011` 的 result/reconciliation 套件同时继续通过。

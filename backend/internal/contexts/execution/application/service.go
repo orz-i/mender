@@ -38,11 +38,24 @@ func NewServiceWithCancellation(repository ports.Repository, authorizer ports.Au
 	return s, nil
 }
 
+func NewServiceWithCancellationAndProvider(repository ports.Repository, authorizer ports.Authorizer, clock ports.Clock, coordinator ports.CoordinatedCanceler, providerCanceler ports.ProviderCancelRequester) (*Service, error) {
+	if providerCanceler == nil {
+		return nil, ErrMissingDependency
+	}
+	s, err := NewServiceWithCancellation(repository, authorizer, clock, coordinator)
+	if err != nil {
+		return nil, err
+	}
+	s.providerCanceler = providerCanceler
+	return s, nil
+}
+
 type Service struct {
-	repository  ports.Repository
-	authorizer  ports.Authorizer
-	clock       ports.Clock
-	coordinator ports.CoordinatedCanceler
+	repository       ports.Repository
+	authorizer       ports.Authorizer
+	clock            ports.Clock
+	coordinator      ports.CoordinatedCanceler
+	providerCanceler ports.ProviderCancelRequester
 }
 
 func NewService(repository ports.Repository, authorizer ports.Authorizer, clock ports.Clock) (*Service, error) {
@@ -108,6 +121,22 @@ func (s *Service) CancelRunWithReason(ctx context.Context, caller ports.Caller, 
 	if s.coordinator != nil {
 		snapshot, managed, e := s.coordinator.CancelAdmission(ctx, caller, id, reason)
 		if e != nil {
+			if errors.Is(e, ports.ErrUnsafeCancel) && s.providerCanceler != nil {
+				providerSnapshot, handled, providerErr := s.providerCanceler.RequestProviderCancellation(ctx, caller, id, reason)
+				if providerErr != nil {
+					return View{}, providerErr
+				}
+				if handled {
+					if providerSnapshot.ID != id || providerSnapshot.WorkspaceID != caller.WorkspaceID || providerSnapshot.State != domain.CancelRequested {
+						return View{}, ports.ErrUnavailable
+					}
+					current, restoreErr := domain.Restore(providerSnapshot)
+					if restoreErr != nil {
+						return View{}, ports.ErrUnavailable
+					}
+					return view(current), nil
+				}
+			}
 			return View{}, e
 		}
 		if managed {

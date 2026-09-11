@@ -71,7 +71,7 @@ func WorkerRole(ctx context.Context, pool *pgxpool.Pool) error {
 			return errors.New("worker role exposes admission data")
 		}
 	}
-	for _, table := range []string{"execution.outbox", "execution.run_cancellations", "execution.provider_observations"} {
+	for _, table := range []string{"execution.outbox", "execution.run_cancellations", "execution.provider_observations", "execution.provider_cancel_intents"} {
 		if err = pool.QueryRow(ctx, `SELECT has_table_privilege(current_user,$1,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') OR has_any_column_privilege(current_user,$1,'SELECT,INSERT,UPDATE')`, table).Scan(&unsafe); err != nil || unsafe {
 			return errors.New("worker role has unrelated data access: " + table)
 		}
