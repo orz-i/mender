@@ -19,9 +19,9 @@
     "ses_62a1ebea37544a1a9eb3d95cec77deaf": {
       "path": "docs/session/ses_62a1ebea37544a1a9eb3d95cec77deaf.md",
       "title": "Mender MCP Meta-Tool Gateway Foundation",
-      "status": "active",
+      "status": "completed",
       "created_at": "unix:1789120714",
-      "updated_at": "unix:1789122249",
+      "updated_at": "unix:1789122443",
       "parent_session_id": "ses_6a0f3473bbe642a18d2f7b2ee99dc037"
     },
     "ses_6a0f3473bbe642a18d2f7b2ee99dc037": {
