@@ -8,6 +8,7 @@
 - Distribution Binding 增加固定 `connection_id`、稳定 `mcp_name` 和 `mcp_exposed`；同 Workspace/Toolset 的公开名称唯一，旧 binding 默认隐藏。
 - 固定入口：`/mcp/v1/workspaces/{workspace_id}/toolsets/{toolset_version_id}`。
 - `tools/list` 每个请求重新读取 published bindings、ToolVersion 和当前 Connection grant；失效／撤销 Connection 不进入当前可调用面。
+- 有效 Workspace 凭据如果缺少 `run:create`，仍可完成 MCP `server/discover`，但 `tools/list` 返回空业务工具面；这样权限不足不会被 SDK 误判成协议版本回退。真正 `tools/call` 会再次读取当前权限并 fail closed。
 - `tools/call` 只接受业务参数和保留 `_mender` 控制块。Tool、版本、Toolset、Connection、Price、Budget、Deployment 都由服务端发布合同／Admission 解析，客户端不能覆盖。
 - `_mender` 必须包含 `idempotency_key`、`currency`、`max_charge_micro`，进入 Admission 前从业务 arguments 中剥离。业务 arguments 使用已发布 input JSON Schema 做服务端验证，并保留原始 JSON bytes 进入 Admission，因此大整数不会因验证而改变持久化精度。
 - 调用结果是异步 Run receipt：`run_id + submission_state=accepted + replayed + currency + reserved_micro`。Catalog 声明的业务 output schema 作为 MCP metadata 提供，只有后续 Provider succeeded Artifact 才是业务结果；本阶段不伪装同步业务结果。

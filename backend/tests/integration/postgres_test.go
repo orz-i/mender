@@ -247,6 +247,9 @@ func TestPostgresRuntimeContract(t *testing.T) {
 	t.Run("authenticated stateless MCP meta-tool gateway", func(t *testing.T) {
 		exerciseMCPGateway(t, ctx, owner, runtime, runtimeURL.String(), keyA, keyReadOnlyA, keyB)
 	})
+	t.Run("fixed Toolset MCP business-tool distribution", func(t *testing.T) {
+		exerciseFixedToolsetMCP(t, ctx, owner, runtime, runtimeURL.String(), keyA, keyReadOnlyA, keyB)
+	})
 	t.Run("protected HTTP uses durable storage and rechecks key revocation", func(t *testing.T) {
 		h, closeAPI, e := bootstrap.BuildAPI(ctx, bootstrap.APIConfig{RunAPIEnabled: true, DatabaseURL: runtimeURL.String()})
 		must(t, e)

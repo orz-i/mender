@@ -294,7 +294,8 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 			if buildErr != nil {
 				return failed(buildErr)
 			}
-			fixedBridge, buildErr := mcpapp.NewFixed(mcpidentity.New(identityFacade), mcpadmission.New(admissionfacade.NewAdmission(admission)), registry)
+			fixedIdentity := mcpidentity.New(identityFacade)
+			fixedBridge, buildErr := mcpapp.NewFixed(fixedIdentity, fixedIdentity, mcpadmission.New(admissionfacade.NewAdmission(admission)), registry)
 			if buildErr != nil {
 				return failed(buildErr)
 			}

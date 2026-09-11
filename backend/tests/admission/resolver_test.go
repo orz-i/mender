@@ -27,6 +27,10 @@ func (s *toolsetsStub) ResolveBinding(context.Context, string, string, string, s
 	return s.binding, s.err
 }
 
+func (s *toolsetsStub) ListDirectBindings(context.Context, string, string) ([]distribution.Binding, error) {
+	return nil, distribution.ErrNotFound
+}
+
 type catalogStub struct {
 	tool  catalog.ToolVersion
 	err   error

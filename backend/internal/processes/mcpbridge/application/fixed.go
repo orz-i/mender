@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"errors"
 )
 
 // DirectTool is the stable, secret-free Toolset publication projection. It
@@ -18,17 +19,22 @@ type DirectTools interface {
 	Resolve(context.Context, Caller, string, string) (DirectTool, error)
 }
 
-type FixedService struct {
-	auth    Authenticator
-	starter Starter
-	tools   DirectTools
+type Authorizer interface {
+	Authorize(context.Context, Caller, string) error
 }
 
-func NewFixed(auth Authenticator, starter Starter, tools DirectTools) (*FixedService, error) {
-	if auth == nil || starter == nil || tools == nil {
+type FixedService struct {
+	auth       Authenticator
+	authorizer Authorizer
+	starter    Starter
+	tools      DirectTools
+}
+
+func NewFixed(auth Authenticator, authorizer Authorizer, starter Starter, tools DirectTools) (*FixedService, error) {
+	if auth == nil || authorizer == nil || starter == nil || tools == nil {
 		return nil, ErrUnavailable
 	}
-	return &FixedService{auth: auth, starter: starter, tools: tools}, nil
+	return &FixedService{auth: auth, authorizer: authorizer, starter: starter, tools: tools}, nil
 }
 
 func (s *FixedService) Authenticate(ctx context.Context, token, workspace string) (Caller, error) {
@@ -38,6 +44,17 @@ func (s *FixedService) Authenticate(ctx context.Context, token, workspace string
 func (s *FixedService) ListTools(ctx context.Context, caller Caller, toolsetID string) ([]DirectTool, error) {
 	if !validID(toolsetID) {
 		return nil, ErrInvalid
+	}
+	// Tool discovery is part of the MCP handshake. A credential that is valid
+	// for the Workspace but lacks run:create must therefore see an empty
+	// callable surface instead of turning server/discover into an HTTP 403
+	// (which the SDK may interpret as a protocol fallback signal). tools/call
+	// re-authorizes run:create again immediately before durable admission.
+	if err := s.authorizer.Authorize(ctx, caller, "run:create"); err != nil {
+		if errors.Is(err, ErrForbidden) || errors.Is(err, ErrUnauthenticated) {
+			return []DirectTool{}, nil
+		}
+		return nil, err
 	}
 	items, err := s.tools.List(ctx, caller, toolsetID)
 	if err != nil {
@@ -59,6 +76,9 @@ func (s *FixedService) ListTools(ctx context.Context, caller Caller, toolsetID s
 func (s *FixedService) StartTool(ctx context.Context, caller Caller, toolsetID, name, idempotencyKey, currency, maxCharge string, arguments []byte) (StartReceipt, error) {
 	if !validID(toolsetID) || !validMCPName(name) || len(arguments) < 2 || len(arguments) > 65536 || !json.Valid(arguments) || arguments[0] != '{' {
 		return StartReceipt{}, ErrInvalid
+	}
+	if err := s.authorizer.Authorize(ctx, caller, "run:create"); err != nil {
+		return StartReceipt{}, err
 	}
 	tool, err := s.tools.Resolve(ctx, caller, toolsetID, name)
 	if err != nil {

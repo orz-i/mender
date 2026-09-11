@@ -51,6 +51,15 @@ func fixedWorkspace(path string) (workspaceID, toolsetID string, ok bool) {
 }
 
 func directSchema(tool application.DirectTool) (json.RawMessage, error) {
+	var published jsonschema.Schema
+	if err := json.Unmarshal([]byte(tool.InputSchema), &published); err != nil {
+		return nil, application.ErrUnavailable
+	}
+	// No Loader is supplied: any nested remote $ref fails closed and can never
+	// trigger network access from tools/list or tools/call.
+	if _, err := published.Resolve(nil); err != nil {
+		return nil, application.ErrUnavailable
+	}
 	var schema map[string]any
 	if err := json.Unmarshal([]byte(tool.InputSchema), &schema); err != nil || schema == nil || schema["type"] != "object" {
 		return nil, application.ErrUnavailable
@@ -289,6 +298,14 @@ func (h *FixedHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			failure(w, http.StatusRequestTimeout, "REQUEST_CANCELED")
+			return
+		}
+		if errors.Is(err, application.ErrUnauthenticated) {
+			failure(w, http.StatusUnauthorized, "UNAUTHENTICATED")
+			return
+		}
+		if errors.Is(err, application.ErrForbidden) {
+			failure(w, http.StatusForbidden, "FORBIDDEN")
 			return
 		}
 		failure(w, http.StatusServiceUnavailable, "MCP_TOOLSET_UNAVAILABLE")

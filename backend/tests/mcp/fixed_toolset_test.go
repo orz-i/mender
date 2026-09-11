@@ -18,6 +18,31 @@ type directRegistry struct {
 	calls int
 }
 
+func TestFixedToolsetDiscoveryHidesToolsWhenCreateScopeIsForbidden(t *testing.T) {
+	registry := &directRegistry{items: []application.DirectTool{reviewedDirectTool()}}
+	fixed, err := application.NewFixed(
+		authFunc(func(context.Context, string) (application.Caller, error) {
+			return application.Caller{WorkspaceID: "ws_a", SubjectID: "sa_read", CredentialID: "key_read"}, nil
+		}),
+		authorizeFunc(func(context.Context, application.Caller, string) error { return application.ErrForbidden }),
+		&captureStarter{},
+		registry,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	items, err := fixed.ListTools(context.Background(), application.Caller{WorkspaceID: "ws_a", SubjectID: "sa_read", CredentialID: "key_read"}, "set_sales_v1")
+	if err != nil || len(items) != 0 {
+		t.Fatal("forbidden caller received a discoverable direct Tool surface", items, err)
+	}
+}
+
+type authorizeFunc func(context.Context, application.Caller, string) error
+
+func (f authorizeFunc) Authorize(ctx context.Context, caller application.Caller, action string) error {
+	return f(ctx, caller, action)
+}
+
 func (r *directRegistry) List(_ context.Context, _ application.Caller, _ string) ([]application.DirectTool, error) {
 	return append([]application.DirectTool(nil), r.items...), nil
 }
@@ -44,11 +69,17 @@ func reviewedDirectTool() application.DirectTool {
 
 func connectFixedTools(t *testing.T, starter application.Starter, registry application.DirectTools, token, workspace, toolset string) (*mcp.ClientSession, func()) {
 	t.Helper()
-	fixed, err := application.NewFixed(authFunc(func(_ context.Context, value string) (application.Caller, error) {
+	auth := authFunc(func(_ context.Context, value string) (application.Caller, error) {
 		if value != "machine-secret" {
 			return application.Caller{}, application.ErrUnauthenticated
 		}
 		return application.Caller{WorkspaceID: "ws_a", SubjectID: "sa_a", CredentialID: "key_a"}, nil
+	})
+	fixed, err := application.NewFixed(auth, authorizeFunc(func(_ context.Context, _ application.Caller, action string) error {
+		if action != "run:create" {
+			return application.ErrForbidden
+		}
+		return nil
 	}), starter, registry)
 	if err != nil {
 		t.Fatal(err)
@@ -133,9 +164,10 @@ func TestFixedToolsetRejectsRoutingOverridesAndSchemaInvalidArguments(t *testing
 func TestFixedToolsetFailsClosedForUnrepresentablePublishedSchema(t *testing.T) {
 	broken := reviewedDirectTool()
 	broken.InputSchema = `{"$ref":"https://example.test/external-schema.json","type":"object"}`
-	fixed, err := application.NewFixed(authFunc(func(context.Context, string) (application.Caller, error) {
+	auth := authFunc(func(context.Context, string) (application.Caller, error) {
 		return application.Caller{WorkspaceID: "ws_a", SubjectID: "sa_a", CredentialID: "key_a"}, nil
-	}), &captureStarter{}, &directRegistry{items: []application.DirectTool{broken}})
+	})
+	fixed, err := application.NewFixed(auth, authorizeFunc(func(context.Context, application.Caller, string) error { return nil }), &captureStarter{}, &directRegistry{items: []application.DirectTool{broken}})
 	if err != nil {
 		t.Fatal(err)
 	}
