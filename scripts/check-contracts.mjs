@@ -151,3 +151,17 @@ for (const tool of mcpTools.tools) {
 }
 for (const name of ['fixed-toolset-direct-tools', 'upstream-mcp-client', 'oauth', 'resources', 'prompts', 'mrtr', 'agent-as-tool']) assert.ok(mcpTools.not_claimed.includes(name));
 console.log('PASS: MCP 2026-07-28 stateless meta-tool contract, stable four-tool surface and forbidden-output policy.');
+
+const fixedToolset = json('fixed-toolset-contract.json');
+assert.equal(fixedToolset.contract_version, '0.1.0');
+assert.deepEqual(fixedToolset.catalog_tool_version.side_effect_values, ['read_only', 'write']);
+assert.deepEqual(fixedToolset.catalog_tool_version.idempotency_values, ['safe_read', 'idempotent', 'unsafe']);
+assert.equal(fixedToolset.catalog_tool_version.input_schema_top_level_type, 'object');
+assert.equal(fixedToolset.catalog_tool_version.default_mcp_publishable, false);
+assert.ok(fixedToolset.catalog_tool_version.immutable_fields.includes('mcp_publishable'));
+assert.equal(fixedToolset.toolset_binding.default_mcp_exposed, false);
+assert.equal(fixedToolset.toolset_binding.mcp_name_pattern, '^[a-z][a-z0-9_]{0,63}$');
+assert.deepEqual(fixedToolset.toolset_binding.unique_scope, ['workspace_id', 'toolset_version_id', 'mcp_name']);
+for (const field of ['connection_id', 'mcp_name', 'mcp_exposed']) assert.ok(fixedToolset.toolset_binding.direct_mcp_requires.includes(field));
+for (const field of ['tool_id', 'tool_version', 'toolset_id', 'connection_id', 'price_version_id', 'budget_id', 'deployment_revision']) assert.ok(fixedToolset.security.client_cannot_override.includes(field));
+console.log('PASS: Fixed Toolset publication contract keeps immutable Tool schemas, stable MCP aliases and server-owned routing controls.');

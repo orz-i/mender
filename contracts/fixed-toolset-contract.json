@@ -1,0 +1,50 @@
+{
+  "contract_version": "0.1.0",
+  "catalog_tool_version": {
+    "immutable_fields": [
+      "title",
+      "description",
+      "input_schema",
+      "output_schema",
+      "side_effect",
+      "idempotency",
+      "mcp_publishable"
+    ],
+    "input_schema_top_level_type": "object",
+    "side_effect_values": ["read_only", "write"],
+    "idempotency_values": ["safe_read", "idempotent", "unsafe"],
+    "default_mcp_publishable": false
+  },
+  "toolset_binding": {
+    "direct_mcp_requires": ["connection_id", "mcp_name", "mcp_exposed"],
+    "mcp_name_pattern": "^[a-z][a-z0-9_]{0,63}$",
+    "unique_scope": ["workspace_id", "toolset_version_id", "mcp_name"],
+    "default_mcp_exposed": false
+  },
+  "security": {
+    "client_cannot_override": [
+      "tool_id",
+      "tool_version",
+      "toolset_id",
+      "connection_id",
+      "price_version_id",
+      "budget_id",
+      "deployment_revision"
+    ],
+    "runtime_revalidates": [
+      "machine_identity",
+      "connection_grant",
+      "price_version",
+      "budget_period",
+      "deployment"
+    ]
+  },
+  "not_claimed": [
+    "synchronous-business-result",
+    "upstream-mcp-client",
+    "oauth",
+    "resources",
+    "prompts",
+    "agent-as-tool"
+  ]
+}

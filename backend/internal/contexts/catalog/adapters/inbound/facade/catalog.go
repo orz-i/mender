@@ -24,7 +24,7 @@ func (f *Catalog) ResolveToolVersion(ctx context.Context, id, toolID, version st
 			return catalog.ToolVersion{}, catalog.ErrUnavailable
 		}
 	}
-	return catalog.ToolVersion{ID: v.ID, ToolID: v.ToolID, Version: v.Version, ProviderID: v.ProviderID, PriceVersionID: v.PriceVersionID, DeploymentRevision: v.DeploymentRevision}, nil
+	return catalog.ToolVersion{ID: v.ID, ToolID: v.ToolID, Version: v.Version, ProviderID: v.ProviderID, PriceVersionID: v.PriceVersionID, DeploymentRevision: v.DeploymentRevision, Title: v.Title, Description: v.Description, InputSchema: v.InputSchema, OutputSchema: v.OutputSchema, SideEffect: v.SideEffect, Idempotency: v.Idempotency, MCPPublishable: v.MCPPublishable}, nil
 }
 
 var _ catalog.Catalog = (*Catalog)(nil)

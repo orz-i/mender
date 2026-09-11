@@ -24,7 +24,22 @@ func (f *Toolsets) ResolveBinding(ctx context.Context, workspace, toolsetVersion
 			return distribution.Binding{}, distribution.ErrUnavailable
 		}
 	}
-	return distribution.Binding{ToolsetVersionID: b.ToolsetVersionID, ToolVersionID: b.ToolVersionID, BudgetID: b.BudgetID}, nil
+	return distribution.Binding{ToolsetVersionID: b.ToolsetVersionID, ToolVersionID: b.ToolVersionID, BudgetID: b.BudgetID, ConnectionID: b.ConnectionID, MCPName: b.MCPName}, nil
+}
+
+func (f *Toolsets) ListDirectBindings(ctx context.Context, workspace, toolsetVersionID string) ([]distribution.Binding, error) {
+	items, err := f.service.ListDirect(ctx, workspace, toolsetVersionID)
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
+		return nil, distribution.ErrUnavailable
+	}
+	result := make([]distribution.Binding, 0, len(items))
+	for _, item := range items {
+		result = append(result, distribution.Binding{ToolsetVersionID: item.ToolsetVersionID, ToolVersionID: item.ToolVersionID, BudgetID: item.BudgetID, ConnectionID: item.ConnectionID, MCPName: item.MCPName})
+	}
+	return result, nil
 }
 
 var _ distribution.Toolsets = (*Toolsets)(nil)

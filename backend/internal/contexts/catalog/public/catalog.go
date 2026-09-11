@@ -12,6 +12,9 @@ var (
 
 type ToolVersion struct {
 	ID, ToolID, Version, ProviderID, PriceVersionID, DeploymentRevision string
+	Title, Description, InputSchema, OutputSchema                       string
+	SideEffect, Idempotency                                             string
+	MCPPublishable                                                      bool
 }
 
 type Catalog interface {
