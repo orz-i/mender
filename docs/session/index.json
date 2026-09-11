@@ -11,9 +11,9 @@
     "ses_1f6e4bf2d4d84a08ab178696f116d189": {
       "path": "docs/session/ses_1f6e4bf2d4d84a08ab178696f116d189.md",
       "title": "Commerce Usage Settlement",
-      "status": "active",
+      "status": "completed",
       "created_at": "unix:1789116461",
-      "updated_at": "unix:1789118012",
+      "updated_at": "unix:1789118092",
       "parent_session_id": "ses_f8eacb3ddd604c48bc9d94548d912e9d"
     },
     "ses_8e2a42283ec744f5940c1dc762d2e187": {
