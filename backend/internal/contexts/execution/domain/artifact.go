@@ -24,7 +24,7 @@ type Artifact struct {
 	CreatedAt           time.Time
 }
 
-func validArtifactID(value string) bool {
+func ValidArtifactID(value string) bool {
 	if len(value) < 1 || len(value) > 160 {
 		return false
 	}
@@ -37,7 +37,7 @@ func validArtifactID(value string) bool {
 }
 
 func (a Artifact) Validate() error {
-	if !a.WorkspaceID.IsValid() || !a.RunID.IsValid() || !validArtifactID(a.ID) || a.Kind != ProviderResultArtifact || a.MediaType != "application/json" || !validObservationID(a.SourceObservationID) || !validJobTime(a.CreatedAt) || len(a.ContentJSON) < 1 || len(a.ContentJSON) > 1<<20 || !utf8.ValidString(a.ContentJSON) || !json.Valid([]byte(a.ContentJSON)) {
+	if !a.WorkspaceID.IsValid() || !a.RunID.IsValid() || !ValidArtifactID(a.ID) || a.Kind != ProviderResultArtifact || a.MediaType != "application/json" || !validObservationID(a.SourceObservationID) || !validJobTime(a.CreatedAt) || len(a.ContentJSON) < 1 || len(a.ContentJSON) > 1<<20 || !utf8.ValidString(a.ContentJSON) || !json.Valid([]byte(a.ContentJSON)) {
 		return ErrInvalidArtifact
 	}
 	return nil

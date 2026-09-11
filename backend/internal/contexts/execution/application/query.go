@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"math"
 	"strings"
@@ -19,6 +20,72 @@ const CursorLifetime = 15 * time.Minute
 type PageRequest struct {
 	Limit  int // Zero uses 20. Explicit HTTP limit=0 is rejected by the transport.
 	Cursor string
+}
+
+func validArtifactMetadata(m ports.ArtifactMetadata, workspace ports.WorkspaceID, runID ports.RunID) bool {
+	return m.WorkspaceID == workspace && m.RunID == runID && domain.ValidArtifactID(m.ArtifactID) && m.Kind == domain.ProviderResultArtifact && m.MediaType == "application/json" && m.SizeBytes > 0 && m.SizeBytes <= 1<<20 && !m.CreatedAt.IsZero() && m.CreatedAt.Year() >= 1 && m.CreatedAt.Year() <= 9999
+}
+
+// ListArtifacts is a bounded metadata projection. The first release can only
+// create one provider_result Artifact per Run, but the repository keeps a hard
+// ceiling so future Artifact kinds cannot turn this endpoint into an unbounded read.
+func (q *Queries) ListArtifacts(ctx context.Context, caller ports.Caller, id ports.RunID) ([]ArtifactView, error) {
+	if !id.IsValid() {
+		return nil, ErrInvalidRequest
+	}
+	if err := q.authorize(ctx, caller, ports.ReadRun, id); err != nil {
+		return nil, err
+	}
+	rows, err := q.repository.FetchArtifacts(ctx, caller.WorkspaceID, id)
+	if err != nil {
+		return nil, err
+	}
+	if err = ctx.Err(); err != nil {
+		return nil, err
+	}
+	if len(rows) > 100 {
+		return nil, ports.ErrUnavailable
+	}
+	items := make([]ArtifactView, 0, len(rows))
+	for _, row := range rows {
+		if !validArtifactMetadata(row, caller.WorkspaceID, id) {
+			return nil, ports.ErrUnavailable
+		}
+		items = append(items, ArtifactView{ArtifactID: row.ArtifactID, Kind: row.Kind, MediaType: row.MediaType, SizeBytes: row.SizeBytes, CreatedAt: row.CreatedAt})
+	}
+	return items, nil
+}
+
+func (q *Queries) GetArtifact(ctx context.Context, caller ports.Caller, id ports.RunID, artifactID string) (ArtifactDetail, error) {
+	if !id.IsValid() || !domain.ValidArtifactID(artifactID) {
+		return ArtifactDetail{}, ErrInvalidRequest
+	}
+	if err := q.authorize(ctx, caller, ports.ReadRun, id); err != nil {
+		return ArtifactDetail{}, err
+	}
+	record, err := q.repository.FetchArtifact(ctx, caller.WorkspaceID, id, artifactID)
+	if err != nil {
+		return ArtifactDetail{}, err
+	}
+	if err = ctx.Err(); err != nil {
+		return ArtifactDetail{}, err
+	}
+	if !validArtifactMetadata(record.ArtifactMetadata, caller.WorkspaceID, id) || record.ArtifactID != artifactID || len(record.ContentJSON) < 1 || len(record.ContentJSON) > 1<<20 || !json.Valid([]byte(record.ContentJSON)) {
+		return ArtifactDetail{}, ports.ErrUnavailable
+	}
+	return ArtifactDetail{ArtifactView: ArtifactView{ArtifactID: record.ArtifactID, Kind: record.Kind, MediaType: record.MediaType, SizeBytes: record.SizeBytes, CreatedAt: record.CreatedAt}, ContentJSON: record.ContentJSON}, nil
+}
+
+type ArtifactView struct {
+	ArtifactID string
+	Kind       domain.ArtifactKind
+	MediaType  string
+	SizeBytes  int64
+	CreatedAt  time.Time
+}
+type ArtifactDetail struct {
+	ArtifactView
+	ContentJSON string
 }
 type RunListRequest struct {
 	PageRequest

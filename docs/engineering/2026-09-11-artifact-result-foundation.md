@@ -20,7 +20,18 @@ Reconciler 仍是最小的 Execution 结果写入 principal。为了在终态事
 
 ## Stage 2：Artifact Query API
 
-下一切片将新增 Run 下的 Artifact 列表与单 Artifact 读取。HTTP 层会复用当前 machine-key `run:read` 授权和 Workspace 隔离；公开响应只包含稳定 Artifact 元数据与 JSON content，不暴露 provider request/task ID、Provider control 状态、Connection secret 或 canonical arguments。
+已新增 Run 下的 Artifact 列表和单 Artifact 读取：
+
+- `GET /api/v1/workspaces/:workspace_id/runs/:run_id/artifacts`
+- `GET /api/v1/workspaces/:workspace_id/runs/:run_id/artifacts/:artifact_id`
+
+两条路径都复用当前 machine-key `run:read` 授权，授权先于任何 projection 访问。列表只返回 `artifact_id/kind/media_type/size_bytes/created_at`；单 Artifact 额外返回原生 JSON `content`。未知 query string 被拒绝，不默默接受未来含义；Run 或 Artifact 在当前 Workspace 不存在时返回 404。
+
+查询应用层只依赖 `ReadRepository` 的 Artifact projection port；PostgreSQL adapter 只读取 `execution.artifacts`，不读取 `provider_observations`，因此公开结果查询不需要 Provider request/task/control 证据权限。应用层对 Workspace、Run、Artifact ID、类型、媒体类型、大小、时间和 JSON 再次进行 projection 校验，错误或跨租户数据 fail closed。
+
+新增 `contracts/artifact-read.openapi.yaml` 作为已实现子集合同。HTTP / application 测试确认 run:cancel-only Key 无法读取 Artifact、撤销/缺失认证不能触达 projection、列表不含 content、detail 不含 provider request/task ID、credential/canonical arguments 等内部字段。
+
+Stage 2 的 focused Go tests、`pnpm check:contracts` 和 `pnpm check:architecture` 已通过。runtime/query 数据库角色对 `execution.artifacts` 的最小 SELECT 仍留在 Stage 3 与真实 PostgreSQL 一起验证。
 
 ## Stage 3：集成与权限加固
 

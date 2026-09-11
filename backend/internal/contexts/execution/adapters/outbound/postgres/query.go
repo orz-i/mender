@@ -126,4 +126,77 @@ func (r *Repository) FetchEvents(ctx context.Context, workspace ports.WorkspaceI
 	return batch, nil
 }
 
+func (r *Repository) FetchArtifacts(ctx context.Context, workspace ports.WorkspaceID, id ports.RunID) ([]ports.ArtifactMetadata, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if !id.IsValid() {
+		return nil, ports.ErrNotFound
+	}
+	tx, err := r.scoped(ctx, workspace)
+	if err != nil {
+		return nil, err
+	}
+	defer rollback(tx)
+	var exists bool
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM execution.runs WHERE workspace_id=$1 AND id=$2)`, string(workspace), string(id)).Scan(&exists); err != nil {
+		return nil, ports.ErrUnavailable
+	}
+	if !exists {
+		return nil, ports.ErrNotFound
+	}
+	rows, err := tx.Query(ctx, `SELECT workspace_id,run_id,id,kind,media_type,octet_length(content_json::text),created_at
+	 FROM execution.artifacts WHERE workspace_id=$1 AND run_id=$2 ORDER BY created_at ASC,id COLLATE "C" ASC LIMIT 101`, string(workspace), string(id))
+	if err != nil {
+		return nil, ports.ErrUnavailable
+	}
+	defer rows.Close()
+	items := make([]ports.ArtifactMetadata, 0, 2)
+	for rows.Next() {
+		var item ports.ArtifactMetadata
+		var workspaceID, runID, kind string
+		if err = rows.Scan(&workspaceID, &runID, &item.ArtifactID, &kind, &item.MediaType, &item.SizeBytes, &item.CreatedAt); err != nil {
+			return nil, ports.ErrUnavailable
+		}
+		item.WorkspaceID, item.RunID, item.Kind = ports.WorkspaceID(workspaceID), ports.RunID(runID), domain.ArtifactKind(kind)
+		items = append(items, item)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, ports.ErrUnavailable
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return nil, ports.ErrUnavailable
+	}
+	return items, nil
+}
+
+func (r *Repository) FetchArtifact(ctx context.Context, workspace ports.WorkspaceID, id ports.RunID, artifactID string) (ports.ArtifactRecord, error) {
+	if err := ctx.Err(); err != nil {
+		return ports.ArtifactRecord{}, err
+	}
+	if !id.IsValid() || !domain.ValidArtifactID(artifactID) {
+		return ports.ArtifactRecord{}, ports.ErrNotFound
+	}
+	tx, err := r.scoped(ctx, workspace)
+	if err != nil {
+		return ports.ArtifactRecord{}, err
+	}
+	defer rollback(tx)
+	var record ports.ArtifactRecord
+	var workspaceID, runID, kind string
+	err = tx.QueryRow(ctx, `SELECT workspace_id,run_id,id,kind,media_type,octet_length(content_json::text),created_at,content_json::text
+	 FROM execution.artifacts WHERE workspace_id=$1 AND run_id=$2 AND id=$3`, string(workspace), string(id), artifactID).Scan(&workspaceID, &runID, &record.ArtifactID, &kind, &record.MediaType, &record.SizeBytes, &record.CreatedAt, &record.ContentJSON)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ports.ArtifactRecord{}, ports.ErrNotFound
+	}
+	if err != nil {
+		return ports.ArtifactRecord{}, ports.ErrUnavailable
+	}
+	record.WorkspaceID, record.RunID, record.Kind = ports.WorkspaceID(workspaceID), ports.RunID(runID), domain.ArtifactKind(kind)
+	if err = tx.Commit(ctx); err != nil {
+		return ports.ArtifactRecord{}, ports.ErrUnavailable
+	}
+	return record, nil
+}
+
 var _ ports.ReadRepository = (*Repository)(nil)

@@ -111,3 +111,24 @@ validate(readAPI.components.schemas.RunListResponse, { data: [], meta: { request
 validate(readAPI.components.schemas.RunListResponse, { data: [{ run_id: 'run_a', workspace_id: 'ws_a', execution_state: 'queued', version: '1', created_at: '2026-09-09T00:00:00Z', updated_at: '2026-09-09T00:00:00Z' }], meta: { request_id: 'example', next_cursor: 'opaque.example' } }, 'Run list response');
 validate(readAPI.components.schemas.EventListResponse, { data: [{ version: '2', event_type: 'run.state_changed', execution_state: 'canceled', occurred_at: '2026-09-09T00:00:00Z', subject_id: 'subject_a', reason: 'example only' }], meta: { request_id: 'example', next_cursor: null, through_version: '2' } }, 'Run event response');
 console.log('PASS: authorized Run list / finite event timeline schemas, local response refs and examples; no database execution claimed.');
+
+const artifactAPI = parse(readFileSync(join(root, 'artifact-read.openapi.yaml'), 'utf8'));
+assert.equal(artifactAPI.openapi, '3.1.0');
+assert.equal(artifactAPI.info.version, '0.1.0');
+assert.equal(Object.keys(artifactAPI.paths).length, 2);
+for (const [path, item] of Object.entries(artifactAPI.paths)) {
+  const expected = [...path.matchAll(/\{([^}]+)\}/g)].map((match) => match[1]).sort();
+  assert.deepEqual(item.parameters.filter((p) => p.in === 'path' && p.required).map((p) => p.name).sort(), expected);
+  assert.ok(item.get.operationId);
+  assert.equal(item.get.parameters, undefined, 'Artifact endpoints intentionally accept no query parameters');
+  assert.ok(item.get.responses['200'].content['application/json'].schema.$ref.startsWith('#/components/schemas/'));
+}
+validate(artifactAPI.components.schemas.ArtifactListResponse, {
+  data: [{ artifact_id: 'art_run_a', kind: 'provider_result', media_type: 'application/json', size_bytes: 11, created_at: '2026-09-11T09:30:00Z' }],
+  meta: { request_id: 'example' },
+}, 'Artifact list response');
+validate(artifactAPI.components.schemas.ArtifactDetailResponse, {
+  data: { artifact_id: 'art_run_a', kind: 'provider_result', media_type: 'application/json', size_bytes: 11, created_at: '2026-09-11T09:30:00Z', content: { ok: true } },
+  meta: { request_id: 'example' },
+}, 'Artifact detail response');
+console.log('PASS: authenticated inline Artifact metadata/content contract; no provider-control identifiers or object-storage claims.');

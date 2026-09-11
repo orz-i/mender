@@ -15,15 +15,105 @@ import (
 )
 
 type queryStore struct {
-	runs   func(context.Context, ports.WorkspaceID, ports.RunFilter) ([]domain.Snapshot, error)
-	events func(context.Context, ports.WorkspaceID, ports.RunID, ports.EventFilter) (ports.EventBatch, error)
+	runs      func(context.Context, ports.WorkspaceID, ports.RunFilter) ([]domain.Snapshot, error)
+	events    func(context.Context, ports.WorkspaceID, ports.RunID, ports.EventFilter) (ports.EventBatch, error)
+	artifacts func(context.Context, ports.WorkspaceID, ports.RunID) ([]ports.ArtifactMetadata, error)
+	artifact  func(context.Context, ports.WorkspaceID, ports.RunID, string) (ports.ArtifactRecord, error)
+}
+
+func TestArtifactQueriesAuthorizeBeforeStorageAndValidateProjection(t *testing.T) {
+	meta := ports.ArtifactMetadata{WorkspaceID: "ws_a", RunID: "run_a", ArtifactID: "art_run_a", Kind: domain.ProviderResultArtifact, MediaType: "application/json", SizeBytes: 11, CreatedAt: at}
+	var calls int
+	store := queryStore{
+		artifacts: func(_ context.Context, w ports.WorkspaceID, id ports.RunID) ([]ports.ArtifactMetadata, error) {
+			calls++
+			if w != "ws_a" || id != "run_a" {
+				return nil, ports.ErrNotFound
+			}
+			return []ports.ArtifactMetadata{meta}, nil
+		},
+		artifact: func(_ context.Context, w ports.WorkspaceID, id ports.RunID, artifactID string) (ports.ArtifactRecord, error) {
+			calls++
+			if w != "ws_a" || id != "run_a" || artifactID != "art_run_a" {
+				return ports.ArtifactRecord{}, ports.ErrNotFound
+			}
+			return ports.ArtifactRecord{ArtifactMetadata: meta, ContentJSON: `{"ok":true}`}, nil
+		},
+	}
+	var actions int
+	policy := authorizeFunc(func(_ context.Context, c ports.Caller, action ports.Action, id domain.RunID) error {
+		actions++
+		if c != queryCaller || action != ports.ReadRun || id != "run_a" {
+			t.Fatal("wrong artifact authorization", c, action, id)
+		}
+		return nil
+	})
+	q := queryService(t, store, policy, fixedClock{at})
+	items, err := q.ListArtifacts(context.Background(), queryCaller, "run_a")
+	if err != nil || len(items) != 1 || items[0].ArtifactID != "art_run_a" || items[0].MediaType != "application/json" {
+		t.Fatal(items, err)
+	}
+	detail, err := q.GetArtifact(context.Background(), queryCaller, "run_a", "art_run_a")
+	if err != nil || detail.ContentJSON != `{"ok":true}` || actions != 2 || calls != 2 {
+		t.Fatal(detail, err, actions, calls)
+	}
+
+	denied := queryService(t, store, authorizeFunc(func(context.Context, ports.Caller, ports.Action, domain.RunID) error { return ports.ErrForbidden }), fixedClock{at})
+	before := calls
+	if _, err = denied.ListArtifacts(context.Background(), queryCaller, "run_a"); !errors.Is(err, ports.ErrForbidden) || calls != before {
+		t.Fatal("denied artifact list reached storage", err)
+	}
+	if _, err = denied.GetArtifact(context.Background(), queryCaller, "run_a", "art_run_a"); !errors.Is(err, ports.ErrForbidden) || calls != before {
+		t.Fatal("denied artifact read reached storage", err)
+	}
+	if _, err = q.GetArtifact(context.Background(), queryCaller, "run_a", "../secret"); !errors.Is(err, application.ErrInvalidRequest) {
+		t.Fatal(err)
+	}
+}
+
+func TestArtifactQueriesRejectCorruptOrOversizedProjection(t *testing.T) {
+	base := ports.ArtifactMetadata{WorkspaceID: "ws_a", RunID: "run_a", ArtifactID: "art_run_a", Kind: domain.ProviderResultArtifact, MediaType: "application/json", SizeBytes: 2, CreatedAt: at}
+	for name, mutate := range map[string]func(*ports.ArtifactRecord){
+		"tenant":   func(r *ports.ArtifactRecord) { r.WorkspaceID = "ws_b" },
+		"kind":     func(r *ports.ArtifactRecord) { r.Kind = "provider_internal" },
+		"media":    func(r *ports.ArtifactRecord) { r.MediaType = "text/plain" },
+		"size":     func(r *ports.ArtifactRecord) { r.SizeBytes = 1<<20 + 1 },
+		"content":  func(r *ports.ArtifactRecord) { r.ContentJSON = "{" },
+		"artifact": func(r *ports.ArtifactRecord) { r.ArtifactID = "art_other" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			record := ports.ArtifactRecord{ArtifactMetadata: base, ContentJSON: `{}`}
+			mutate(&record)
+			q := queryService(t, queryStore{artifact: func(context.Context, ports.WorkspaceID, ports.RunID, string) (ports.ArtifactRecord, error) {
+				return record, nil
+			}}, allow(), fixedClock{at})
+			if _, err := q.GetArtifact(context.Background(), queryCaller, "run_a", "art_run_a"); !errors.Is(err, ports.ErrUnavailable) {
+				t.Fatal(err)
+			}
+		})
+	}
 }
 
 func (s queryStore) FetchRuns(c context.Context, w ports.WorkspaceID, f ports.RunFilter) ([]domain.Snapshot, error) {
 	return s.runs(c, w, f)
 }
 func (s queryStore) FetchEvents(c context.Context, w ports.WorkspaceID, id ports.RunID, f ports.EventFilter) (ports.EventBatch, error) {
+	if s.events == nil {
+		return ports.EventBatch{}, ports.ErrUnavailable
+	}
 	return s.events(c, w, id, f)
+}
+func (s queryStore) FetchArtifacts(c context.Context, w ports.WorkspaceID, id ports.RunID) ([]ports.ArtifactMetadata, error) {
+	if s.artifacts == nil {
+		return nil, ports.ErrUnavailable
+	}
+	return s.artifacts(c, w, id)
+}
+func (s queryStore) FetchArtifact(c context.Context, w ports.WorkspaceID, id ports.RunID, artifactID string) (ports.ArtifactRecord, error) {
+	if s.artifact == nil {
+		return ports.ArtifactRecord{}, ports.ErrUnavailable
+	}
+	return s.artifact(c, w, id, artifactID)
 }
 
 type queryClock struct{ now time.Time }

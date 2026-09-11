@@ -1,0 +1,93 @@
+openapi: 3.1.0
+info:
+  title: Mender authenticated inline Artifact result subset
+  version: 0.1.0
+  description: >-
+    Requires the Run read API and a machine credential with run:read in the same Workspace.
+    This implemented subset exposes immutable execution-owned provider_result Artifacts only.
+    Lists return metadata; a single Artifact returns bounded application/json content inline.
+    Provider request/task identifiers, connection data, canonical arguments and provider control state are not part of this contract.
+    Object storage, signed URLs, file uploads and Artifact deletion are not implemented here.
+servers:
+  - url: http://127.0.0.1:18080
+security:
+  - MachineKey: []
+paths:
+  /api/v1/workspaces/{workspace_id}/runs/{run_id}/artifacts:
+    parameters:
+      - {name: workspace_id, in: path, required: true, schema: {type: string, pattern: '^[A-Za-z0-9_-]{1,128}$'}}
+      - {name: run_id, in: path, required: true, schema: {type: string, pattern: '^[A-Za-z0-9_-]{1,128}$'}}
+    get:
+      operationId: listAuthorizedRunArtifacts
+      responses:
+        '200': {description: 'Metadata array; an existing Run without a result Artifact returns an empty array', content: {application/json: {schema: {$ref: '#/components/schemas/ArtifactListResponse'}}}}
+        '400': {description: Unknown query string or invalid path identifier}
+        '401': {description: Missing, invalid, expired or revoked credential}
+        '403': {description: Workspace or run:read scope denied}
+        '404': {description: Run not found in authorized Workspace}
+        '503': {description: Dependency or stored projection unavailable}
+        '504': {description: Request deadline exceeded}
+  /api/v1/workspaces/{workspace_id}/runs/{run_id}/artifacts/{artifact_id}:
+    parameters:
+      - {name: workspace_id, in: path, required: true, schema: {type: string, pattern: '^[A-Za-z0-9_-]{1,128}$'}}
+      - {name: run_id, in: path, required: true, schema: {type: string, pattern: '^[A-Za-z0-9_-]{1,128}$'}}
+      - {name: artifact_id, in: path, required: true, schema: {type: string, pattern: '^[A-Za-z0-9._:-]{1,160}$'}}
+    get:
+      operationId: getAuthorizedRunArtifact
+      responses:
+        '200': {description: 'Immutable bounded inline JSON result', content: {application/json: {schema: {$ref: '#/components/schemas/ArtifactDetailResponse'}}}}
+        '400': {description: Unknown query string or invalid path identifier}
+        '401': {description: Missing, invalid, expired or revoked credential}
+        '403': {description: Workspace or run:read scope denied}
+        '404': {description: Run or Artifact not found in authorized Workspace}
+        '503': {description: Dependency or stored projection unavailable}
+        '504': {description: Request deadline exceeded}
+components:
+  securitySchemes:
+    MachineKey: {type: http, scheme: bearer, description: 'Server-issued random machine API Key; never a client-provided subject identity'}
+  schemas:
+    ArtifactMetadata: &ArtifactMetadata
+      type: object
+      additionalProperties: false
+      required: [artifact_id, kind, media_type, size_bytes, created_at]
+      properties:
+        artifact_id: {type: string, pattern: '^[A-Za-z0-9._:-]{1,160}$'}
+        kind: {const: provider_result}
+        media_type: {const: application/json}
+        size_bytes: {type: integer, minimum: 1, maximum: 1048576}
+        created_at: {type: string, format: date-time}
+    ArtifactListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {type: array, maxItems: 100, items: *ArtifactMetadata}
+        meta:
+          type: object
+          additionalProperties: false
+          required: [request_id]
+          properties:
+            request_id: {type: string}
+    ArtifactDetail: &ArtifactDetail
+      type: object
+      additionalProperties: false
+      required: [artifact_id, kind, media_type, size_bytes, created_at, content]
+      properties:
+        artifact_id: {type: string, pattern: '^[A-Za-z0-9._:-]{1,160}$'}
+        kind: {const: provider_result}
+        media_type: {const: application/json}
+        size_bytes: {type: integer, minimum: 1, maximum: 1048576}
+        created_at: {type: string, format: date-time}
+        content: {}
+    ArtifactDetailResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: *ArtifactDetail
+        meta:
+          type: object
+          additionalProperties: false
+          required: [request_id]
+          properties:
+            request_id: {type: string}

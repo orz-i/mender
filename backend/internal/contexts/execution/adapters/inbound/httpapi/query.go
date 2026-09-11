@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"errors"
 	"net/url"
 	"strconv"
@@ -16,6 +17,53 @@ type QueryHandler struct {
 	authenticator ports.Authenticator
 }
 
+func (h *QueryHandler) handleArtifacts(single bool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, done, caller, requestID, ok := authenticateRequest(c, h.authenticator)
+		defer done()
+		if !ok {
+			return
+		}
+		if c.Request.URL.RawQuery != "" {
+			failError(c, requestID, application.ErrInvalidRequest)
+			return
+		}
+		runID := ports.RunID(c.Param("run_id"))
+		if single {
+			artifact, err := h.queries.GetArtifact(ctx, caller, runID, c.Param("artifact_id"))
+			if err != nil {
+				failError(c, requestID, err)
+				return
+			}
+			c.JSON(200, gin.H{"data": artifactDetailDTO{artifactDTO: artifactDTO{ArtifactID: artifact.ArtifactID, Kind: string(artifact.Kind), MediaType: artifact.MediaType, SizeBytes: artifact.SizeBytes, CreatedAt: artifact.CreatedAt}, Content: json.RawMessage(artifact.ContentJSON)}, "meta": gin.H{"request_id": requestID}})
+			return
+		}
+		artifacts, err := h.queries.ListArtifacts(ctx, caller, runID)
+		if err != nil {
+			failError(c, requestID, err)
+			return
+		}
+		items := make([]artifactDTO, 0, len(artifacts))
+		for _, artifact := range artifacts {
+			items = append(items, artifactDTO{ArtifactID: artifact.ArtifactID, Kind: string(artifact.Kind), MediaType: artifact.MediaType, SizeBytes: artifact.SizeBytes, CreatedAt: artifact.CreatedAt})
+		}
+		c.JSON(200, gin.H{"data": items, "meta": gin.H{"request_id": requestID}})
+	}
+}
+
+type artifactDTO struct {
+	ArtifactID string    `json:"artifact_id"`
+	Kind       string    `json:"kind"`
+	MediaType  string    `json:"media_type"`
+	SizeBytes  int64     `json:"size_bytes"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+type artifactDetailDTO struct {
+	artifactDTO
+	Content json.RawMessage `json:"content"`
+}
+
 func NewQueries(queries *application.Queries, auth ports.Authenticator) (*QueryHandler, error) {
 	if queries == nil || auth == nil {
 		return nil, errors.New("query HTTP adapter requires queries and authentication")
@@ -27,6 +75,8 @@ func (h *QueryHandler) Register(router *gin.Engine) {
 	base := "/api/v1/workspaces/:workspace_id/runs"
 	router.GET(base, h.handle(false))
 	router.GET(base+"/:run_id/events", h.handle(true))
+	router.GET(base+"/:run_id/artifacts", h.handleArtifacts(false))
+	router.GET(base+"/:run_id/artifacts/:artifact_id", h.handleArtifacts(true))
 }
 
 func parsePage(raw string, events bool) (application.RunListRequest, error) {

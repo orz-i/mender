@@ -12,6 +12,8 @@ import (
 type ReadRepository interface {
 	FetchRuns(context.Context, WorkspaceID, RunFilter) ([]domain.Snapshot, error)
 	FetchEvents(context.Context, WorkspaceID, RunID, EventFilter) (EventBatch, error)
+	FetchArtifacts(context.Context, WorkspaceID, RunID) ([]ArtifactMetadata, error)
+	FetchArtifact(context.Context, WorkspaceID, RunID, string) (ArtifactRecord, error)
 }
 
 type RunFilter struct {
@@ -40,6 +42,21 @@ type Event struct {
 type EventBatch struct {
 	Through uint64
 	Items   []Event
+}
+
+type ArtifactMetadata struct {
+	WorkspaceID WorkspaceID
+	RunID       RunID
+	ArtifactID  string
+	Kind        domain.ArtifactKind
+	MediaType   string
+	SizeBytes   int64
+	CreatedAt   time.Time
+}
+
+type ArtifactRecord struct {
+	ArtifactMetadata
+	ContentJSON string
 }
 
 // Cursor is an application continuation contract. It never grants access.

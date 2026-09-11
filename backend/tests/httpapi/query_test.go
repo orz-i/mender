@@ -25,8 +25,70 @@ import (
 )
 
 type projection struct {
-	rows  []domain.Snapshot
-	calls int
+	rows      []domain.Snapshot
+	calls     int
+	artifacts []ports.ArtifactRecord
+}
+
+func TestArtifactHTTPRequiresRunReadAndHidesProviderControlDetails(t *testing.T) {
+	h, key, credentials, store := setupQueries(t)
+	base := listPath + "/run_1/artifacts"
+	for _, path := range []string{base, base + "/art_run_1"} {
+		if w := request(h, "", "GET", path, ""); w.Code != 401 {
+			t.Fatal(path, w.Code)
+		}
+	}
+	before := store.calls
+	if w := request(h, key, "GET", base+"?cursor=nope", ""); w.Code != 400 || store.calls != before {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	credentials.credential.Scopes = []string{"run:cancel"}
+	if w := request(h, key, "GET", base, ""); w.Code != 403 || store.calls != before {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	credentials.credential.Scopes = []string{"run:read"}
+	w := request(h, key, "GET", base, "")
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"artifact_id":"art_run_1"`) || strings.Contains(w.Body.String(), `"content"`) {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	w = request(h, key, "GET", base+"/art_run_1", "")
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"content":{"ok":true}`) {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	for _, forbidden := range []string{"provider_request_id", "external_task_id", "credential_id", "canonical_arguments", credentials.credential.Digest} {
+		if strings.Contains(w.Body.String(), forbidden) {
+			t.Fatal("artifact response leaked provider/control data", forbidden)
+		}
+	}
+	if w = request(h, key, "GET", base+"/missing", ""); w.Code != 404 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if w = request(h, key, "GET", listPath+"/missing/artifacts", ""); w.Code != 404 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+}
+func (p *projection) FetchArtifacts(_ context.Context, w ports.WorkspaceID, id ports.RunID) ([]ports.ArtifactMetadata, error) {
+	p.calls++
+	if id != "run_1" || w != "ws_a" {
+		return nil, ports.ErrNotFound
+	}
+	items := make([]ports.ArtifactMetadata, 0, len(p.artifacts))
+	for _, a := range p.artifacts {
+		items = append(items, a.ArtifactMetadata)
+	}
+	return items, nil
+}
+func (p *projection) FetchArtifact(_ context.Context, w ports.WorkspaceID, id ports.RunID, artifactID string) (ports.ArtifactRecord, error) {
+	p.calls++
+	if id != "run_1" || w != "ws_a" {
+		return ports.ArtifactRecord{}, ports.ErrNotFound
+	}
+	for _, a := range p.artifacts {
+		if a.ArtifactID == artifactID {
+			return a, nil
+		}
+	}
+	return ports.ArtifactRecord{}, ports.ErrNotFound
 }
 
 func (p *projection) FetchRuns(_ context.Context, w ports.WorkspaceID, f ports.RunFilter) ([]domain.Snapshot, error) {
@@ -73,7 +135,7 @@ func setupQueries(t *testing.T) (http.Handler, string, *credentialStore, *projec
 		}
 		rows = append(rows, r.Snapshot())
 	}
-	store := &projection{rows: rows}
+	store := &projection{rows: rows, artifacts: []ports.ArtifactRecord{{ArtifactMetadata: ports.ArtifactMetadata{WorkspaceID: "ws_a", RunID: "run_1", ArtifactID: "art_run_1", Kind: domain.ProviderResultArtifact, MediaType: "application/json", SizeBytes: 11, CreatedAt: rows[0].UpdatedAt}, ContentJSON: `{"ok":true}`}}}
 	queries, e := application.NewQueries(store, access, codec, clock)
 	if e != nil {
 		t.Fatal(e)
