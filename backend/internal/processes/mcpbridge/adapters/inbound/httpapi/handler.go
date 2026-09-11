@@ -230,6 +230,7 @@ func callerFromContext(r *http.Request) (application.Caller, bool) {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	if h == nil || h.service == nil || h.mcp == nil {
 		failure(w, http.StatusServiceUnavailable, "MCP_UNAVAILABLE")
 		return

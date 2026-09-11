@@ -11,6 +11,7 @@ var (
 	ErrForbidden         = errors.New("admission forbidden")
 	ErrConflict          = errors.New("admission idempotency conflict")
 	ErrBudgetExceeded    = errors.New("admission budget exceeded")
+	ErrBudgetUnavailable = errors.New("admission budget unavailable")
 	ErrUnavailable       = errors.New("admission unavailable")
 	ErrCommitUnconfirmed = errors.New("admission commit unconfirmed")
 )

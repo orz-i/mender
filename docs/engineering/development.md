@@ -54,7 +54,8 @@ pnpm dev:api
 | Worker SQL 租约控制 | 已实现 Job/Attempt、lease/heartbeat/expiry/fencing 基础；默认 worker idle，显式启用后当前进程只恢复过期 lease，不领取新任务、不调用供应商 |
 | HTTP Supplier Submit / Provider status/cancel | hardened adapter 与 reviewed library composition 已实现；默认命令没有生产 SecretProvider/egress/runtime，所以不访问真实供应商 |
 | Usage Settlement | terminal Provider fact 会原子创建 pending settlement job；reviewed settlement runtime 可用专用角色将 held quota 转成 consumed/released quota，但默认 API/Worker 不调度它，也不做 payment/revenue accounting |
-| MCP、Agent、callback/webhook 等其他业务路径 | 尚未开放 |
+| `POST /mcp/v1/workspaces/{workspace_id}` | 默认未注册；显式启用后只接受 MCP `2026-07-28` stateless Streamable HTTP，Bearer machine Key 在进入官方 SDK 前绑定 Workspace；暴露四个 `mender_*` 平台元工具 |
+| 固定 Toolset direct MCP tools、上游 MCP Client、Agent、callback/webhook | 尚未开放 |
 
 前端 `/` 是初始化介绍，`/status` 发送真实健康请求；网络失败或响应不合法时显示恢复入口。未知前端路由提供 404 和返回首页。服务状态只确认 API 进程连通，不表示 Worker、认证、存储或业务链路健康。
 
@@ -77,6 +78,8 @@ Worker 租约控制使用独立角色：先由管理员执行 `pnpm db:grant-wor
 应用 `0013_provider_control_endpoints.sql` 后，Supply deployment 可以声明固定 HTTP status/cancel POST endpoint。Provider request/task handle 始终作为有界 JSON body 发送，不拼入 URL。`BuildProviderHTTPControlRuntime` 只能由受审 host 代码显式传入 executor/reconciler 两个独立角色、Provider allowlist、egress policy 与 SecretProvider；默认 `cmd/worker`／API 不读取任何 `MENDER_PROVIDER_*` 环境变量。实现与验证边界见 [Provider HTTP Control Runtime](2026-09-11-provider-control-runtime.md)。
 
 应用 `0014_usage_settlement_contract.sql` 与 `0015_terminal_settlement_jobs.sql` 后，既有固定价格被明确为 `fixed_success_only`，Provider 终态收敛会在同一 Execution 事务创建 settlement job。先由管理员执行 `pnpm db:grant-settlement --role <role>` 为预先存在的独立角色授权；`BuildUsageSettlementRuntime` 启动时会校验 migration digest、最小权限与 RLS。该 runtime 没有后台循环，结算事务也不会执行 Provider、Secret、Webhook 或支付网络调用。实现与验证边界见 [Commerce Usage Settlement](2026-09-11-commerce-usage-settlement.md)。
+
+MCP gateway 使用官方 `github.com/modelcontextprotocol/go-sdk` v1.7.0，并把本阶段兼容承诺固定为 `2026-07-28`。启用 `MENDER_MCP_GATEWAY_ENABLED=true` 前还必须同时启用 Run API、Run read、StartRun 和 coordinated cancellation，并配置现有 reader/admission/cancellation 角色及 cursor signing key。入口是 `/mcp/v1/workspaces/{workspace_id}`，当前工具只有 `mender_run_start`、`mender_run_get`、`mender_run_cancel`、`mender_artifact_get`。StartRun 的 `arguments` 从 SDK raw `json.RawMessage` 严格解析后交给现有 Admission，避免大整数在幂等哈希前转换为浮点；客户端断开不会撤销已持久受理的 Run，应复用同一 `idempotency_key` 查询结果。详情见 [MCP Meta-Tool Gateway](2026-09-11-mcp-meta-tool-gateway.md)。
 
 应用 `0016_execution_artifacts.sql` 后，已有 API runtime 与 reconciler role 都要重新执行对应 grant。Runtime 只新增 Artifact 安全列读取，明确看不到 `source_observation_id`；Reconciler 只增加 Artifact SELECT/INSERT，以便 succeeded Provider Observation 与结果 Artifact 在同一 Execution terminal transaction 中提交。`MENDER_RUN_READ_API_ENABLED=true` 时 Artifact 路径随 Run read handler 一起注册，没有匿名结果 API，也没有对象存储配置。实现、历史回填和真实 PostgreSQL 证据见 [Artifact / Result Foundation](2026-09-11-artifact-result-foundation.md)。
 

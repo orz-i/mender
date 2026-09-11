@@ -244,6 +244,9 @@ func TestPostgresRuntimeContract(t *testing.T) {
 	t.Run("immutable result Artifacts and protected reads", func(t *testing.T) {
 		exerciseArtifacts(t, ctx, owner, runtime, runtimeURL.String(), keyB)
 	})
+	t.Run("authenticated stateless MCP meta-tool gateway", func(t *testing.T) {
+		exerciseMCPGateway(t, ctx, owner, runtime, runtimeURL.String(), keyA, keyReadOnlyA, keyB)
+	})
 	t.Run("protected HTTP uses durable storage and rechecks key revocation", func(t *testing.T) {
 		h, closeAPI, e := bootstrap.BuildAPI(ctx, bootstrap.APIConfig{RunAPIEnabled: true, DatabaseURL: runtimeURL.String()})
 		must(t, e)

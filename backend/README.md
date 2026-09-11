@@ -1,8 +1,8 @@
 # Mender Backend
 
-最新实现：[Artifact / Result Foundation](../docs/engineering/2026-09-11-artifact-result-foundation.md)。Provider succeeded terminal convergence 现在把受限 JSON result 在同一 Execution 事务内物化为 immutable `provider_result` Artifact；受保护 Run read API 可列出 Artifact 元数据并按 ID 读取 JSON content，始终重新执行 machine-key `run:read` 与 Workspace 隔离。
+最新实现：[MCP Meta-Tool Gateway Foundation](../docs/engineering/2026-09-11-mcp-meta-tool-gateway.md)。API 可显式启用官方 MCP Go SDK v1.7.0 的 `2026-07-28` stateless Streamable HTTP 入口，将现有 Admission、Run cancel/read 和 Artifact read 作为四个认证平台元工具暴露；MCP handler 不拥有新的权限、预算或执行旁路。
 
-已有受保护 Run/Artifact 查询、取消与公共 StartRun、原子预算预留、Worker lease/fencing、Supplier submission、HTTP executor、Provider result/status/cancel 收敛及 quota/usage settlement。Artifact v1 只支持 <=1 MiB 的 inline `application/json`；对象存储、签名 URL、真实外部 Provider、MCP／Agent、Webhook 和 Outbox external delivery 仍未开放。Commerce 仍不是 payment wallet、收入总账或真实收费系统。
+已有受保护 Run/Artifact 查询、取消与公共 StartRun、原子预算预留、Worker lease/fencing、Supplier submission、HTTP executor、Provider result/status/cancel 收敛及 quota/usage settlement。MCP 当前仅为动态平台元工具网关；固定 Toolset direct tools、上游 MCP Client、OAuth、Resources/Prompts、MRTR 和 Agent 仍未开放。Artifact v1 只支持 <=1 MiB inline JSON；Commerce 仍不是 payment wallet 或真实收费系统。
 
 独立 Go 模块 `github.com/orz-i/mender/backend`。从仓库根可用 `pnpm dev:api`／`pnpm dev:worker`，或在本目录直接使用 Go。
 
@@ -18,14 +18,16 @@ internal/contexts/<context>/     候选领域边界
   public/                        身份、受理和预留的稳定集成合同
 internal/processes/admission/    内部原子受理用例、事务端口及防腐层
 internal/processes/settlement/   终态 Execution fact → Commerce quota 的受控同库 UoW
+internal/processes/mcpbridge/    MCP 纯用例、跨域 ACL 与官方 SDK inbound adapter
 internal/platform/httpserver/    当前 Gin 探针适配
 internal/sharedkernel/           最小共享纯类型预留
 migrations/                     0001–0016：另含 Usage Settlement、terminal jobs 与 Execution Artifact
 tests/architecture/              Go AST 边界检查与负向 fixture
 tests/execution/                 应用用例与仅测试编译的内存仓储
+tests/mcp/                       MCP 2026-07-28、认证与四个元工具协议测试
 ```
 
-8 个上下文的 README 记录候选职责和所有权。bootstrap 只在显式配置与数据库角色自检通过后安装相应能力；Provider control 与 Usage Settlement 都保持受审 library composition，没有 ambient production 开关或默认调度循环。Artifact read 是现有 Run read API 的受保护子资源，不引入独立匿名结果入口。数据库测试真实执行仍不代表支付、人类登录、完整业务前端或生产可用。
+8 个上下文的 README 记录候选职责和所有权。bootstrap 只在显式配置与数据库角色自检通过后安装相应能力。MCP gateway 默认关闭，启用时要求 Run read、StartRun、协调取消和各自现有受限数据库角色；Bearer machine Key 在进入 SDK 前与 path Workspace 交叉验证。数据库/MCP E2E 测试真实执行仍不代表支付、人类登录、完整业务前端或生产可用。
 
 测试内存仓储只存在于 `_test.go`，不会链接到 API／Worker。运行中的任务接受取消后保持 `cancel_requested`；结果不明时保持 `reconciling`，不把网络超时误认为远端已停止。
 

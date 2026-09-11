@@ -24,8 +24,10 @@ func admissionError(err error) error {
 		return admission.ErrForbidden
 	case errors.Is(err, application.ErrConflict):
 		return admission.ErrConflict
-	case errors.Is(err, application.ErrBudgetExceeded), errors.Is(err, application.ErrBudgetUnavailable):
+	case errors.Is(err, application.ErrBudgetExceeded):
 		return admission.ErrBudgetExceeded
+	case errors.Is(err, application.ErrBudgetUnavailable):
+		return admission.ErrBudgetUnavailable
 	case errors.Is(err, application.ErrCommitUnconfirmed):
 		return admission.ErrCommitUnconfirmed
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
