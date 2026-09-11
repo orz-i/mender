@@ -116,6 +116,9 @@ func (r *workerRepoFake) RecordSubmitted(_ context.Context, token domain.LeaseTo
 	if err := r.attempt.MarkSubmitted(token, at, key, providerRequestID, externalTaskID); err != nil {
 		return domain.Snapshot{}, domain.AttemptSnapshot{}, err
 	}
+	if err := r.job.MarkProviderWaiting(token, at); err != nil {
+		return domain.Snapshot{}, domain.AttemptSnapshot{}, err
+	}
 	if r.run.Snapshot().State == domain.Queued {
 		if err := r.run.Start(at); err != nil {
 			return domain.Snapshot{}, domain.AttemptSnapshot{}, err

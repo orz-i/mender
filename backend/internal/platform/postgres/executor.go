@@ -55,7 +55,7 @@ func ExecutorRole(ctx context.Context, pool *pgxpool.Pool) error {
 	// Cross-schema reachability above is authoritative for identity/commerce/
 	// catalog/distribution. Within the schemas this role can actually USE, reject
 	// access to unrelated execution tables explicitly.
-	for _, table := range []string{"execution.runs", "execution.jobs", "execution.run_attempts", "execution.run_events", "execution.outbox", "execution.run_cancellations"} {
+	for _, table := range []string{"execution.runs", "execution.jobs", "execution.run_attempts", "execution.run_events", "execution.outbox", "execution.run_cancellations", "execution.provider_observations"} {
 		if err = pool.QueryRow(ctx, `SELECT has_table_privilege(current_user,$1,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') OR has_any_column_privilege(current_user,$1,'SELECT,INSERT,UPDATE')`, table).Scan(&unsafe); err != nil || unsafe {
 			return errors.New("executor role has unrelated table access: " + table)
 		}

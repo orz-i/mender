@@ -23,7 +23,7 @@ var contexts = map[string]bool{
 // Pure imports are an explicit allowlist. Adding one requires a boundary review.
 var pureImports = map[string]bool{
 	"bytes": true, "cmp": true, "context": true, "encoding/hex": true,
-	"errors": true, "fmt": true, "math": true, "math/big": true,
+	"encoding/json": true, "errors": true, "fmt": true, "math": true, "math/big": true,
 	"slices": true, "sort": true, "strconv": true, "strings": true,
 	"time": true, "unicode": true, "unicode/utf8": true,
 }

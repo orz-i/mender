@@ -6,7 +6,7 @@
 
 `BeginSubmission` 必须在任何未来网络副作用之前提交 `Attempt=submitting`、唯一 `submission_key` 与 `submission_intent_at`。只有这个事务成功后，dispatcher 才有资格把同一个 key 交给供应商。intent 之前的 lease 可以安全 `ReleaseBeforeSubmit` 或在到期后标记 `expired` 并 requeue；intent 之后绝不能使用这条安全重投路径。
 
-供应商明确接受后，`RecordSubmitted` 在同一 execution 事务中保存 `provider_request_id`、可选 `external_task_id`、`submitted_at`，并把 Run 从 queued v1 推进为 running v2、追加 RunEvent。相同 generation、submission key 与 provider IDs 的重复确认是幂等读取，不增加 Run version。
+供应商明确接受后，`RecordSubmitted` 在同一 execution 事务中保存 `provider_request_id`、可选 `external_task_id`、`submitted_at`，并把 Run 从 queued v1 推进为 running v2、追加 RunEvent。自 `0010` 起同一事务还把 Job 转为 `provider_waiting` 并清空 Worker lease；远端异步处理不再占用本地执行租约。相同 generation、submission key 与 provider IDs 的重复确认是幂等读取，不增加 Run version。
 
 网络 timeout、进程崩溃或 acknowledgement 不可确认时，`RecordSubmissionUnknown`／`RecoverExpired` 把 Attempt 置为 `unknown`，Job 置为 `reconciling / submission_outcome_unknown`，Run 置为 `reconciling`。若 provider IDs 已经确认，它们保留在 unknown Attempt 中供后续查询/对账使用。该 Job 不再 leaseable；旧 Worker 的 fencing token 也不能迟到写入新的 provider 结果。
 
@@ -25,12 +25,12 @@ pnpm db:grant-worker --role mender_worker
 
 ## 恢复与重试规则
 
-lease 到期时先锁 Run，再锁 Job/Attempt，与协调取消保持同一 Run→Job 锁顺序。当前 Attempt 仍是 `leased` 说明没有 durable submission intent，可按原策略 expired/requeue；Attempt 已是 `submitting` 或 `submitted` 则只能 unknown/reconciling，不能自动创建新 Attempt 或再次提交。
+lease 到期时先锁 Run，再锁 Job/Attempt，与协调取消保持同一 Run→Job 锁顺序。当前 Attempt 仍是 `leased` 说明没有 durable submission intent，可按原策略 expired/requeue；`submitting` 在 lease 到期后只能 unknown/reconciling，不能自动创建新 Attempt 或再次提交。`0010` 后 `submitted` 已与 `provider_waiting` 配对并释放 lease，因此不会再由 Worker lease expiry 驱动 reconciliation；它只能由 Provider Result/Reconciler 查询已知 provider identifiers 收敛。
 
 本阶段的 `submission_key` 由调用该应用端口的未来 dispatcher 提供；Stage 3 会负责确定稳定生成规则和 Executor 端口。数据库协议本身不把“存在 key”误当成供应商支持幂等：真实适配器仍必须声明供应商幂等能力，对不支持幂等且结果不明的写操作只能查询/对账，不能盲重投。
 
 ## 验证
 
-领域/应用测试覆盖 submitting/submitted/unknown 状态、重复 accepted 幂等、invalid key/provider facts、queued/running→reconciling 和 stale fencing。真实隔离 PostgreSQL 套件验证：`0008` 与既有 StartRun/取消/lease 迁移共存；intent 在 Run 仍 queued 时先持久；accepted provider IDs 与 running Run 同 bundle；accepted replay 不改版本；显式 timeout 与 intent/submitted lease expiry 均进入 unknown/reconciling；provider IDs 在 recovery 后保留；旧 generation 的迟到 accepted 写入被拒；直接把受理 Run 改为 running 而没有 submitted Attempt proof 无法提交。测试容器由现有所有权标签机制清理。
+领域/应用测试覆盖 submitting/submitted/unknown 状态、重复 accepted 幂等、invalid key/provider facts、queued/running→reconciling 和 stale fencing。`0010` 进一步验证 accepted provider IDs、running Run 与 `provider_waiting` Job 同 bundle，accepted 后 lease expiry 不再命中，显式 unknown/submitting crash 仍进入 reconciliation；provider IDs 保留供后续查询。直接把受理 Run 改为 running 而没有 submitted Attempt proof仍无法提交。
 
 后续已在此协议之上增加 Executor Dispatcher application seam 与 deterministic fake executor，但生产 dispatch 仍保持 fail-closed，也没有真实供应商网络证据，因此不宣称端到端执行已经完成。Dispatcher 的顺序、fencing 与仍缺失的 heartbeat/payload/credential/provider capability 边界见 [Executor Dispatcher 记录](2026-09-10-executor-dispatcher.md)。真实 HTTP/MCP/Agent 网络出口仍需单独评审。

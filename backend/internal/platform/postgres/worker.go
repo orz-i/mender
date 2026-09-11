@@ -70,7 +70,7 @@ func WorkerRole(ctx context.Context, pool *pgxpool.Pool) error {
 			return errors.New("worker role exposes admission data")
 		}
 	}
-	for _, table := range []string{"execution.outbox", "execution.run_cancellations"} {
+	for _, table := range []string{"execution.outbox", "execution.run_cancellations", "execution.provider_observations"} {
 		if err = pool.QueryRow(ctx, `SELECT has_table_privilege(current_user,$1,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') OR has_any_column_privilege(current_user,$1,'SELECT,INSERT,UPDATE')`, table).Scan(&unsafe); err != nil || unsafe {
 			return errors.New("worker role has unrelated data access: " + table)
 		}
@@ -92,8 +92,8 @@ func WorkerRole(ctx context.Context, pool *pgxpool.Pool) error {
 		}
 	}
 	var rls int
-	err = pool.QueryRow(ctx, `SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='execution' AND c.relname IN('runs','run_events','jobs','run_attempts','run_admissions') AND c.relrowsecurity AND c.relforcerowsecurity`).Scan(&rls)
-	if err != nil || rls != 5 {
+	err = pool.QueryRow(ctx, `SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='execution' AND c.relname IN('runs','run_events','jobs','run_attempts','run_admissions','provider_observations') AND c.relrowsecurity AND c.relforcerowsecurity`).Scan(&rls)
+	if err != nil || rls != 6 {
 		return errors.New("worker RLS safeguards missing")
 	}
 	return nil

@@ -19,6 +19,9 @@ func AdmissionRole(ctx context.Context, pool *pgxpool.Pool) error {
 	if e = pool.QueryRow(ctx, `SELECT has_table_privilege(current_user,'execution.run_attempts','SELECT,INSERT,UPDATE,DELETE,TRUNCATE') OR has_any_column_privilege(current_user,'execution.run_attempts','SELECT,INSERT,UPDATE')`).Scan(&unsafe); e != nil || unsafe {
 		return errors.New("admission writer can access worker attempts")
 	}
+	if e = pool.QueryRow(ctx, `SELECT has_table_privilege(current_user,'execution.provider_observations','SELECT,INSERT,UPDATE,DELETE,TRUNCATE') OR has_any_column_privilege(current_user,'execution.provider_observations','SELECT,INSERT,UPDATE')`).Scan(&unsafe); e != nil || unsafe {
+		return errors.New("admission writer can access provider results")
+	}
 	var ok bool
 	e = pool.QueryRow(ctx, `SELECT has_table_privilege(current_user,'execution.runs','INSERT') AND NOT has_any_column_privilege(current_user,'execution.runs','UPDATE')
  AND has_table_privilege(current_user,'execution.run_admissions','SELECT') AND has_table_privilege(current_user,'execution.run_admissions','INSERT')

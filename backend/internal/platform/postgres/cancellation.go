@@ -99,6 +99,11 @@ func CancellationRole(ctx context.Context, pool *pgxpool.Pool) error {
 			return errors.New("cancellation role exposes admission plan data")
 		}
 	}
+	if oid, found := tables["execution.provider_observations"]; !found {
+		return errors.New("cancellation schema missing")
+	} else if e = pool.QueryRow(ctx, `SELECT has_table_privilege(current_user,$1::oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') OR has_any_column_privilege(current_user,$1::oid,'SELECT,INSERT,UPDATE')`, oid).Scan(&unsafe); e != nil || unsafe {
+		return errors.New("cancellation role exposes provider results")
+	}
 	var count int
 	e = pool.QueryRow(ctx, `SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relrowsecurity AND c.relforcerowsecurity AND ((n.nspname='execution' AND c.relname IN('runs','run_admissions','jobs','outbox','run_events','run_cancellations')) OR(n.nspname='commerce' AND c.relname IN('budget_periods','reservations')))`).Scan(&count)
 	if e != nil || count != 8 {

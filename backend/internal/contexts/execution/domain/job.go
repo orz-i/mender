@@ -9,11 +9,13 @@ import (
 type JobState string
 
 const (
-	JobBlocked     JobState = "blocked"
-	JobQueued      JobState = "queued"
-	JobLeased      JobState = "leased"
-	JobReconciling JobState = "reconciling"
-	JobCanceled    JobState = "canceled"
+	JobBlocked         JobState = "blocked"
+	JobQueued          JobState = "queued"
+	JobLeased          JobState = "leased"
+	JobProviderWaiting JobState = "provider_waiting"
+	JobReconciling     JobState = "reconciling"
+	JobFinished        JobState = "finished"
+	JobCanceled        JobState = "canceled"
 )
 
 const (
@@ -39,6 +41,45 @@ type LeaseToken struct {
 	RunID       RunID
 	WorkerID    string
 	Generation  uint64
+}
+
+// MarkProviderWaiting consumes the local execution lease after the supplier has
+// durably acknowledged the submission. Provider processing is asynchronous and
+// must not keep a Worker lease alive until remote completion.
+func (j *Job) MarkProviderWaiting(token LeaseToken, at time.Time) error {
+	if err := j.checkTime(at); err != nil {
+		return err
+	}
+	if j.snapshot.State != JobLeased || !j.matches(token) {
+		return ErrLeaseLost
+	}
+	if !at.Before(j.snapshot.LeaseUntil) {
+		return ErrLeaseExpired
+	}
+	j.snapshot.State = JobProviderWaiting
+	j.snapshot.LeaseOwner = ""
+	j.snapshot.LeaseUntil = time.Time{}
+	j.snapshot.UpdatedAt = at.UTC()
+	return nil
+}
+
+// FinishFromProvider is only for a trusted provider-result transaction. It is
+// deliberately unavailable from queued/blocked jobs so a local worker cannot
+// invent a terminal outcome without remote evidence.
+func (j *Job) FinishFromProvider(at time.Time) error {
+	if err := j.checkTime(at); err != nil {
+		return err
+	}
+	if j.snapshot.State != JobProviderWaiting && j.snapshot.State != JobReconciling {
+		return ErrJobState
+	}
+	j.snapshot.State = JobFinished
+	j.snapshot.BlockedReason = ""
+	j.snapshot.LeaseOwner = ""
+	j.snapshot.LeaseUntil = time.Time{}
+	j.snapshot.StoppedAt = at.UTC()
+	j.snapshot.UpdatedAt = at.UTC()
+	return nil
 }
 
 type JobSnapshot struct {
@@ -79,8 +120,16 @@ func RestoreJob(s JobSnapshot) (Job, error) {
 		if s.BlockedReason != "" || !validID(s.LeaseOwner) || !validJobTime(s.LeaseUntil) || !s.LeaseUntil.After(s.UpdatedAt) || s.LeaseGeneration == 0 || s.AttemptCount == 0 || !s.StoppedAt.IsZero() {
 			return Job{}, ErrInvalidJob
 		}
+	case JobProviderWaiting:
+		if s.BlockedReason != "" || s.LeaseOwner != "" || !s.LeaseUntil.IsZero() || s.AttemptCount == 0 || s.LeaseGeneration == 0 || !s.StoppedAt.IsZero() {
+			return Job{}, ErrInvalidJob
+		}
 	case JobReconciling:
 		if s.BlockedReason != BlockSubmissionOutcomeUnknown || s.LeaseOwner != "" || !s.LeaseUntil.IsZero() || s.AttemptCount == 0 || s.LeaseGeneration == 0 || !s.StoppedAt.IsZero() {
+			return Job{}, ErrInvalidJob
+		}
+	case JobFinished:
+		if s.BlockedReason != "" || s.LeaseOwner != "" || !s.LeaseUntil.IsZero() || s.AttemptCount == 0 || s.LeaseGeneration == 0 || !validJobTime(s.StoppedAt) || s.StoppedAt.Before(s.CreatedAt) {
 			return Job{}, ErrInvalidJob
 		}
 	case JobCanceled:

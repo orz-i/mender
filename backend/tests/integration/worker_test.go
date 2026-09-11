@@ -240,13 +240,15 @@ VALUES($1,$2,'sa_worker','fixture_key_worker',$2||'_idem',repeat('a',64),'res_'|
 		clock.at = lease.LeaseUntil
 		recovered, e := control.RecoverExpired(ctx, "ws_submit", 10)
 		must(t, e)
-		if recovered != 1 {
-			t.Fatal("submitted lease did not enter reconciliation", recovered)
+		if recovered != 0 {
+			t.Fatal("provider-waiting submission still looked like an active lease", recovered)
 		}
-		var jobState, providerRequestID, externalTaskID, unknownReason string
-		must(t, owner.QueryRow(ctx, `SELECT r.state,j.state,a.state,a.provider_request_id,a.external_task_id,a.unknown_reason FROM execution.runs r JOIN execution.jobs j ON (j.workspace_id,j.run_id)=(r.workspace_id,r.id) JOIN execution.run_attempts a ON (a.workspace_id,a.run_id,a.lease_generation)=(j.workspace_id,j.run_id,j.lease_generation) WHERE r.workspace_id='ws_submit' AND r.id='run_submit_accepted'`).Scan(&runState, &jobState, &attemptState, &providerRequestID, &externalTaskID, &unknownReason))
-		if runState != "reconciling" || jobState != "reconciling" || attemptState != "unknown" || providerRequestID != "provider/request-accepted" || externalTaskID != "external/task-accepted" || unknownReason == "" {
-			t.Fatal("accepted submission was blind-requeued or lost provider facts", runState, jobState, attemptState, providerRequestID, externalTaskID, unknownReason)
+		var jobState, providerRequestID, externalTaskID string
+		var leaseOwner *string
+		var leaseUntil *time.Time
+		must(t, owner.QueryRow(ctx, `SELECT r.state,j.state,j.lease_owner,j.lease_until,a.state,a.provider_request_id,a.external_task_id FROM execution.runs r JOIN execution.jobs j ON (j.workspace_id,j.run_id)=(r.workspace_id,r.id) JOIN execution.run_attempts a ON (a.workspace_id,a.run_id,a.lease_generation)=(j.workspace_id,j.run_id,j.lease_generation) WHERE r.workspace_id='ws_submit' AND r.id='run_submit_accepted'`).Scan(&runState, &jobState, &leaseOwner, &leaseUntil, &attemptState, &providerRequestID, &externalTaskID))
+		if runState != "running" || jobState != "provider_waiting" || leaseOwner != nil || leaseUntil != nil || attemptState != "submitted" || providerRequestID != "provider/request-accepted" || externalTaskID != "external/task-accepted" {
+			t.Fatal("accepted submission retained worker ownership or lost provider facts", runState, jobState, leaseOwner, leaseUntil, attemptState, providerRequestID, externalTaskID)
 		}
 		clock.at = clock.at.Add(time.Second)
 		if _, e = control.RecordSubmitted(ctx, intent, "provider/stale", "external/stale"); !errors.Is(e, runapp.ErrWorkerLeaseLost) {

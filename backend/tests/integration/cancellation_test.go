@@ -253,7 +253,19 @@ func exerciseCancellation(t *testing.T, ctx context.Context, owner, runtime, wri
 			must(t, e)
 			_, e = tx.Exec(ctx, `UPDATE execution.jobs SET state='leased',blocked_reason=NULL,available_at=$1,lease_owner='worker_cancel_fixture',lease_until=$2,lease_generation=1,attempt_count=1,updated_at=$1 WHERE workspace_id=$3 AND run_id=$4`, leaseAt, leaseUntil, r.WorkspaceID, r.RunID)
 			if e == nil {
-				_, e = tx.Exec(ctx, `INSERT INTO execution.run_attempts(workspace_id,run_id,attempt_no,lease_generation,lease_owner,state,leased_at,lease_until,submission_key,submission_intent_at,provider_request_id,submitted_at) VALUES($1,$2,1,1,'worker_cancel_fixture','submitted',$3,$4,$5,$6,$7,$8)`, r.WorkspaceID, r.RunID, leaseAt, leaseUntil, submissionKey, intentAt, fmt.Sprintf("fixture/request-%d", i), submittedAt)
+				_, e = tx.Exec(ctx, `INSERT INTO execution.run_attempts(workspace_id,run_id,attempt_no,lease_generation,lease_owner,state,leased_at,lease_until) VALUES($1,$2,1,1,'worker_cancel_fixture','leased',$3,$4)`, r.WorkspaceID, r.RunID, leaseAt, leaseUntil)
+			}
+			if e != nil {
+				_ = tx.Rollback(ctx)
+				t.Fatal(e)
+			}
+			must(t, tx.Commit(ctx))
+
+			tx, e = owner.Begin(ctx)
+			must(t, e)
+			_, e = tx.Exec(ctx, `UPDATE execution.run_attempts SET state='submitted',submission_key=$1,submission_intent_at=$2,provider_request_id=$3,submitted_at=$4 WHERE workspace_id=$5 AND run_id=$6 AND attempt_no=1`, submissionKey, intentAt, fmt.Sprintf("fixture/request-%d", i), submittedAt, r.WorkspaceID, r.RunID)
+			if e == nil {
+				_, e = tx.Exec(ctx, `UPDATE execution.jobs SET state='provider_waiting',lease_owner=NULL,lease_until=NULL,updated_at=$1 WHERE workspace_id=$2 AND run_id=$3`, submittedAt, r.WorkspaceID, r.RunID)
 			}
 			if e == nil {
 				_, e = tx.Exec(ctx, `UPDATE execution.runs SET state='running',version=2,updated_at=$1 WHERE workspace_id=$2 AND id=$3`, submittedAt, r.WorkspaceID, r.RunID)

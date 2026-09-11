@@ -408,28 +408,35 @@ func (w *Workers) RecordSubmitted(ctx context.Context, token domain.LeaseToken, 
 		return domain.Snapshot{}, domain.AttemptSnapshot{}, err
 	}
 	beforeRun := run.Snapshot()
-	job, err := loadJobForUpdate(ctx, tx, token.WorkspaceID, token.RunID)
-	if err != nil || !jobMatchesToken(job, token) {
-		return domain.Snapshot{}, domain.AttemptSnapshot{}, domain.ErrLeaseLost
+	beforeJob, err := loadJobForUpdate(ctx, tx, token.WorkspaceID, token.RunID)
+	if err != nil {
+		return domain.Snapshot{}, domain.AttemptSnapshot{}, err
 	}
 	beforeAttempt, err := w.loadAttemptForToken(ctx, tx, token)
 	if err != nil {
 		return domain.Snapshot{}, domain.AttemptSnapshot{}, err
 	}
-	attempt, _ := domain.RestoreAttempt(beforeAttempt)
-	if err = attempt.MarkSubmitted(token, at, key, providerRequestID, externalTaskID); err != nil {
-		return domain.Snapshot{}, domain.AttemptSnapshot{}, err
-	}
-	afterAttempt := attempt.Snapshot()
 	if beforeAttempt.State == domain.AttemptSubmitted {
-		if beforeRun.State != domain.Running || !beforeRun.UpdatedAt.Equal(beforeAttempt.SubmittedAt) {
-			return domain.Snapshot{}, domain.AttemptSnapshot{}, application.ErrWorkerUnavailable
+		if beforeAttempt.SubmissionKey != key || beforeAttempt.ProviderRequestID != providerRequestID || beforeAttempt.ExternalTaskID != externalTaskID || beforeRun.State != domain.Running || !beforeRun.UpdatedAt.Equal(beforeAttempt.SubmittedAt) || beforeJob.State != domain.JobProviderWaiting || beforeJob.LeaseGeneration != token.Generation {
+			return domain.Snapshot{}, domain.AttemptSnapshot{}, domain.ErrLeaseLost
 		}
 		if err = tx.Commit(ctx); err != nil {
 			return domain.Snapshot{}, domain.AttemptSnapshot{}, application.ErrWorkerUnavailable
 		}
 		return beforeRun, beforeAttempt, nil
 	}
+	if !jobMatchesToken(beforeJob, token) {
+		return domain.Snapshot{}, domain.AttemptSnapshot{}, domain.ErrLeaseLost
+	}
+	attempt, _ := domain.RestoreAttempt(beforeAttempt)
+	if err = attempt.MarkSubmitted(token, at, key, providerRequestID, externalTaskID); err != nil {
+		return domain.Snapshot{}, domain.AttemptSnapshot{}, err
+	}
+	job, _ := domain.RestoreJob(beforeJob)
+	if err = job.MarkProviderWaiting(token, at); err != nil {
+		return domain.Snapshot{}, domain.AttemptSnapshot{}, err
+	}
+	afterAttempt, afterJob := attempt.Snapshot(), job.Snapshot()
 	if beforeRun.State != domain.Queued {
 		return domain.Snapshot{}, domain.AttemptSnapshot{}, application.ErrWorkerUnavailable
 	}
@@ -437,6 +444,9 @@ func (w *Workers) RecordSubmitted(ctx context.Context, token domain.LeaseToken, 
 		return domain.Snapshot{}, domain.AttemptSnapshot{}, err
 	}
 	if err = updateAttempt(ctx, tx, beforeAttempt, afterAttempt); err != nil {
+		return domain.Snapshot{}, domain.AttemptSnapshot{}, err
+	}
+	if err = updateJob(ctx, tx, beforeJob, afterJob); err != nil {
 		return domain.Snapshot{}, domain.AttemptSnapshot{}, err
 	}
 	if err = saveWorkerRun(ctx, tx, beforeRun, run, token, "supplier submission accepted"); err != nil {
