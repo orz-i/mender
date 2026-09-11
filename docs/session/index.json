@@ -18,9 +18,9 @@
     "ses_f8eacb3ddd604c48bc9d94548d912e9d": {
       "path": "docs/session/ses_f8eacb3ddd604c48bc9d94548d912e9d.md",
       "title": "Provider HTTP Control Runtime",
-      "status": "active",
+      "status": "completed",
       "created_at": "unix:1789109114",
-      "updated_at": "unix:1789115954"
+      "updated_at": "unix:1789116029"
     }
   },
   "host_scopes": {
