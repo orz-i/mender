@@ -33,3 +33,19 @@ status 成功响应采用严格字段／重复键校验，只接受 `pending/suc
 ## Stage 2 之后仍未开放
 
 目前 adapter 已可在显式构造时调用受控 HTTP Provider，但默认 `cmd/worker` 没有生产 SecretProvider 或 Provider Control runtime，仍不会发起 status/cancel 网络请求。下一切片只负责 reviewed runtime composition 与 fail-closed 运行边界，不新增 callback/webhook、Artifact、结算、Outbox 外部投递或真实 provider 配置。
+
+## Stage 3：Reviewed Provider Control Runtime
+
+bootstrap 新增 `BuildProviderHTTPControlRuntime`，只接受显式传入的 executor DB URL、reconciler DB URL、审核 Provider ID 列表、egress allowlist 与 `SecretProvider`。两个数据库连接必须指向同一个 PostgreSQL database、拥有不同用户名，并且所有 fallback host/port 完全一致。启动后分别执行 migration digest、`ExecutorRole` 与 `ReconcilerRole` 自检；因此 Execution control plane 仍看不到 Supply/Connections/arguments，Supply control plane 则没有 Run/result/cancel intent 写权限。
+
+executor role 负责读取 immutable admission/deployment 与当前 Connection credential reference，并在 Supply Broker 内解析 Secret；reconciler role 负责选择 provider target、claim durable cancel intent、追加 ProviderObservation 和收敛 Run/Job。两者只在 bootstrap 组合，Execution application 不 import Supply，Supply adapter 不持有 reconciler repository。
+
+`ReviewedProviderControlRuntime.ControlOne` 是刻意有界的单步入口：每次最多 claim/调用一个 provider cancellation，再查询一个 provider status。没有取消任务时直接进入 reconciliation；取消 outcome unknown 时不会重发取消，而是继续允许一次只读 status query 尝试收敛；存储、权限或其他错误立即 fail closed。runtime 不创建后台 goroutine、无限轮询或新的 submission/Attempt，调用频率和 Workspace 选择必须由未来受审 host 显式决定。
+
+默认 `cmd/worker` 与 API **没有**从环境变量构造 Provider Control Runtime，也没有生产 SecretProvider；因此本阶段新增的 runtime library 不会让默认进程突然访问供应商。`backend/.env.example` 明确保留这一边界。生产 host／SecretProvider、Provider-specific response mapping、callback/webhook 仍是后续独立评审项。
+
+新增 integration fixture 已编译，并设计为在现有 isolated PostgreSQL 套件中创建独立 worker/executor/reconciler/cancellation 角色，配合 `httptest.Server` 验证真实 RLS/ACL、Broker secret boundary、status→success 与 cancel→fulfilled 的端到端收敛。HTTP 只绑定 loopback；请求体断言不含 Workspace、Run canonical arguments 或 secret。当前宿主 Docker daemon 在 Stage 1 试跑时不可用，因此这项 real PostgreSQL fixture 只有在最终 `provider-control-phase-postgres` gate 实际成功后才能记为通过。
+
+## 本阶段完成后仍不包含
+
+不包含公网 Provider 配置或真实供应商调用、生产 SecretProvider、provider callback/webhook、Artifact/object storage、Commerce settlement/ledger、Outbox external delivery、生产调度命令、部署与 push。正式 WBS/ADR/G0–G5 也不因本阶段代码和本地测试自动推进。
