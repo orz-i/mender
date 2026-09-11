@@ -360,6 +360,9 @@ func (r *ProviderCancellations) RecordProviderCancelAcknowledged(ctx context.Con
 	if err = insertProviderObservation(ctx, tx, observation); err != nil {
 		return application.ProviderResultRecord{}, err
 	}
+	if err = insertSettlementJob(ctx, tx, observation); err != nil {
+		return application.ProviderResultRecord{}, err
+	}
 	if err = saveProviderCancelIntent(ctx, tx, beforeIntent, intent.Snapshot()); err != nil {
 		return application.ProviderResultRecord{}, err
 	}

@@ -32,6 +32,7 @@ func ReconcilerRole(ctx context.Context, pool *pgxpool.Pool) error {
 	 AND has_table_privilege(current_user,'execution.run_attempts','SELECT')
 	 AND has_table_privilege(current_user,'execution.provider_observations','SELECT,INSERT')
 	 AND has_table_privilege(current_user,'execution.provider_cancel_intents','SELECT')
+	 AND has_table_privilege(current_user,'execution.settlement_jobs','INSERT')
 	 AND has_table_privilege(current_user,'execution.run_events','INSERT')
 	 AND has_column_privilege(current_user,'execution.runs','state','UPDATE')
 	 AND has_column_privilege(current_user,'execution.runs','version','UPDATE')
@@ -57,8 +58,11 @@ func ReconcilerRole(ctx context.Context, pool *pgxpool.Pool) error {
 			return errors.New("reconciler append-only facts are mutable")
 		}
 	}
+	if err := pool.QueryRow(ctx, `SELECT has_table_privilege(current_user,'execution.settlement_jobs','SELECT,UPDATE,DELETE,TRUNCATE') OR has_any_column_privilege(current_user,'execution.settlement_jobs','SELECT,UPDATE')`).Scan(&unsafe); err != nil || unsafe {
+		return errors.New("reconciler can inspect or mutate settlement jobs after creation")
+	}
 	var rls int
-	if err := pool.QueryRow(ctx, `SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='execution' AND c.relname IN('runs','jobs','run_attempts','provider_observations','provider_cancel_intents') AND c.relrowsecurity AND c.relforcerowsecurity`).Scan(&rls); err != nil || rls != 5 {
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='execution' AND c.relname IN('runs','jobs','run_attempts','provider_observations','provider_cancel_intents','settlement_jobs') AND c.relrowsecurity AND c.relforcerowsecurity`).Scan(&rls); err != nil || rls != 6 {
 		return errors.New("reconciler RLS safeguards missing")
 	}
 	return nil

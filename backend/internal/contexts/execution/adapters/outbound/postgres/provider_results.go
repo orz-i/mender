@@ -100,6 +100,17 @@ func saveProviderRun(ctx context.Context, tx pgx.Tx, before domain.Snapshot, run
 	return nil
 }
 
+func insertSettlementJob(ctx context.Context, tx pgx.Tx, o domain.ProviderObservation) error {
+	if !o.IsTerminal() {
+		return application.ErrProviderResultConflict
+	}
+	_, err := tx.Exec(ctx, `INSERT INTO execution.settlement_jobs(workspace_id,run_id,observation_id,created_at) VALUES($1,$2,$3,$4)`, string(o.WorkspaceID), string(o.RunID), o.ObservationID, o.ObservedAt)
+	if err != nil {
+		return application.ErrProviderResultUnavailable
+	}
+	return nil
+}
+
 func saveFinishedJob(ctx context.Context, tx pgx.Tx, before, after domain.JobSnapshot) error {
 	tag, err := tx.Exec(ctx, `UPDATE execution.jobs SET state=$1,blocked_reason=NULLIF($2,''),updated_at=$3,stopped_at=$4
  WHERE workspace_id=$5 AND run_id=$6 AND state=$7 AND lease_generation=$8 AND updated_at=$9`, string(after.State), after.BlockedReason, after.UpdatedAt, after.StoppedAt, string(after.WorkspaceID), string(after.RunID), string(before.State), int64(before.LeaseGeneration), before.UpdatedAt)
@@ -212,6 +223,9 @@ func (r *ProviderResults) RecordProviderObservation(ctx context.Context, observa
 		return application.ProviderResultRecord{}, err
 	}
 	if err = insertProviderObservation(ctx, tx, observation); err != nil {
+		return application.ProviderResultRecord{}, err
+	}
+	if err = insertSettlementJob(ctx, tx, observation); err != nil {
 		return application.ProviderResultRecord{}, err
 	}
 	afterJob := job.Snapshot()

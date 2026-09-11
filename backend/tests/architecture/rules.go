@@ -20,6 +20,8 @@ var contexts = map[string]bool{
 	"execution": true, "commerce": true, "supply": true, "governance": true,
 }
 
+var processes = map[string]bool{"process:admission": true, "process:settlement": true}
+
 // Pure imports are an explicit allowlist. Adding one requires a boundary review.
 var pureImports = map[string]bool{
 	"bytes": true, "cmp": true, "context": true, "encoding/hex": true,
@@ -105,7 +107,7 @@ func CheckSource(filename string, source []byte) []Violation {
 	add := func(pos token.Pos, rule, detail string) {
 		violations = append(violations, Violation{filename, fset.Position(pos).Line, rule, detail})
 	}
-	if from.context != "" && !contexts[from.context] && from.context != "process:admission" {
+	if from.context != "" && !contexts[from.context] && !processes[from.context] {
 		add(file.Pos(), "GO_CONTEXT", "unknown context: "+from.context)
 	}
 	if from.context != "" && from.layer != "domain" && from.layer != "application" && from.layer != "public" && (from.layer != "adapters" || (from.direction != "inbound" && from.direction != "outbound")) {

@@ -23,3 +23,15 @@ PriceVersion、Budget、Reservation 与 UsageSettlement 继续归 Commerce 上�
 ## 尚未实现
 
 尚未把 terminal Provider result 转成 settlement job，也未实现 settlement principal、跨上下文 UoW、失败注入或 settlement API/read model。支付充值、收入／成本分录、退款、Provider cost、Artifact、Webhook、Outbox external delivery、MCP／Agent 仍不在本阶段范围。
+
+## Stage 2：Durable Settlement Job 与受控跨上下文 UoW
+
+`0015_terminal_settlement_jobs.sql` 新增 Execution-owned `execution.settlement_jobs`。Provider `succeeded/failed/canceled` 终态 Observation 被接受时，reconciler 在**同一 Execution 事务**插入 pending settlement job；Provider cancellation acknowledgement 走同一路径。数据库 deferred trigger 在提交时再次证明 Observation、Run 与 Job 已形成一致终态。这样结算触发不依赖进程内回调，Worker/Reconciler 崩溃后仍可恢复。
+
+Reconciler 只获得 settlement job 的 INSERT 权限，不能读取、更新或删除已经创建的 job。新的 settlement principal 才能读取 pending job 并仅更新 `state/finished_at`；它读取 `run_admissions` 时只获得 reservation/price/budget/currency 等结算引用，不可读取 `canonical_arguments`、subject、credential、Connection、Toolset 或 deployment。该角色没有 Identity、Connections、Supply、Catalog、Distribution schema 使用权。
+
+`internal/processes/settlement` 是明确的 ADR-020 同库协调流程，而不是新的业务上下文。application 只定义 `Claim → Settle → Finish` 端口；PostgreSQL UoW 打开一个事务并设置 Workspace RLS，outbound capability adapter 只依赖 `commerce/public.Settler`。Commerce 自己锁 Budget/Reservation、验证 immutable PriceVersion、把 held reservation 原子转为 consumed quota，并写 append-only UsageSettlement；Execution 自己把 settlement job 标记 finished。SQL transaction 不泄露到 application/domain。
+
+`ReviewedUsageSettlementRuntime` 仍是一个无后台循环的受审 library composition。默认 API/Worker 不自动运行它；后续 host 才能决定 Workspace 和 cadence。结算事务内没有 Provider HTTP、SecretProvider、Webhook 或支付网络调用。
+
+Stage 2 单元测试覆盖成功 charge、failed/canceled 零 charge、未知 outcome、immutable replay、未来/过早 Observation、无任务与失败不误标 finished；架构门禁新增 `process:settlement` 规则，禁止 application 直接依赖 Commerce public/pgx，且跨域只能由 outbound adapter 通过 public contract。

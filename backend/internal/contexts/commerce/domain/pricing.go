@@ -26,6 +26,10 @@ type PriceVersion struct {
 	Active                      bool
 }
 
+func ValidSettlementIdentity(workspace, run, reservation, price, budget, period, currency string) bool {
+	return validID(workspace) && validID(run) && validID(reservation) && validID(price) && validID(budget) && validID(period) && validCurrency(currency)
+}
+
 type BudgetWindow struct {
 	WorkspaceID, BudgetID, PeriodID, Currency string
 	StartsAt, EndsAt                          time.Time

@@ -20,10 +20,10 @@ import (
 // Only issue-key intentionally prints a generated secret, once, after durable insertion.
 func RunOperator(ctx context.Context, args []string, getenv func(string) string, out, errOut io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("operator requires migrate, grant-runtime, grant-admission, grant-cancellation, grant-worker, grant-executor, grant-reconciler, issue-key or revoke-key")
+		return errors.New("operator requires migrate, grant-runtime, grant-admission, grant-cancellation, grant-worker, grant-executor, grant-reconciler, grant-settlement, issue-key or revoke-key")
 	}
 	command := args[0]
-	if command != "migrate" && command != "grant-runtime" && command != "grant-admission" && command != "grant-cancellation" && command != "grant-worker" && command != "grant-executor" && command != "grant-reconciler" && command != "issue-key" && command != "revoke-key" {
+	if command != "migrate" && command != "grant-runtime" && command != "grant-admission" && command != "grant-cancellation" && command != "grant-worker" && command != "grant-executor" && command != "grant-reconciler" && command != "grant-settlement" && command != "issue-key" && command != "revoke-key" {
 		return errors.New("unknown operator command")
 	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
@@ -77,6 +77,12 @@ func RunOperator(ctx context.Context, args []string, getenv func(string) string,
 		return err
 	}
 	switch command {
+	case "grant-settlement":
+		if err = migrations.GrantSettlement(ctx, pool, *role); err != nil {
+			return err
+		}
+		_, err = io.WriteString(out, "Restricted usage-settlement grants applied.\n")
+		return err
 	case "grant-reconciler":
 		if err = migrations.GrantReconciler(ctx, pool, *role); err != nil {
 			return err
