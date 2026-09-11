@@ -51,6 +51,7 @@ pnpm dev:api
 | `POST /api/v1/workspaces/{workspace_id}/runs/{run_id}/cancel` | 默认未注册；要求 run:cancel；可选协调取消可原子停止未执行受理任务并释放原预留，其他路径保持本地取消／意图语义 |
 | Worker SQL 租约控制 | 已实现 Job/Attempt、lease/heartbeat/expiry/fencing 基础；默认 worker idle，显式启用后当前进程只恢复过期 lease，不领取新任务、不调用供应商 |
 | HTTP Supplier Submit / Provider status/cancel | hardened adapter 与 reviewed library composition 已实现；默认命令没有生产 SecretProvider/egress/runtime，所以不访问真实供应商 |
+| Usage Settlement | terminal Provider fact 会原子创建 pending settlement job；reviewed settlement runtime 可用专用角色将 held quota 转成 consumed/released quota，但默认 API/Worker 不调度它，也不做 payment/revenue accounting |
 | MCP、Agent、callback/webhook 等其他业务路径 | 尚未开放 |
 
 前端 `/` 是初始化介绍，`/status` 发送真实健康请求；网络失败或响应不合法时显示恢复入口。未知前端路由提供 404 和返回首页。服务状态只确认 API 进程连通，不表示 Worker、认证、存储或业务链路健康。
@@ -72,6 +73,8 @@ Worker 租约控制使用独立角色：先由管理员执行 `pnpm db:grant-wor
 应用 `0008_supplier_submission.sql` 后，已有 worker role 必须再次执行 `pnpm db:grant-worker --role <role>`。应用层此时具备 durable intent、accepted provider IDs、unknown/reconciling 与 lease-expiry no-blind-retry 协议，但 `cmd/worker` 仍不会 activation/lease，也没有 HTTP/MCP/Agent supplier adapter；详情见 [供应商提交协议](2026-09-10-supplier-submission.md)。
 
 应用 `0013_provider_control_endpoints.sql` 后，Supply deployment 可以声明固定 HTTP status/cancel POST endpoint。Provider request/task handle 始终作为有界 JSON body 发送，不拼入 URL。`BuildProviderHTTPControlRuntime` 只能由受审 host 代码显式传入 executor/reconciler 两个独立角色、Provider allowlist、egress policy 与 SecretProvider；默认 `cmd/worker`／API 不读取任何 `MENDER_PROVIDER_*` 环境变量。实现与验证边界见 [Provider HTTP Control Runtime](2026-09-11-provider-control-runtime.md)。
+
+应用 `0014_usage_settlement_contract.sql` 与 `0015_terminal_settlement_jobs.sql` 后，既有固定价格被明确为 `fixed_success_only`，Provider 终态收敛会在同一 Execution 事务创建 settlement job。先由管理员执行 `pnpm db:grant-settlement --role <role>` 为预先存在的独立角色授权；`BuildUsageSettlementRuntime` 启动时会校验 migration digest、最小权限与 RLS。该 runtime 没有后台循环，结算事务也不会执行 Provider、Secret、Webhook 或支付网络调用。实现与验证边界见 [Commerce Usage Settlement](2026-09-11-commerce-usage-settlement.md)。
 
 ## 构建与检查
 

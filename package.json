@@ -29,6 +29,7 @@
     "db:grant-worker": "node scripts/backend.mjs run ./cmd/operator grant-worker",
     "db:grant-executor": "node scripts/backend.mjs run ./cmd/operator grant-executor",
     "db:grant-reconciler": "node scripts/backend.mjs run ./cmd/operator grant-reconciler",
+    "db:grant-settlement": "node scripts/backend.mjs run ./cmd/operator grant-settlement",
     "key:issue": "node scripts/backend.mjs run ./cmd/operator issue-key",
     "key:revoke": "node scripts/backend.mjs run ./cmd/operator revoke-key",
     "vet:backend": "node scripts/backend.mjs vet ./...",

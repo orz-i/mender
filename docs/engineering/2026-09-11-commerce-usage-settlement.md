@@ -20,7 +20,7 @@ PriceVersion、Budget、Reservation 与 UsageSettlement 继续归 Commerce 上�
 - `pnpm check:architecture`：通过。
 - `pnpm test:integration:docker`：迁移 0014 在真实隔离 PostgreSQL 上应用并复验既有 migration/RLS/CAS/query/admission/provider-control 套件通过，自有容器已删除。
 
-## 尚未实现
+## Stage 1 结束时尚未实现
 
 尚未把 terminal Provider result 转成 settlement job，也未实现 settlement principal、跨上下文 UoW、失败注入或 settlement API/read model。支付充值、收入／成本分录、退款、Provider cost、Artifact、Webhook、Outbox external delivery、MCP／Agent 仍不在本阶段范围。
 
@@ -35,3 +35,13 @@ Reconciler 只获得 settlement job 的 INSERT 权限，不能读取、更新或
 `ReviewedUsageSettlementRuntime` 仍是一个无后台循环的受审 library composition。默认 API/Worker 不自动运行它；后续 host 才能决定 Workspace 和 cadence。结算事务内没有 Provider HTTP、SecretProvider、Webhook 或支付网络调用。
 
 Stage 2 单元测试覆盖成功 charge、failed/canceled 零 charge、未知 outcome、immutable replay、未来/过早 Observation、无任务与失败不误标 finished；架构门禁新增 `process:settlement` 规则，禁止 application 直接依赖 Commerce public/pgx，且跨域只能由 outbound adapter 通过 public contract。
+
+## Stage 3：真实 PostgreSQL 结算与角色隔离
+
+隔离 PostgreSQL fixture 使用独立 worker、reconciler、cancellation 与 settlement 角色，真实走 submission → terminal ProviderObservation → settlement job → settlement UoW。验证结果：success 将 100 micro held quota 结算为 70 consumed；failed/canceled 的 charge 为 0 且释放全部 held quota；所有 Reservation 最终保持不可变 `settled` 收据，而预执行 coordinated cancellation 仍使用原 `released` 语义。
+
+测试在 UsageSettlement INSERT 处注入约束失败，证明 Budget、Reservation 和 Execution settlement job 全部回滚，移除故障后同一 durable job 可恢复成功。将已完成 job 人工恢复成 pending 后重放，Commerce 识别既有 immutable receipt，只重新完成 delivery marker，不重复 consumed quota 或新增收据。两个并发 cycle 竞争最后一个 pending job 时，`FOR UPDATE SKIP LOCKED` 只允许一个完成结算，另一个得到 no-work。
+
+Settlement role 的 RLS 与列权限也在真实数据库验证：无 Workspace context 查询 settlement jobs 得到 0；读取 `canonical_arguments`、Connections、Supply、Identity，修改 ProviderObservation、伪造 settlement job 或修改 reservation amount 全部被拒绝。runtime/owner 等错误数据库角色不能通过 `SettlementRole` 自检。
+
+本阶段的 quota settlement 仍不是充值、支付确认、复式会计收入／供应商成本、退款或发票系统；默认 API／Worker 也没有自动 settlement scheduler。
