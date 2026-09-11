@@ -63,3 +63,19 @@ func (a *Allowance) Release(amount int64) error {
 	a.revision++
 	return nil
 }
+
+// Settle converts one already-held reservation into consumed quota. The full
+// reserved amount is released, while charged is the actual quota consumption.
+// Payment/revenue accounting is deliberately outside this aggregate.
+func (a *Allowance) Settle(reserved, charged int64) error {
+	if a.revision < 1 || reserved < 0 || charged < 0 || charged > reserved || reserved > a.reserved || a.revision == math.MaxInt64 {
+		return ErrInvalidAllowance
+	}
+	if charged > a.limit-a.consumed {
+		return ErrLimitExceeded
+	}
+	a.reserved -= reserved
+	a.consumed += charged
+	a.revision++
+	return nil
+}

@@ -39,3 +39,21 @@ func TestExactMicroAndQuotaBoundaries(t *testing.T) {
 		t.Fatal("revision overflow")
 	}
 }
+
+func TestAllowanceSettlementConvertsHeldQuotaToConsumption(t *testing.T) {
+	a, err := RestoreAllowance(AllowanceSnapshot{Limit: 100, Consumed: 10, Reserved: 40, Revision: 7})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = a.Settle(40, 25); err != nil {
+		t.Fatal(err)
+	}
+	if got := a.Snapshot(); got != (AllowanceSnapshot{Limit: 100, Consumed: 35, Reserved: 0, Revision: 8}) {
+		t.Fatal(got)
+	}
+	for _, tc := range [][2]int64{{1, 2}, {41, 1}, {-1, 0}, {1, -1}} {
+		if err = a.Settle(tc[0], tc[1]); err == nil {
+			t.Fatal("invalid settlement accepted", tc)
+		}
+	}
+}

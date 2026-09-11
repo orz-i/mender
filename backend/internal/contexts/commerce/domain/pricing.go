@@ -7,9 +7,21 @@ import (
 
 var ErrInvalidPricing = errors.New("invalid pricing state")
 
+type BillingPolicy string
+type SettlementOutcome string
+
+const (
+	FixedSuccessOnly BillingPolicy = "fixed_success_only"
+
+	OutcomeSucceeded SettlementOutcome = "succeeded"
+	OutcomeFailed    SettlementOutcome = "failed"
+	OutcomeCanceled  SettlementOutcome = "canceled"
+)
+
 type PriceVersion struct {
 	ID, ToolVersionID, Currency string
-	ReserveMicro                int64
+	ReserveMicro, ChargeMicro   int64
+	BillingPolicy               BillingPolicy
 	StartsAt, EndsAt            time.Time
 	Active                      bool
 }
@@ -45,7 +57,25 @@ func validCurrency(value string) bool {
 }
 
 func (p PriceVersion) UsableAt(at time.Time) bool {
-	return validID(p.ID) && validID(p.ToolVersionID) && validCurrency(p.Currency) && p.ReserveMicro >= 0 && !p.StartsAt.IsZero() && p.EndsAt.After(p.StartsAt) && p.Active && !at.IsZero() && !at.Before(p.StartsAt) && at.Before(p.EndsAt)
+	return p.ValidContract() && p.Active && !at.IsZero() && !at.Before(p.StartsAt) && at.Before(p.EndsAt)
+}
+
+func (p PriceVersion) ValidContract() bool {
+	return validID(p.ID) && validID(p.ToolVersionID) && validCurrency(p.Currency) && p.ReserveMicro >= 0 && p.ChargeMicro >= 0 && p.ChargeMicro <= p.ReserveMicro && p.BillingPolicy == FixedSuccessOnly && !p.StartsAt.IsZero() && p.EndsAt.After(p.StartsAt)
+}
+
+func (p PriceVersion) ChargeFor(outcome SettlementOutcome) (int64, error) {
+	if !p.ValidContract() {
+		return 0, ErrInvalidPricing
+	}
+	switch outcome {
+	case OutcomeSucceeded:
+		return p.ChargeMicro, nil
+	case OutcomeFailed, OutcomeCanceled:
+		return 0, nil
+	default:
+		return 0, ErrInvalidPricing
+	}
 }
 
 func (b BudgetWindow) UsableAt(at time.Time) bool {

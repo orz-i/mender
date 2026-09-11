@@ -23,7 +23,7 @@ func rollbackPricing(tx pgx.Tx) {
 
 func (p *Pricing) FindPrice(ctx context.Context, id string) (domain.PriceVersion, error) {
 	var price domain.PriceVersion
-	err := p.pool.QueryRow(ctx, `SELECT id,tool_version_id,currency,reserve_micro,starts_at,ends_at,active FROM commerce.price_versions WHERE id=$1`, id).Scan(&price.ID, &price.ToolVersionID, &price.Currency, &price.ReserveMicro, &price.StartsAt, &price.EndsAt, &price.Active)
+	err := p.pool.QueryRow(ctx, `SELECT id,tool_version_id,currency,reserve_micro,charge_micro,billing_policy,starts_at,ends_at,active FROM commerce.price_versions WHERE id=$1`, id).Scan(&price.ID, &price.ToolVersionID, &price.Currency, &price.ReserveMicro, &price.ChargeMicro, &price.BillingPolicy, &price.StartsAt, &price.EndsAt, &price.Active)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.PriceVersion{}, application.ErrPriceUnavailable
 	}

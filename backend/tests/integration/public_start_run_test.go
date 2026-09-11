@@ -56,7 +56,7 @@ func exercisePublicStartRun(t *testing.T, ctx context.Context, owner, runtime *p
 	must(t, err)
 	_, err = owner.Exec(ctx, `INSERT INTO connections.connection_grants(workspace_id,connection_id,subject_id,active,created_at,expires_at) VALUES('ws_a','conn_public','sa_a',true,$1,$2)`, at.Add(-time.Hour), at.Add(45*time.Minute))
 	must(t, err)
-	_, err = owner.Exec(ctx, `INSERT INTO commerce.price_versions(id,tool_version_id,currency,reserve_micro,starts_at,ends_at,active) VALUES('price_public_v1','tool_public_v1','USD',40,$1,$2,true)`, at.Add(-time.Hour), at.Add(time.Hour))
+	_, err = owner.Exec(ctx, `INSERT INTO commerce.price_versions(id,tool_version_id,currency,reserve_micro,charge_micro,billing_policy,starts_at,ends_at,active) VALUES('price_public_v1','tool_public_v1','USD',40,40,'fixed_success_only',$1,$2,true)`, at.Add(-time.Hour), at.Add(time.Hour))
 	must(t, err)
 	_, err = owner.Exec(ctx, `INSERT INTO commerce.budget_periods(workspace_id,budget_id,period_id,currency,starts_at,ends_at,limit_micro) VALUES('ws_a','budget_public','period_public','USD',$1,$2,1000)`, at.Add(-time.Hour), at.Add(time.Hour))
 	must(t, err)
