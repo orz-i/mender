@@ -1,0 +1,44 @@
+{
+  "contract_version": "0.1.0",
+  "implementation_status": "contracts_only",
+  "sdk": "github.com/modelcontextprotocol/go-sdk@v1.7.0",
+  "protocol_version": "2026-07-28",
+  "transport": "streamable-http-stateless",
+  "scope": "tools-only",
+  "deployment": {
+    "transport_kind": "mcp_streamable_http",
+    "endpoint_is_reviewed_and_fixed": true,
+    "client_arguments_cannot_override_endpoint": true,
+    "stateless_required": true,
+    "generic_idempotency_header": false,
+    "supported_auth_modes": ["none", "bearer", "header"],
+    "machine_token_passthrough": false
+  },
+  "discovery_snapshot": {
+    "append_only": true,
+    "untrusted": true,
+    "fields": [
+      "deployment_revision",
+      "tool_name",
+      "title",
+      "description",
+      "input_schema",
+      "output_schema",
+      "annotations",
+      "content_sha256",
+      "discovered_at"
+    ],
+    "auto_publish_to_catalog": false,
+    "schema_drift_creates_new_snapshot": true
+  },
+  "not_claimed": [
+    "network-client-runtime",
+    "upstream-tools-call",
+    "oauth",
+    "resources",
+    "prompts",
+    "tasks",
+    "mrtr",
+    "agent-as-tool"
+  ]
+}

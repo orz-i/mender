@@ -13,6 +13,8 @@ type Deployment struct {
 	Revision, ProviderID, TransportKind, EndpointURL, HTTPMethod  string
 	StatusEndpointURL, StatusHTTPMethod, CancelEndpointURL        string
 	CancelHTTPMethod, AuthMode, AuthHeaderName, IdempotencyHeader string
+	MCPProtocolVersion                                            string
+	MCPStateless                                                  bool
 	RequestTimeout                                                time.Duration
 	MaxRequestBytes, MaxResponseBytes                             int
 	State                                                         string
@@ -53,7 +55,19 @@ func validHeaderName(value string) bool {
 }
 
 func (d Deployment) Validate() error {
-	if !validID(d.Revision) || !validID(d.ProviderID) || d.TransportKind != "http" || d.HTTPMethod != "POST" || len(d.EndpointURL) < 1 || len(d.EndpointURL) > 2048 || !utf8.ValidString(d.EndpointURL) || (!strings.HasPrefix(d.EndpointURL, "https://") && !strings.HasPrefix(d.EndpointURL, "http://")) || !validHeaderName(d.IdempotencyHeader) || reservedHTTPHeader(d.IdempotencyHeader) || d.RequestTimeout < 100*time.Millisecond || d.RequestTimeout > 5*time.Minute || d.MaxRequestBytes < 1 || d.MaxRequestBytes > 1<<20 || d.MaxResponseBytes < 1 || d.MaxResponseBytes > 8<<20 || d.CreatedAt.IsZero() {
+	if !validID(d.Revision) || !validID(d.ProviderID) || d.HTTPMethod != "POST" || len(d.EndpointURL) < 1 || len(d.EndpointURL) > 2048 || !utf8.ValidString(d.EndpointURL) || (!strings.HasPrefix(d.EndpointURL, "https://") && !strings.HasPrefix(d.EndpointURL, "http://")) || d.RequestTimeout < 100*time.Millisecond || d.RequestTimeout > 5*time.Minute || d.MaxRequestBytes < 1 || d.MaxRequestBytes > 1<<20 || d.MaxResponseBytes < 1 || d.MaxResponseBytes > 8<<20 || d.CreatedAt.IsZero() {
+		return ErrInvalidDeployment
+	}
+	switch d.TransportKind {
+	case "http":
+		if !validHeaderName(d.IdempotencyHeader) || reservedHTTPHeader(d.IdempotencyHeader) || d.MCPProtocolVersion != "" || d.MCPStateless {
+			return ErrInvalidDeployment
+		}
+	case "mcp_streamable_http":
+		if d.IdempotencyHeader != "" || d.MCPProtocolVersion != "2026-07-28" || !d.MCPStateless || d.StatusEndpointURL != "" || d.StatusHTTPMethod != "" || d.CancelEndpointURL != "" || d.CancelHTTPMethod != "" {
+			return ErrInvalidDeployment
+		}
+	default:
 		return ErrInvalidDeployment
 	}
 	if !validOptionalControlEndpoint(d.StatusEndpointURL, d.StatusHTTPMethod) || !validOptionalControlEndpoint(d.CancelEndpointURL, d.CancelHTTPMethod) {
@@ -106,4 +120,8 @@ func (d Deployment) SupportsStatusQuery() bool {
 
 func (d Deployment) SupportsCancellation() bool {
 	return d.CancelEndpointURL != "" && d.CancelHTTPMethod == "POST"
+}
+
+func (d Deployment) SupportsMCPTools() bool {
+	return d.Validate() == nil && d.TransportKind == "mcp_streamable_http" && d.MCPProtocolVersion == "2026-07-28" && d.MCPStateless
 }

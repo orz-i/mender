@@ -9,6 +9,7 @@ API、插件、工具和事件的设计合同，供接口评审与实现使用�
 | [artifact-read.openapi.yaml](artifact-read.openapi.yaml) | 已实现的受保护 Run Artifact list/detail 子集；只包含 bounded inline JSON result，不声明对象存储或签名 URL |
 | [mcp-meta-tools.json](mcp-meta-tools.json) | MCP 2026-07-28 stateless 网关的四个已实现平台元工具、输入/输出和明确未承诺能力 |
 | [fixed-toolset-contract.json](fixed-toolset-contract.json) | 已实现 Fixed Toolset MCP：不可变 Tool Schema、稳定别名、固定 Connection、`_mender` 幂等/费用控制和异步 Run receipt；不把业务 Artifact 冒充同步 Tool result |
+| [upstream-mcp-contract.json](upstream-mcp-contract.json) | 远程 MCP Tools 接入的第一阶段合同：固定 reviewed endpoint、2026-07-28 stateless、禁止 machine token passthrough、append-only discovery snapshot；当前仅合同/持久化基础，不声明网络 Client 已实现 |
 | [run-query-cancel.openapi.yaml](run-query-cancel.openapi.yaml) | v0.3.0：机器认证查询／取消，可选独立角色的协调取消；默认关闭，已通过本地真实数据库子集测试，不代表商业验收 |
 | [plugin-manifest.schema.json](plugin-manifest.schema.json) | 声明式插件清单与制品摘要约束 |
 | [tool.example.json](tool.example.json) · [http-executor.example.json](http-executor.example.json) | 工具定义与 HTTP 执行映射 |
