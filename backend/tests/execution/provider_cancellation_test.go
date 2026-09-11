@@ -169,7 +169,7 @@ func TestSupplyCancelSourceUsesExactProviderRoute(t *testing.T) {
 	source, err := supplycancel.New(map[string]supply.ProviderCanceler{
 		"provider_a": providerCancelerFunc(func(_ context.Context, query supply.CancelQuery) (supply.CancelResult, error) {
 			called = true
-			if query.ProviderID != "provider_a" || query.ProviderRequestID != "request/1" || query.CancelKey != "mender.cancel.run_cancel.1" {
+			if query.WorkspaceID != "ws_cancel" || query.RunID != "run_cancel" || query.AttemptNo != 1 || query.ProviderID != "provider_a" || query.ProviderRequestID != "request/1" || query.CancelKey != "mender.cancel.run_cancel.1" {
 				t.Fatal(query)
 			}
 			return supply.CancelResult{Disposition: supply.CancelAcknowledged, ObservationID: "obs.cancel.route", ObservedAt: at.Add(2 * time.Second)}, nil

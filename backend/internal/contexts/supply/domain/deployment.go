@@ -2,7 +2,6 @@ package domain
 
 import (
 	"errors"
-	"net/url"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -87,8 +86,18 @@ func validOptionalControlEndpoint(endpoint, method string) bool {
 	if method != "POST" || len(endpoint) > 2048 || !utf8.ValidString(endpoint) || (!strings.HasPrefix(endpoint, "https://") && !strings.HasPrefix(endpoint, "http://")) {
 		return false
 	}
-	parsed, err := url.Parse(endpoint)
-	return err == nil && parsed.Host != "" && parsed.User == nil && parsed.Fragment == ""
+	if strings.Contains(endpoint, "#") {
+		return false
+	}
+	rest := strings.TrimPrefix(strings.TrimPrefix(endpoint, "https://"), "http://")
+	hostEnd := len(rest)
+	for _, separator := range []string{"/", "?"} {
+		if at := strings.Index(rest, separator); at >= 0 && at < hostEnd {
+			hostEnd = at
+		}
+	}
+	host := rest[:hostEnd]
+	return host != "" && !strings.Contains(host, "@")
 }
 
 func (d Deployment) SupportsStatusQuery() bool {

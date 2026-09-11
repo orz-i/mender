@@ -135,6 +135,24 @@ func reservedHeader(value string) bool {
 	}
 }
 
+func (e *Executor) newClient(deployment domain.Deployment, pinnedAddress string) (*http.Client, func()) {
+	transport := &http.Transport{
+		Proxy:                 nil,
+		DisableKeepAlives:     true,
+		ForceAttemptHTTP2:     false,
+		TLSClientConfig:       &tls.Config{MinVersion: tls.VersionTLS12},
+		ResponseHeaderTimeout: deployment.RequestTimeout,
+		DialContext: func(dialCtx context.Context, network, _ string) (net.Conn, error) {
+			return e.dialer.DialContext(dialCtx, network, pinnedAddress)
+		},
+	}
+	client := &http.Client{
+		Transport:     transport,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+	return client, transport.CloseIdleConnections
+}
+
 func safeHeaderValue(secret application.Secret) (string, bool) {
 	value := secret.Bytes()
 	if len(value) == 0 || len(value) > 16<<10 || !utf8.Valid(value) {
@@ -231,6 +249,10 @@ func buildHeaders(req *http.Request, deployment domain.Deployment, secret applic
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set(deployment.IdempotencyHeader, submissionKey)
+	return buildAuthHeaders(req, deployment, secret)
+}
+
+func buildAuthHeaders(req *http.Request, deployment domain.Deployment, secret application.Secret) error {
 	switch deployment.AuthMode {
 	case "none":
 		return nil
@@ -357,21 +379,8 @@ func (e *Executor) Submit(ctx context.Context, submission supply.Submission) (su
 	if err = buildHeaders(req, prepared.Deployment, prepared.Secret, submission.SubmissionKey); err != nil {
 		return supply.Result{}, err
 	}
-	transport := &http.Transport{
-		Proxy:                 nil,
-		DisableKeepAlives:     true,
-		ForceAttemptHTTP2:     false,
-		TLSClientConfig:       &tls.Config{MinVersion: tls.VersionTLS12},
-		ResponseHeaderTimeout: prepared.Deployment.RequestTimeout,
-		DialContext: func(dialCtx context.Context, network, _ string) (net.Conn, error) {
-			return e.dialer.DialContext(dialCtx, network, pinnedAddress)
-		},
-	}
-	defer transport.CloseIdleConnections()
-	client := &http.Client{
-		Transport:     transport,
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-	}
+	client, closeClient := e.newClient(prepared.Deployment, pinnedAddress)
+	defer closeClient()
 	resp, err := client.Do(req)
 	if err != nil {
 		if ctx.Err() != nil {

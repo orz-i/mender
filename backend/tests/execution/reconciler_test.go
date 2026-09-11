@@ -123,7 +123,7 @@ func TestSupplyStatusSourceRoutesOnlyByDurableProviderIdentity(t *testing.T) {
 	source, err := supplystatus.New(map[string]supply.ProviderStatusReader{
 		"provider_a": statusReaderFunc(func(_ context.Context, query supply.StatusQuery) (supply.StatusObservation, error) {
 			called = true
-			if query.ProviderID != "provider_a" || query.ProviderRequestID != "request/123" || query.ExternalTaskID != "task:abc" {
+			if query.WorkspaceID != "ws_reconcile" || query.RunID != "run_reconcile" || query.AttemptNo != 1 || query.ProviderID != "provider_a" || query.ProviderRequestID != "request/123" || query.ExternalTaskID != "task:abc" {
 				t.Fatal(query)
 			}
 			return supply.StatusObservation{ObservationID: "obs.route.1", State: supply.StatusSucceeded, ResultJSON: `{"ok":true}`, ObservedAt: at}, nil

@@ -36,7 +36,10 @@ func (s *Source) QueryProviderStatus(ctx context.Context, target application.Pro
 	if reader == nil {
 		return application.ProviderStatus{}, application.ErrProviderStatusUnavailable
 	}
-	value, err := reader.QueryStatus(ctx, supply.StatusQuery{ProviderID: target.ProviderID, ProviderRequestID: target.ProviderRequestID, ExternalTaskID: target.ExternalTaskID})
+	value, err := reader.QueryStatus(ctx, supply.StatusQuery{
+		WorkspaceID: string(target.WorkspaceID), RunID: string(target.RunID), AttemptNo: target.AttemptNo,
+		ProviderID: target.ProviderID, ProviderRequestID: target.ProviderRequestID, ExternalTaskID: target.ExternalTaskID,
+	})
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return application.ProviderStatus{}, err

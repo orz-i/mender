@@ -16,6 +16,8 @@ const (
 )
 
 type CancelQuery struct {
+	WorkspaceID, RunID                                       string
+	AttemptNo                                                uint32
 	ProviderID, ProviderRequestID, ExternalTaskID, CancelKey string
 }
 

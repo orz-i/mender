@@ -36,7 +36,10 @@ func (s *Source) CancelProvider(ctx context.Context, target application.Provider
 	if canceler == nil {
 		return application.ProviderCancelResult{}, application.ErrProviderCancelUnavailable
 	}
-	result, err := canceler.Cancel(ctx, supply.CancelQuery{ProviderID: target.ProviderID, ProviderRequestID: target.ProviderRequestID, ExternalTaskID: target.ExternalTaskID, CancelKey: target.CancelKey})
+	result, err := canceler.Cancel(ctx, supply.CancelQuery{
+		WorkspaceID: string(target.WorkspaceID), RunID: string(target.RunID), AttemptNo: target.AttemptNo,
+		ProviderID: target.ProviderID, ProviderRequestID: target.ProviderRequestID, ExternalTaskID: target.ExternalTaskID, CancelKey: target.CancelKey,
+	})
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return application.ProviderCancelResult{}, err
