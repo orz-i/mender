@@ -30,9 +30,9 @@ func (e *Executor) Submit(ctx context.Context, request application.ExecutorSubmi
 	}
 	switch result.Disposition {
 	case supply.Accepted:
-		return application.ExecutorResult{Disposition: application.ExecutorAccepted, ProviderRequestID: result.ProviderRequestID, ExternalTaskID: result.ExternalTaskID}, nil
+		return application.ExecutorResult{Disposition: application.ExecutorAccepted, ProviderID: result.ProviderID, ProviderRequestID: result.ProviderRequestID, ExternalTaskID: result.ExternalTaskID}, nil
 	case supply.Unknown:
-		return application.ExecutorResult{Disposition: application.ExecutorUnknown}, nil
+		return application.ExecutorResult{Disposition: application.ExecutorUnknown, ProviderID: result.ProviderID, ProviderRequestID: result.ProviderRequestID, ExternalTaskID: result.ExternalTaskID}, nil
 	default:
 		return application.ExecutorResult{}, nil
 	}

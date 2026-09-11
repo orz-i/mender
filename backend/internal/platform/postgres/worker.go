@@ -44,6 +44,7 @@ func WorkerRole(ctx context.Context, pool *pgxpool.Pool) error {
 	 AND has_column_privilege(current_user,'execution.run_attempts','finished_at','UPDATE')
 	 AND has_column_privilege(current_user,'execution.run_attempts','submission_key','UPDATE')
 	 AND has_column_privilege(current_user,'execution.run_attempts','submission_intent_at','UPDATE')
+	 AND has_column_privilege(current_user,'execution.run_attempts','provider_id','UPDATE')
 	 AND has_column_privilege(current_user,'execution.run_attempts','provider_request_id','UPDATE')
 	 AND has_column_privilege(current_user,'execution.run_attempts','external_task_id','UPDATE')
 	 AND has_column_privilege(current_user,'execution.run_attempts','submitted_at','UPDATE')

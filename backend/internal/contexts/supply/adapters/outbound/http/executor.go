@@ -396,6 +396,7 @@ func (e *Executor) Submit(ctx context.Context, submission supply.Submission) (su
 	if err != nil {
 		return unknown()
 	}
+	result.ProviderID = prepared.Deployment.ProviderID
 	return result, nil
 }
 

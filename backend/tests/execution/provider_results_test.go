@@ -54,7 +54,7 @@ func TestProviderWaitingConsumesWorkerLeaseAndOnlyProviderResultFinishes(t *test
 
 func TestProviderObservationValidation(t *testing.T) {
 	at := time.Date(2026, 9, 10, 20, 0, 0, 0, time.UTC)
-	base := domain.ProviderObservation{WorkspaceID: "ws_result", RunID: "run_result", ObservationID: "obs_1", AttemptNo: 1, ProviderRequestID: "provider/request-1", ExternalTaskID: "task-1", State: domain.ProviderPending, ObservedAt: at}
+	base := domain.ProviderObservation{WorkspaceID: "ws_result", RunID: "run_result", ObservationID: "obs_1", AttemptNo: 1, ProviderID: "provider_a", ProviderRequestID: "provider/request-1", ExternalTaskID: "task-1", State: domain.ProviderPending, ObservedAt: at}
 	if err := base.Validate(); err != nil {
 		t.Fatal(err)
 	}

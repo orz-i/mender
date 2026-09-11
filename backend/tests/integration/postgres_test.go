@@ -229,6 +229,9 @@ func TestPostgresRuntimeContract(t *testing.T) {
 	t.Run("provider observations and terminal result convergence", func(t *testing.T) {
 		exerciseProviderResults(t, ctx, owner, runtime, runtimeURL.String())
 	})
+	t.Run("provider status polling and reconciliation orchestration", func(t *testing.T) {
+		exerciseProviderReconciler(t, ctx, owner, runtime, runtimeURL.String())
+	})
 	t.Run("protected HTTP uses durable storage and rechecks key revocation", func(t *testing.T) {
 		h, closeAPI, e := bootstrap.BuildAPI(ctx, bootstrap.APIConfig{RunAPIEnabled: true, DatabaseURL: runtimeURL.String()})
 		must(t, e)

@@ -35,12 +35,15 @@ func scanProviderObservation(row rowScanner) (domain.ProviderObservation, error)
 	var o domain.ProviderObservation
 	var workspace, run, state string
 	var attempt int32
-	var externalTask, resultJSON, errorCode *string
-	if err := row.Scan(&workspace, &run, &o.ObservationID, &attempt, &o.ProviderRequestID, &externalTask, &state, &resultJSON, &errorCode, &o.ObservedAt); err != nil {
+	var providerID, externalTask, resultJSON, errorCode *string
+	if err := row.Scan(&workspace, &run, &o.ObservationID, &attempt, &providerID, &o.ProviderRequestID, &externalTask, &state, &resultJSON, &errorCode, &o.ObservedAt); err != nil {
 		return domain.ProviderObservation{}, err
 	}
 	o.WorkspaceID, o.RunID = domain.WorkspaceID(workspace), domain.RunID(run)
 	o.AttemptNo, o.State = uint32(attempt), domain.ProviderResultState(state)
+	if providerID != nil {
+		o.ProviderID = *providerID
+	}
 	if externalTask != nil {
 		o.ExternalTaskID = *externalTask
 	}
@@ -58,7 +61,7 @@ func scanProviderObservation(row rowScanner) (domain.ProviderObservation, error)
 }
 
 func loadProviderObservation(ctx context.Context, tx pgx.Tx, o domain.ProviderObservation) (domain.ProviderObservation, bool, error) {
-	row := tx.QueryRow(ctx, `SELECT workspace_id,run_id,observation_id,attempt_no,provider_request_id,external_task_id,state,result_json::text,error_code,observed_at
+	row := tx.QueryRow(ctx, `SELECT workspace_id,run_id,observation_id,attempt_no,provider_id,provider_request_id,external_task_id,state,result_json::text,error_code,observed_at
  FROM execution.provider_observations WHERE workspace_id=$1 AND run_id=$2 AND observation_id=$3`, string(o.WorkspaceID), string(o.RunID), o.ObservationID)
 	existing, err := scanProviderObservation(row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -68,10 +71,10 @@ func loadProviderObservation(ctx context.Context, tx pgx.Tx, o domain.ProviderOb
 		return domain.ProviderObservation{}, false, application.ErrProviderResultUnavailable
 	}
 	var same bool
-	err = tx.QueryRow(ctx, `SELECT attempt_no=$4 AND provider_request_id=$5 AND external_task_id IS NOT DISTINCT FROM NULLIF($6,'') AND state=$7
- AND result_json IS NOT DISTINCT FROM CASE WHEN $8='' THEN NULL ELSE $8::jsonb END
- AND error_code IS NOT DISTINCT FROM NULLIF($9,'') AND observed_at=$10
- FROM execution.provider_observations WHERE workspace_id=$1 AND run_id=$2 AND observation_id=$3`, string(o.WorkspaceID), string(o.RunID), o.ObservationID, int32(o.AttemptNo), o.ProviderRequestID, o.ExternalTaskID, string(o.State), o.ResultJSON, o.ErrorCode, o.ObservedAt).Scan(&same)
+	err = tx.QueryRow(ctx, `SELECT attempt_no=$4 AND provider_id IS NOT DISTINCT FROM NULLIF($5,'') AND provider_request_id=$6 AND external_task_id IS NOT DISTINCT FROM NULLIF($7,'') AND state=$8
+ AND result_json IS NOT DISTINCT FROM CASE WHEN $9='' THEN NULL ELSE $9::jsonb END
+ AND error_code IS NOT DISTINCT FROM NULLIF($10,'') AND observed_at=$11
+ FROM execution.provider_observations WHERE workspace_id=$1 AND run_id=$2 AND observation_id=$3`, string(o.WorkspaceID), string(o.RunID), o.ObservationID, int32(o.AttemptNo), o.ProviderID, o.ProviderRequestID, o.ExternalTaskID, string(o.State), o.ResultJSON, o.ErrorCode, o.ObservedAt).Scan(&same)
 	if err != nil {
 		return domain.ProviderObservation{}, false, application.ErrProviderResultUnavailable
 	}
@@ -107,8 +110,8 @@ func saveFinishedJob(ctx context.Context, tx pgx.Tx, before, after domain.JobSna
 }
 
 func insertProviderObservation(ctx context.Context, tx pgx.Tx, o domain.ProviderObservation) error {
-	_, err := tx.Exec(ctx, `INSERT INTO execution.provider_observations(workspace_id,run_id,observation_id,attempt_no,provider_request_id,external_task_id,state,result_json,error_code,observed_at)
- VALUES($1,$2,$3,$4,$5,NULLIF($6,''),$7,CASE WHEN $8='' THEN NULL ELSE $8::jsonb END,NULLIF($9,''),$10)`, string(o.WorkspaceID), string(o.RunID), o.ObservationID, int32(o.AttemptNo), o.ProviderRequestID, o.ExternalTaskID, string(o.State), o.ResultJSON, o.ErrorCode, o.ObservedAt)
+	_, err := tx.Exec(ctx, `INSERT INTO execution.provider_observations(workspace_id,run_id,observation_id,attempt_no,provider_id,provider_request_id,external_task_id,state,result_json,error_code,observed_at)
+ VALUES($1,$2,$3,$4,NULLIF($5,''),$6,NULLIF($7,''),$8,CASE WHEN $9='' THEN NULL ELSE $9::jsonb END,NULLIF($10,''),$11)`, string(o.WorkspaceID), string(o.RunID), o.ObservationID, int32(o.AttemptNo), o.ProviderID, o.ProviderRequestID, o.ExternalTaskID, string(o.State), o.ResultJSON, o.ErrorCode, o.ObservedAt)
 	if err != nil {
 		return application.ErrProviderResultUnavailable
 	}
@@ -156,7 +159,14 @@ func (r *ProviderResults) RecordProviderObservation(ctx context.Context, observa
 	if err != nil {
 		return application.ProviderResultRecord{}, application.ErrProviderResultUnavailable
 	}
-	if (attempt.State != domain.AttemptSubmitted && attempt.State != domain.AttemptUnknown) || attempt.ProviderRequestID == "" || attempt.ProviderRequestID != observation.ProviderRequestID || observation.ExternalTaskID != "" && attempt.ExternalTaskID != observation.ExternalTaskID {
+	if (attempt.State != domain.AttemptSubmitted && attempt.State != domain.AttemptUnknown) || attempt.ProviderID == "" || attempt.ProviderID != observation.ProviderID || attempt.ProviderRequestID == "" || attempt.ProviderRequestID != observation.ProviderRequestID || observation.ExternalTaskID != "" && attempt.ExternalTaskID != observation.ExternalTaskID {
+		return application.ProviderResultRecord{}, application.ErrProviderResultConflict
+	}
+	evidenceAt := attempt.SubmissionIntentAt
+	if !attempt.SubmittedAt.IsZero() {
+		evidenceAt = attempt.SubmittedAt
+	}
+	if observation.ObservedAt.Before(evidenceAt) {
 		return application.ProviderResultRecord{}, application.ErrProviderResultConflict
 	}
 	var latest *time.Time

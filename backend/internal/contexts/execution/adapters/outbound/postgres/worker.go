@@ -39,8 +39,8 @@ func nullableString(v string) any {
 }
 
 func updateAttempt(ctx context.Context, tx pgx.Tx, before, after domain.AttemptSnapshot) error {
-	tag, err := tx.Exec(ctx, `UPDATE execution.run_attempts SET state=$1,lease_until=$2,finished_at=$3,submission_key=$4,submission_intent_at=$5,provider_request_id=$6,external_task_id=$7,submitted_at=$8,unknown_at=$9,unknown_reason=$10
-	 WHERE workspace_id=$11 AND run_id=$12 AND lease_generation=$13 AND lease_owner=$14 AND state=$15 AND lease_until=$16`, string(after.State), after.LeaseUntil, nullableTime(after.FinishedAt), nullableString(after.SubmissionKey), nullableTime(after.SubmissionIntentAt), nullableString(after.ProviderRequestID), nullableString(after.ExternalTaskID), nullableTime(after.SubmittedAt), nullableTime(after.UnknownAt), nullableString(after.UnknownReason), string(after.WorkspaceID), string(after.RunID), int64(after.LeaseGeneration), after.LeaseOwner, string(before.State), before.LeaseUntil)
+	tag, err := tx.Exec(ctx, `UPDATE execution.run_attempts SET state=$1,lease_until=$2,finished_at=$3,submission_key=$4,submission_intent_at=$5,provider_id=$6,provider_request_id=$7,external_task_id=$8,submitted_at=$9,unknown_at=$10,unknown_reason=$11
+	 WHERE workspace_id=$12 AND run_id=$13 AND lease_generation=$14 AND lease_owner=$15 AND state=$16 AND lease_until=$17`, string(after.State), after.LeaseUntil, nullableTime(after.FinishedAt), nullableString(after.SubmissionKey), nullableTime(after.SubmissionIntentAt), nullableString(after.ProviderID), nullableString(after.ProviderRequestID), nullableString(after.ExternalTaskID), nullableTime(after.SubmittedAt), nullableTime(after.UnknownAt), nullableString(after.UnknownReason), string(after.WorkspaceID), string(after.RunID), int64(after.LeaseGeneration), after.LeaseOwner, string(before.State), before.LeaseUntil)
 	if err != nil {
 		return application.ErrWorkerUnavailable
 	}
@@ -148,7 +148,7 @@ func scanJob(row rowScanner) (domain.JobSnapshot, error) {
 }
 
 const jobColumns = `j.workspace_id,j.run_id,j.state,j.blocked_reason,j.available_at,j.priority,j.lease_owner,j.lease_until,j.lease_generation,j.attempt_count,j.max_attempts,j.created_at,j.updated_at,j.stopped_at`
-const attemptColumns = `a.workspace_id,a.run_id,a.attempt_no,a.lease_generation,a.lease_owner,a.state,a.leased_at,a.lease_until,a.finished_at,a.submission_key,a.submission_intent_at,a.provider_request_id,a.external_task_id,a.submitted_at,a.unknown_at,a.unknown_reason`
+const attemptColumns = `a.workspace_id,a.run_id,a.attempt_no,a.lease_generation,a.lease_owner,a.state,a.leased_at,a.lease_until,a.finished_at,a.submission_key,a.submission_intent_at,a.provider_id,a.provider_request_id,a.external_task_id,a.submitted_at,a.unknown_at,a.unknown_reason`
 
 func scanAttempt(row rowScanner) (domain.AttemptSnapshot, error) {
 	var s domain.AttemptSnapshot
@@ -156,8 +156,8 @@ func scanAttempt(row rowScanner) (domain.AttemptSnapshot, error) {
 	var attemptNo int32
 	var generation int64
 	var finishedAt, intentAt, submittedAt, unknownAt *time.Time
-	var submissionKey, providerRequestID, externalTaskID, unknownReason *string
-	if err := row.Scan(&workspace, &run, &attemptNo, &generation, &owner, &state, &s.LeasedAt, &s.LeaseUntil, &finishedAt, &submissionKey, &intentAt, &providerRequestID, &externalTaskID, &submittedAt, &unknownAt, &unknownReason); err != nil {
+	var submissionKey, providerID, providerRequestID, externalTaskID, unknownReason *string
+	if err := row.Scan(&workspace, &run, &attemptNo, &generation, &owner, &state, &s.LeasedAt, &s.LeaseUntil, &finishedAt, &submissionKey, &intentAt, &providerID, &providerRequestID, &externalTaskID, &submittedAt, &unknownAt, &unknownReason); err != nil {
 		return s, err
 	}
 	if attemptNo < 1 || generation < 1 {
@@ -174,6 +174,9 @@ func scanAttempt(row rowScanner) (domain.AttemptSnapshot, error) {
 	}
 	if intentAt != nil {
 		s.SubmissionIntentAt = *intentAt
+	}
+	if providerID != nil {
+		s.ProviderID = *providerID
 	}
 	if providerRequestID != nil {
 		s.ProviderRequestID = *providerRequestID
@@ -397,7 +400,7 @@ func jobMatchesToken(job domain.JobSnapshot, token domain.LeaseToken) bool {
 	return job.State == domain.JobLeased && job.WorkspaceID == token.WorkspaceID && job.RunID == token.RunID && job.LeaseOwner == token.WorkerID && job.LeaseGeneration == token.Generation
 }
 
-func (w *Workers) RecordSubmitted(ctx context.Context, token domain.LeaseToken, key, providerRequestID, externalTaskID string, at time.Time) (domain.Snapshot, domain.AttemptSnapshot, error) {
+func (w *Workers) RecordSubmitted(ctx context.Context, token domain.LeaseToken, key, providerID, providerRequestID, externalTaskID string, at time.Time) (domain.Snapshot, domain.AttemptSnapshot, error) {
 	tx, err := w.scoped(ctx, token.WorkspaceID)
 	if err != nil {
 		return domain.Snapshot{}, domain.AttemptSnapshot{}, err
@@ -417,7 +420,7 @@ func (w *Workers) RecordSubmitted(ctx context.Context, token domain.LeaseToken, 
 		return domain.Snapshot{}, domain.AttemptSnapshot{}, err
 	}
 	if beforeAttempt.State == domain.AttemptSubmitted {
-		if beforeAttempt.SubmissionKey != key || beforeAttempt.ProviderRequestID != providerRequestID || beforeAttempt.ExternalTaskID != externalTaskID || beforeRun.State != domain.Running || !beforeRun.UpdatedAt.Equal(beforeAttempt.SubmittedAt) || beforeJob.State != domain.JobProviderWaiting || beforeJob.LeaseGeneration != token.Generation {
+		if beforeAttempt.SubmissionKey != key || beforeAttempt.ProviderID != providerID || beforeAttempt.ProviderRequestID != providerRequestID || beforeAttempt.ExternalTaskID != externalTaskID || beforeRun.State != domain.Running || !beforeRun.UpdatedAt.Equal(beforeAttempt.SubmittedAt) || beforeJob.State != domain.JobProviderWaiting || beforeJob.LeaseGeneration != token.Generation {
 			return domain.Snapshot{}, domain.AttemptSnapshot{}, domain.ErrLeaseLost
 		}
 		if err = tx.Commit(ctx); err != nil {
@@ -429,7 +432,7 @@ func (w *Workers) RecordSubmitted(ctx context.Context, token domain.LeaseToken, 
 		return domain.Snapshot{}, domain.AttemptSnapshot{}, domain.ErrLeaseLost
 	}
 	attempt, _ := domain.RestoreAttempt(beforeAttempt)
-	if err = attempt.MarkSubmitted(token, at, key, providerRequestID, externalTaskID); err != nil {
+	if err = attempt.MarkSubmitted(token, at, key, providerID, providerRequestID, externalTaskID); err != nil {
 		return domain.Snapshot{}, domain.AttemptSnapshot{}, err
 	}
 	job, _ := domain.RestoreJob(beforeJob)
@@ -458,7 +461,7 @@ func (w *Workers) RecordSubmitted(ctx context.Context, token domain.LeaseToken, 
 	return run.Snapshot(), afterAttempt, nil
 }
 
-func (w *Workers) RecordSubmissionUnknown(ctx context.Context, token domain.LeaseToken, key, reason string, at time.Time) (domain.Snapshot, domain.AttemptSnapshot, error) {
+func (w *Workers) RecordSubmissionUnknown(ctx context.Context, token domain.LeaseToken, key, providerID, providerRequestID, externalTaskID, reason string, at time.Time) (domain.Snapshot, domain.AttemptSnapshot, error) {
 	tx, err := w.scoped(ctx, token.WorkspaceID)
 	if err != nil {
 		return domain.Snapshot{}, domain.AttemptSnapshot{}, err
@@ -478,7 +481,7 @@ func (w *Workers) RecordSubmissionUnknown(ctx context.Context, token domain.Leas
 		return domain.Snapshot{}, domain.AttemptSnapshot{}, err
 	}
 	attempt, _ := domain.RestoreAttempt(beforeAttempt)
-	if err = attempt.MarkUnknown(token, at, key, reason); err != nil {
+	if err = attempt.MarkUnknown(token, at, key, providerID, providerRequestID, externalTaskID, reason); err != nil {
 		return domain.Snapshot{}, domain.AttemptSnapshot{}, err
 	}
 	job, _ := domain.RestoreJob(beforeJob)

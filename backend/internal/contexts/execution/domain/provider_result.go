@@ -23,6 +23,7 @@ type ProviderObservation struct {
 	RunID             RunID
 	ObservationID     string
 	AttemptNo         uint32
+	ProviderID        string
 	ProviderRequestID string
 	ExternalTaskID    string
 	State             ProviderResultState
@@ -64,7 +65,7 @@ func (o ProviderObservation) IsTerminal() bool {
 }
 
 func (o ProviderObservation) Validate() error {
-	if !o.WorkspaceID.IsValid() || !o.RunID.IsValid() || !validObservationID(o.ObservationID) || o.AttemptNo == 0 || o.AttemptNo > 100 || !validProviderValue(o.ProviderRequestID, true) || !validProviderValue(o.ExternalTaskID, false) || !validJobTime(o.ObservedAt) {
+	if !o.WorkspaceID.IsValid() || !o.RunID.IsValid() || !validObservationID(o.ObservationID) || o.AttemptNo == 0 || o.AttemptNo > 100 || (o.ProviderID != "" && !validID(o.ProviderID)) || !validProviderValue(o.ProviderRequestID, true) || !validProviderValue(o.ExternalTaskID, false) || !validJobTime(o.ObservedAt) {
 		return ErrInvalidProviderObservation
 	}
 	switch o.State {

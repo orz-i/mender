@@ -26,6 +26,7 @@ type Submission struct {
 
 type Result struct {
 	Disposition       Disposition
+	ProviderID        string
 	ProviderRequestID string
 	ExternalTaskID    string
 }

@@ -32,7 +32,7 @@ func GrantWorker(ctx context.Context, pool *pgxpool.Pool, role string) error {
 		"GRANT SELECT (workspace_id,run_id,deployment_revision) ON execution.run_admissions TO " + id,
 		"GRANT UPDATE (state,blocked_reason,available_at,lease_owner,lease_until,lease_generation,attempt_count,updated_at) ON execution.jobs TO " + id,
 		"GRANT INSERT ON execution.run_attempts TO " + id,
-		"GRANT UPDATE (state,lease_until,finished_at,submission_key,submission_intent_at,provider_request_id,external_task_id,submitted_at,unknown_at,unknown_reason) ON execution.run_attempts TO " + id,
+		"GRANT UPDATE (state,lease_until,finished_at,submission_key,submission_intent_at,provider_id,provider_request_id,external_task_id,submitted_at,unknown_at,unknown_reason) ON execution.run_attempts TO " + id,
 		"GRANT UPDATE (state,version,updated_at) ON execution.runs TO " + id,
 		"GRANT INSERT ON execution.run_events TO " + id,
 	} {

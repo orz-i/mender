@@ -225,13 +225,13 @@ VALUES($1,$2,'sa_worker','fixture_key_worker',$2||'_idem',repeat('a',64),'res_'|
 		}
 
 		clock.at = clock.at.Add(time.Second)
-		record, e := control.RecordSubmitted(ctx, intent, "provider/request-accepted", "external/task-accepted")
+		record, e := control.RecordSubmitted(ctx, intent, "provider_worker", "provider/request-accepted", "external/task-accepted")
 		must(t, e)
 		if record.Run.State != "running" || record.Attempt.State != "submitted" {
 			t.Fatal("accepted submission not reflected", record)
 		}
 		clock.at = clock.at.Add(time.Second)
-		replayed, e := control.RecordSubmitted(ctx, intent, "provider/request-accepted", "external/task-accepted")
+		replayed, e := control.RecordSubmitted(ctx, intent, "provider_worker", "provider/request-accepted", "external/task-accepted")
 		must(t, e)
 		if replayed.Run.Version != record.Run.Version || !replayed.Attempt.SubmittedAt.Equal(record.Attempt.SubmittedAt) {
 			t.Fatal("accepted submission replay mutated facts", replayed, record)
@@ -251,7 +251,7 @@ VALUES($1,$2,'sa_worker','fixture_key_worker',$2||'_idem',repeat('a',64),'res_'|
 			t.Fatal("accepted submission retained worker ownership or lost provider facts", runState, jobState, leaseOwner, leaseUntil, attemptState, providerRequestID, externalTaskID)
 		}
 		clock.at = clock.at.Add(time.Second)
-		if _, e = control.RecordSubmitted(ctx, intent, "provider/stale", "external/stale"); !errors.Is(e, runapp.ErrWorkerLeaseLost) {
+		if _, e = control.RecordSubmitted(ctx, intent, "provider_worker", "provider/stale", "external/stale"); !errors.Is(e, runapp.ErrWorkerLeaseLost) {
 			t.Fatal("expired fencing token recorded a new provider result", e)
 		}
 	})
@@ -270,7 +270,7 @@ VALUES($1,$2,'sa_worker','fixture_key_worker',$2||'_idem',repeat('a',64),'res_'|
 		intent, e := control.BeginSubmission(ctx, lease, "submit.run_submit_unknown.1")
 		must(t, e)
 		clock.at = clock.at.Add(time.Second)
-		record, e := control.RecordSubmissionUnknown(ctx, intent, "timeout waiting for supplier acknowledgement")
+		record, e := control.RecordSubmissionUnknown(ctx, intent, "", "", "", "timeout waiting for supplier acknowledgement")
 		must(t, e)
 		if record.Run.State != "reconciling" || record.Attempt.State != "unknown" {
 			t.Fatal(record)
@@ -303,7 +303,7 @@ VALUES($1,$2,'sa_worker','fixture_key_worker',$2||'_idem',repeat('a',64),'res_'|
 			t.Fatal("expired submission intent was requeued", runState, jobState, attemptState)
 		}
 		clock.at = clock.at.Add(time.Second)
-		if _, e = control.RecordSubmitted(ctx, crashIntent, "provider/late", ""); !errors.Is(e, runapp.ErrWorkerLeaseLost) {
+		if _, e = control.RecordSubmitted(ctx, crashIntent, "provider_worker", "provider/late", ""); !errors.Is(e, runapp.ErrWorkerLeaseLost) {
 			t.Fatal("late worker overwrote reconciled submission", e)
 		}
 	})

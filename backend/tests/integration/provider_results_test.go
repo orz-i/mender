@@ -80,7 +80,7 @@ VALUES('ws_result',$1,'sa_result','key_result',$1||'_idem',repeat('a',64),'res_'
 		intent, e := control.BeginSubmission(ctx, lease, "submit."+run+".1")
 		must(t, e)
 		clock.at = clock.at.Add(time.Second)
-		record, e := control.RecordSubmitted(ctx, intent, requestID, "task-"+run)
+		record, e := control.RecordSubmitted(ctx, intent, "provider_result", requestID, "task-"+run)
 		must(t, e)
 		var state string
 		var leaseOwner *string
@@ -93,10 +93,10 @@ VALUES('ws_result',$1,'sa_result','key_result',$1||'_idem',repeat('a',64),'res_'
 	}
 	successSubmission := accept("run_result_success", "deploy_result_success", "worker_result_success", "provider/result-success")
 	orderSubmission := accept("run_result_order", "deploy_result_order", "worker_result_order", "provider/result-order")
-	var persistedRun, persistedJob, persistedAttempt, persistedRequest, persistedTask string
-	must(t, owner.QueryRow(ctx, `SELECT r.state,j.state,a.state,a.provider_request_id,a.external_task_id FROM execution.runs r JOIN execution.jobs j ON (j.workspace_id,j.run_id)=(r.workspace_id,r.id) JOIN execution.run_attempts a ON (a.workspace_id,a.run_id,a.attempt_no)=(r.workspace_id,r.id,1) WHERE r.workspace_id='ws_result' AND r.id='run_result_success'`).Scan(&persistedRun, &persistedJob, &persistedAttempt, &persistedRequest, &persistedTask))
-	if persistedRun != "running" || persistedJob != "provider_waiting" || persistedAttempt != "submitted" || persistedRequest != "provider/result-success" || persistedTask != "task-run_result_success" {
-		t.Fatal("accepted provider-result fixture facts are inconsistent", persistedRun, persistedJob, persistedAttempt, persistedRequest, persistedTask)
+	var persistedRun, persistedJob, persistedAttempt, persistedProvider, persistedRequest, persistedTask string
+	must(t, owner.QueryRow(ctx, `SELECT r.state,j.state,a.state,a.provider_id,a.provider_request_id,a.external_task_id FROM execution.runs r JOIN execution.jobs j ON (j.workspace_id,j.run_id)=(r.workspace_id,r.id) JOIN execution.run_attempts a ON (a.workspace_id,a.run_id,a.attempt_no)=(r.workspace_id,r.id,1) WHERE r.workspace_id='ws_result' AND r.id='run_result_success'`).Scan(&persistedRun, &persistedJob, &persistedAttempt, &persistedProvider, &persistedRequest, &persistedTask))
+	if persistedRun != "running" || persistedJob != "provider_waiting" || persistedAttempt != "submitted" || persistedProvider != "provider_result" || persistedRequest != "provider/result-success" || persistedTask != "task-run_result_success" {
+		t.Fatal("accepted provider-result fixture facts are inconsistent", persistedRun, persistedJob, persistedAttempt, persistedProvider, persistedRequest, persistedTask)
 	}
 	t.Run("reconciler SQL permissions and pending bundle are usable", func(t *testing.T) {
 		tx, e := reconciler.Begin(ctx)
@@ -120,7 +120,7 @@ VALUES('ws_result',$1,'sa_result','key_result',$1||'_idem',repeat('a',64),'res_'
 			t.Fatal("reconciler Attempt read lock failed", e)
 		}
 		probeAt := successSubmission.Attempt.SubmittedAt.Add(time.Second)
-		_, e = tx.Exec(ctx, `INSERT INTO execution.provider_observations(workspace_id,run_id,observation_id,attempt_no,provider_request_id,external_task_id,state,result_json,error_code,observed_at) VALUES('ws_result','run_result_success','obs_permission_probe',1,'provider/result-success','task-run_result_success','pending',NULL,NULL,$1)`, probeAt)
+		_, e = tx.Exec(ctx, `INSERT INTO execution.provider_observations(workspace_id,run_id,observation_id,attempt_no,provider_id,provider_request_id,external_task_id,state,result_json,error_code,observed_at) VALUES('ws_result','run_result_success','obs_permission_probe',1,'provider_result','provider/result-success','task-run_result_success','pending',NULL,NULL,$1)`, probeAt)
 		if e != nil {
 			t.Fatal("reconciler pending INSERT failed", e)
 		}
@@ -133,7 +133,7 @@ VALUES('ws_result',$1,'sa_result','key_result',$1||'_idem',repeat('a',64),'res_'
 	results, err := runapp.NewProviderResults(runpg.NewProviderResults(reconciler))
 	must(t, err)
 	pendingAt := successSubmission.Attempt.SubmittedAt.Add(2 * time.Second)
-	pending := domain.ProviderObservation{WorkspaceID: "ws_result", RunID: "run_result_success", ObservationID: "obs_success_pending", AttemptNo: 1, ProviderRequestID: "provider/result-success", ExternalTaskID: "task-run_result_success", State: domain.ProviderPending, ObservedAt: pendingAt}
+	pending := domain.ProviderObservation{WorkspaceID: "ws_result", RunID: "run_result_success", ObservationID: "obs_success_pending", AttemptNo: 1, ProviderID: "provider_result", ProviderRequestID: "provider/result-success", ExternalTaskID: "task-run_result_success", State: domain.ProviderPending, ObservedAt: pendingAt}
 	record, err := results.Observe(ctx, pending)
 	if err != nil {
 		t.Fatalf("pending provider observation failed: %v", err)
@@ -143,7 +143,7 @@ VALUES('ws_result',$1,'sa_result','key_result',$1||'_idem',repeat('a',64),'res_'
 	}
 
 	terminalAt := pendingAt.Add(time.Second)
-	succeeded := domain.ProviderObservation{WorkspaceID: "ws_result", RunID: "run_result_success", ObservationID: "obs_success_terminal", AttemptNo: 1, ProviderRequestID: "provider/result-success", ExternalTaskID: "task-run_result_success", State: domain.ProviderSucceeded, ResultJSON: `{"answer":42}`, ObservedAt: terminalAt}
+	succeeded := domain.ProviderObservation{WorkspaceID: "ws_result", RunID: "run_result_success", ObservationID: "obs_success_terminal", AttemptNo: 1, ProviderID: "provider_result", ProviderRequestID: "provider/result-success", ExternalTaskID: "task-run_result_success", State: domain.ProviderSucceeded, ResultJSON: `{"answer":42}`, ObservedAt: terminalAt}
 	record, err = results.Observe(ctx, succeeded)
 	if err != nil {
 		t.Fatalf("terminal provider observation failed: %v", err)
@@ -169,11 +169,11 @@ VALUES('ws_result',$1,'sa_result','key_result',$1||'_idem',repeat('a',64),'res_'
 	}
 
 	orderAt := orderSubmission.Attempt.SubmittedAt.Add(5 * time.Second)
-	_, err = results.Observe(ctx, domain.ProviderObservation{WorkspaceID: "ws_result", RunID: "run_result_order", ObservationID: "obs_order_new", AttemptNo: 1, ProviderRequestID: "provider/result-order", ExternalTaskID: "task-run_result_order", State: domain.ProviderPending, ObservedAt: orderAt})
+	_, err = results.Observe(ctx, domain.ProviderObservation{WorkspaceID: "ws_result", RunID: "run_result_order", ObservationID: "obs_order_new", AttemptNo: 1, ProviderID: "provider_result", ProviderRequestID: "provider/result-order", ExternalTaskID: "task-run_result_order", State: domain.ProviderPending, ObservedAt: orderAt})
 	if err != nil {
 		t.Fatalf("newer pending provider observation failed: %v", err)
 	}
-	_, err = results.Observe(ctx, domain.ProviderObservation{WorkspaceID: "ws_result", RunID: "run_result_order", ObservationID: "obs_order_old", AttemptNo: 1, ProviderRequestID: "provider/result-order", ExternalTaskID: "task-run_result_order", State: domain.ProviderPending, ObservedAt: orderAt.Add(-time.Second)})
+	_, err = results.Observe(ctx, domain.ProviderObservation{WorkspaceID: "ws_result", RunID: "run_result_order", ObservationID: "obs_order_old", AttemptNo: 1, ProviderID: "provider_result", ProviderRequestID: "provider/result-order", ExternalTaskID: "task-run_result_order", State: domain.ProviderPending, ObservedAt: orderAt.Add(-time.Second)})
 	if !errors.Is(err, runapp.ErrProviderResultConflict) {
 		t.Fatal("out-of-order provider observation accepted", err)
 	}

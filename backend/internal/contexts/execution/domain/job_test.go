@@ -53,16 +53,16 @@ func TestSubmissionAttemptRequiresCurrentFenceAndPreservesUnknownOutcome(t *test
 	}
 	stale := token
 	stale.Generation = 2
-	if err = attempt.MarkSubmitted(stale, at.Add(2*time.Second), "submit.run_submit.1", "request/1", "task/1"); !errors.Is(err, ErrLeaseLost) {
+	if err = attempt.MarkSubmitted(stale, at.Add(2*time.Second), "submit.run_submit.1", "provider_a", "request/1", "task/1"); !errors.Is(err, ErrLeaseLost) {
 		t.Fatal("stale fence recorded provider identifiers", err)
 	}
-	if err = attempt.MarkSubmitted(token, at.Add(2*time.Second), "submit.run_submit.1", "request/1", "task/1"); err != nil {
+	if err = attempt.MarkSubmitted(token, at.Add(2*time.Second), "submit.run_submit.1", "provider_a", "request/1", "task/1"); err != nil {
 		t.Fatal(err)
 	}
-	if attempt.Snapshot().State != AttemptSubmitted || attempt.Snapshot().ProviderRequestID != "request/1" {
+	if attempt.Snapshot().State != AttemptSubmitted || attempt.Snapshot().ProviderID != "provider_a" || attempt.Snapshot().ProviderRequestID != "request/1" {
 		t.Fatal(attempt.Snapshot())
 	}
-	if err = attempt.MarkUnknown(token, at.Add(3*time.Second), "submit.run_submit.1", "response outcome unknown"); err != nil {
+	if err = attempt.MarkUnknown(token, at.Add(3*time.Second), "submit.run_submit.1", "", "", "", "response outcome unknown"); err != nil {
 		t.Fatal(err)
 	}
 	if s := attempt.Snapshot(); s.State != AttemptUnknown || s.UnknownReason == "" || !s.FinishedAt.Equal(s.UnknownAt) {

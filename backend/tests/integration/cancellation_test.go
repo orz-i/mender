@@ -263,7 +263,7 @@ func exerciseCancellation(t *testing.T, ctx context.Context, owner, runtime, wri
 
 			tx, e = owner.Begin(ctx)
 			must(t, e)
-			_, e = tx.Exec(ctx, `UPDATE execution.run_attempts SET state='submitted',submission_key=$1,submission_intent_at=$2,provider_request_id=$3,submitted_at=$4 WHERE workspace_id=$5 AND run_id=$6 AND attempt_no=1`, submissionKey, intentAt, fmt.Sprintf("fixture/request-%d", i), submittedAt, r.WorkspaceID, r.RunID)
+			_, e = tx.Exec(ctx, `UPDATE execution.run_attempts SET state='submitted',submission_key=$1,submission_intent_at=$2,provider_id='provider_cancel_fixture',provider_request_id=$3,submitted_at=$4 WHERE workspace_id=$5 AND run_id=$6 AND attempt_no=1`, submissionKey, intentAt, fmt.Sprintf("fixture/request-%d", i), submittedAt, r.WorkspaceID, r.RunID)
 			if e == nil {
 				_, e = tx.Exec(ctx, `UPDATE execution.jobs SET state='provider_waiting',lease_owner=NULL,lease_until=NULL,updated_at=$1 WHERE workspace_id=$2 AND run_id=$3`, submittedAt, r.WorkspaceID, r.RunID)
 			}

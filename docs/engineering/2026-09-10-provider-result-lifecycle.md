@@ -1,6 +1,6 @@
 # Mender：Provider Result Lifecycle
 
-日期：2026-09-10。本阶段在 supplier submission/fencing 之后建立异步 Provider Result 的持久证据模型。**当前只完成本地 execution 数据协议与受限 Reconciler 角色；尚未加入 production provider polling/callback/cancel adapter，也没有访问真实供应商。**
+日期：2026-09-10。本阶段在 supplier submission/fencing 之后建立异步 Provider Result 的持久证据模型。后续 `0011` 与 Provider Reconciler 已加入按 provider identity 路由的状态查询应用编排；**仍没有 production provider polling/callback/cancel adapter，也没有访问真实供应商。**
 
 ## Accepted 后释放 Worker lease
 
@@ -30,4 +30,4 @@ Reconciler 只读 Run/Job/Attempt/result observation，追加 observation/RunEve
 
 隔离 PostgreSQL 套件验证：accepted submission 原子释放 Worker lease；旧 lease expiry 对 `provider_waiting` 不产生 recovery；pending observation 不改变 Run/Job；terminal success 原子生成 observation + finished Job + terminal Run/Event；完全相同 observation replay 不增加 Run version；同 ID 不同事实、乱序 observation、terminal 后新 observation 均拒绝；Reconciler 无法读 arguments/Identity/Commerce/Connections/Supply、无法改 Attempt 或删除 observation；没有 provider evidence 的直接 terminal Run update 无法提交。测试容器由现有所有权标签机制清理。
 
-下一切片只在此协议之上增加 provider status query/reconciliation 应用端口与 fake/local provider；仍不启用真实公网 provider polling。
+后续切片已在此协议之上增加 provider status query/reconciliation 应用端口与 fake provider，并通过真实 PostgreSQL + 内存 provider reader 验证；完整说明见 [Provider Reconciliation](2026-09-10-provider-reconciliation.md)。真实公网 provider polling 仍未启用。

@@ -34,6 +34,7 @@ type ExecutorSubmission struct {
 
 type ExecutorResult struct {
 	Disposition       ExecutorDisposition
+	ProviderID        string
 	ProviderRequestID string
 	ExternalTaskID    string
 }
@@ -44,8 +45,8 @@ type Executor interface {
 
 type SubmissionControl interface {
 	BeginSubmission(context.Context, Lease, string) (SubmissionIntent, error)
-	RecordSubmitted(context.Context, SubmissionIntent, string, string) (SubmissionRecord, error)
-	RecordSubmissionUnknown(context.Context, SubmissionIntent, string) (SubmissionRecord, error)
+	RecordSubmitted(context.Context, SubmissionIntent, string, string, string) (SubmissionRecord, error)
+	RecordSubmissionUnknown(context.Context, SubmissionIntent, string, string, string, string) (SubmissionRecord, error)
 }
 
 type DispatchResult struct {
@@ -77,8 +78,8 @@ func deterministicSubmissionKey(lease Lease) (string, error) {
 	return key, nil
 }
 
-func (d *Dispatcher) reconcile(ctx context.Context, intent SubmissionIntent, reason string) (DispatchResult, error) {
-	record, err := d.control.RecordSubmissionUnknown(ctx, intent, reason)
+func (d *Dispatcher) reconcile(ctx context.Context, intent SubmissionIntent, outcome ExecutorResult, reason string) (DispatchResult, error) {
+	record, err := d.control.RecordSubmissionUnknown(ctx, intent, outcome.ProviderID, outcome.ProviderRequestID, outcome.ExternalTaskID, reason)
 	if err != nil {
 		return DispatchResult{}, err
 	}
@@ -110,13 +111,13 @@ func (d *Dispatcher) Dispatch(ctx context.Context, lease Lease) (DispatchResult,
 		return DispatchResult{SubmissionKey: key}, ctx.Err()
 	}
 	if submitErr != nil {
-		return d.reconcile(ctx, intent, "executor returned without a confirmed supplier outcome")
+		return d.reconcile(ctx, intent, ExecutorResult{}, "executor returned without a confirmed supplier outcome")
 	}
 	switch outcome.Disposition {
 	case ExecutorUnknown:
-		return d.reconcile(ctx, intent, "executor reported supplier outcome unknown")
+		return d.reconcile(ctx, intent, outcome, "executor reported supplier outcome unknown")
 	case ExecutorAccepted:
-		record, recordErr := d.control.RecordSubmitted(ctx, intent, outcome.ProviderRequestID, outcome.ExternalTaskID)
+		record, recordErr := d.control.RecordSubmitted(ctx, intent, outcome.ProviderID, outcome.ProviderRequestID, outcome.ExternalTaskID)
 		if recordErr == nil {
 			return DispatchResult{SubmissionKey: key, Run: record.Run, Attempt: record.Attempt}, nil
 		}
@@ -125,9 +126,9 @@ func (d *Dispatcher) Dispatch(ctx context.Context, lease Lease) (DispatchResult,
 		}
 		// If acceptance metadata cannot be safely persisted but the lease is still
 		// ours, degrade to reconciliation instead of pretending the call failed.
-		return d.reconcile(ctx, intent, "supplier acceptance could not be persisted safely")
+		return d.reconcile(ctx, intent, outcome, "supplier acceptance could not be persisted safely")
 	default:
-		result, reconcileErr := d.reconcile(ctx, intent, "executor returned an invalid supplier outcome")
+		result, reconcileErr := d.reconcile(ctx, intent, ExecutorResult{}, "executor returned an invalid supplier outcome")
 		if reconcileErr != nil && !errors.Is(reconcileErr, ErrExecutorOutcomeUnknown) {
 			return DispatchResult{}, reconcileErr
 		}

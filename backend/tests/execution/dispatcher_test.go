@@ -42,7 +42,7 @@ func TestDispatcherPersistsIntentBeforeExecutorAndRecordsAcceptance(t *testing.T
 		if request.SubmissionKey != "mender.submit.run_a.1" || request.RunID != "run_a" || request.Generation != 1 || request.AttemptNo != 1 {
 			t.Fatal(request)
 		}
-		return app.ExecutorResult{Disposition: app.ExecutorAccepted, ProviderRequestID: "provider/request-1", ExternalTaskID: "task-1"}, nil
+		return app.ExecutorResult{Disposition: app.ExecutorAccepted, ProviderID: "provider_a", ProviderRequestID: "provider/request-1", ExternalTaskID: "task-1"}, nil
 	})
 	dispatcher, err := app.NewDispatcher(control, executor)
 	if err != nil {
@@ -103,7 +103,7 @@ func TestDispatcherRejectsExpiredLeaseBeforeExecutorCall(t *testing.T) {
 	called := false
 	dispatcher, err := app.NewDispatcher(control, executorFunc(func(context.Context, app.ExecutorSubmission) (app.ExecutorResult, error) {
 		called = true
-		return app.ExecutorResult{Disposition: app.ExecutorAccepted, ProviderRequestID: "must-not-run"}, nil
+		return app.ExecutorResult{Disposition: app.ExecutorAccepted, ProviderID: "provider_a", ProviderRequestID: "must-not-run"}, nil
 	}))
 	if err != nil {
 		t.Fatal(err)

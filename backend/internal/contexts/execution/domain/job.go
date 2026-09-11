@@ -368,6 +368,7 @@ type AttemptSnapshot struct {
 	FinishedAt         time.Time
 	SubmissionKey      string
 	SubmissionIntentAt time.Time
+	ProviderID         string
 	ProviderRequestID  string
 	ExternalTaskID     string
 	SubmittedAt        time.Time
@@ -414,23 +415,24 @@ func RestoreAttempt(a AttemptSnapshot) (Attempt, error) {
 	}
 	switch a.State {
 	case AttemptLeased:
-		if !a.FinishedAt.IsZero() || a.SubmissionKey != "" || !a.SubmissionIntentAt.IsZero() || a.ProviderRequestID != "" || a.ExternalTaskID != "" || !a.SubmittedAt.IsZero() || !a.UnknownAt.IsZero() || a.UnknownReason != "" {
+		if !a.FinishedAt.IsZero() || a.SubmissionKey != "" || !a.SubmissionIntentAt.IsZero() || a.ProviderID != "" || a.ProviderRequestID != "" || a.ExternalTaskID != "" || !a.SubmittedAt.IsZero() || !a.UnknownAt.IsZero() || a.UnknownReason != "" {
 			return Attempt{}, ErrInvalidJob
 		}
 	case AttemptReleased, AttemptExpired:
-		if !validJobTime(a.FinishedAt) || a.FinishedAt.Before(a.LeasedAt) || a.SubmissionKey != "" || !a.SubmissionIntentAt.IsZero() || a.ProviderRequestID != "" || a.ExternalTaskID != "" || !a.SubmittedAt.IsZero() || !a.UnknownAt.IsZero() || a.UnknownReason != "" {
+		if !validJobTime(a.FinishedAt) || a.FinishedAt.Before(a.LeasedAt) || a.SubmissionKey != "" || !a.SubmissionIntentAt.IsZero() || a.ProviderID != "" || a.ProviderRequestID != "" || a.ExternalTaskID != "" || !a.SubmittedAt.IsZero() || !a.UnknownAt.IsZero() || a.UnknownReason != "" {
 			return Attempt{}, ErrInvalidJob
 		}
 	case AttemptSubmitting:
-		if !validSubmissionKey(a.SubmissionKey) || !validJobTime(a.SubmissionIntentAt) || a.SubmissionIntentAt.Before(a.LeasedAt) || !a.SubmissionIntentAt.Before(a.LeaseUntil) || a.ProviderRequestID != "" || a.ExternalTaskID != "" || !a.SubmittedAt.IsZero() || !a.UnknownAt.IsZero() || a.UnknownReason != "" || !a.FinishedAt.IsZero() {
+		if !validSubmissionKey(a.SubmissionKey) || !validJobTime(a.SubmissionIntentAt) || a.SubmissionIntentAt.Before(a.LeasedAt) || !a.SubmissionIntentAt.Before(a.LeaseUntil) || a.ProviderID != "" || a.ProviderRequestID != "" || a.ExternalTaskID != "" || !a.SubmittedAt.IsZero() || !a.UnknownAt.IsZero() || a.UnknownReason != "" || !a.FinishedAt.IsZero() {
 			return Attempt{}, ErrInvalidJob
 		}
 	case AttemptSubmitted:
-		if !validSubmissionKey(a.SubmissionKey) || !validJobTime(a.SubmissionIntentAt) || a.SubmissionIntentAt.Before(a.LeasedAt) || !a.SubmissionIntentAt.Before(a.LeaseUntil) || !validProviderValue(a.ProviderRequestID, true) || !validProviderValue(a.ExternalTaskID, false) || !validJobTime(a.SubmittedAt) || a.SubmittedAt.Before(a.SubmissionIntentAt) || !a.SubmittedAt.Before(a.LeaseUntil) || !a.UnknownAt.IsZero() || a.UnknownReason != "" || !a.FinishedAt.IsZero() {
+		if !validSubmissionKey(a.SubmissionKey) || !validJobTime(a.SubmissionIntentAt) || a.SubmissionIntentAt.Before(a.LeasedAt) || !a.SubmissionIntentAt.Before(a.LeaseUntil) || (a.ProviderID != "" && !validID(a.ProviderID)) || !validProviderValue(a.ProviderRequestID, true) || !validProviderValue(a.ExternalTaskID, false) || !validJobTime(a.SubmittedAt) || a.SubmittedAt.Before(a.SubmissionIntentAt) || !a.SubmittedAt.Before(a.LeaseUntil) || !a.UnknownAt.IsZero() || a.UnknownReason != "" || !a.FinishedAt.IsZero() {
 			return Attempt{}, ErrInvalidJob
 		}
 	case AttemptUnknown:
-		if !validSubmissionKey(a.SubmissionKey) || !validJobTime(a.SubmissionIntentAt) || a.SubmissionIntentAt.Before(a.LeasedAt) || !a.SubmissionIntentAt.Before(a.LeaseUntil) || !validProviderValue(a.ProviderRequestID, false) || !validProviderValue(a.ExternalTaskID, false) || (!a.SubmittedAt.IsZero() && (!validJobTime(a.SubmittedAt) || a.SubmittedAt.Before(a.SubmissionIntentAt) || !a.SubmittedAt.Before(a.LeaseUntil))) || !validJobTime(a.UnknownAt) || a.UnknownAt.Before(a.SubmissionIntentAt) || !validUnknownReason(a.UnknownReason) || !a.FinishedAt.Equal(a.UnknownAt) {
+		knownProvider := a.ProviderRequestID != ""
+		if !validSubmissionKey(a.SubmissionKey) || !validJobTime(a.SubmissionIntentAt) || a.SubmissionIntentAt.Before(a.LeasedAt) || !a.SubmissionIntentAt.Before(a.LeaseUntil) || (a.ProviderID != "" && !validID(a.ProviderID)) || (!knownProvider && (a.ProviderID != "" || a.ExternalTaskID != "")) || !validProviderValue(a.ProviderRequestID, false) || !validProviderValue(a.ExternalTaskID, false) || (!a.SubmittedAt.IsZero() && (!validJobTime(a.SubmittedAt) || a.SubmittedAt.Before(a.SubmissionIntentAt) || !a.SubmittedAt.Before(a.LeaseUntil))) || !validJobTime(a.UnknownAt) || a.UnknownAt.Before(a.SubmissionIntentAt) || !validUnknownReason(a.UnknownReason) || !a.FinishedAt.Equal(a.UnknownAt) {
 			return Attempt{}, ErrInvalidJob
 		}
 	default:
@@ -496,35 +498,46 @@ func (a *Attempt) BeginSubmission(token LeaseToken, at time.Time, key string) er
 	return nil
 }
 
-func (a *Attempt) MarkSubmitted(token LeaseToken, at time.Time, key, providerRequestID, externalTaskID string) error {
+func (a *Attempt) MarkSubmitted(token LeaseToken, at time.Time, key, providerID, providerRequestID, externalTaskID string) error {
 	if err := a.checkActive(token, at); err != nil {
 		return err
 	}
-	if !validSubmissionKey(key) || !validProviderValue(providerRequestID, true) || !validProviderValue(externalTaskID, false) {
+	if !validSubmissionKey(key) || !validID(providerID) || !validProviderValue(providerRequestID, true) || !validProviderValue(externalTaskID, false) {
 		return ErrInvalidSubmission
 	}
-	if a.snapshot.State == AttemptSubmitted && a.snapshot.SubmissionKey == key && a.snapshot.ProviderRequestID == providerRequestID && a.snapshot.ExternalTaskID == externalTaskID {
+	if a.snapshot.State == AttemptSubmitted && a.snapshot.SubmissionKey == key && a.snapshot.ProviderID == providerID && a.snapshot.ProviderRequestID == providerRequestID && a.snapshot.ExternalTaskID == externalTaskID {
 		return nil
 	}
 	if a.snapshot.State != AttemptSubmitting || a.snapshot.SubmissionKey != key || at.Before(a.snapshot.SubmissionIntentAt) {
 		return ErrSubmissionState
 	}
 	a.snapshot.State = AttemptSubmitted
+	a.snapshot.ProviderID = providerID
 	a.snapshot.ProviderRequestID = providerRequestID
 	a.snapshot.ExternalTaskID = externalTaskID
 	a.snapshot.SubmittedAt = at.UTC()
 	return nil
 }
 
-func (a *Attempt) MarkUnknown(token LeaseToken, at time.Time, key, reason string) error {
+func (a *Attempt) MarkUnknown(token LeaseToken, at time.Time, key, providerID, providerRequestID, externalTaskID, reason string) error {
 	if err := a.checkActive(token, at); err != nil {
 		return err
 	}
-	if !validSubmissionKey(key) || !validUnknownReason(reason) {
+	knownProvider := providerRequestID != ""
+	if !validSubmissionKey(key) || !validUnknownReason(reason) || (knownProvider && !validID(providerID)) || (!knownProvider && (providerID != "" || externalTaskID != "")) || !validProviderValue(providerRequestID, false) || !validProviderValue(externalTaskID, false) {
 		return ErrInvalidSubmission
 	}
 	if (a.snapshot.State != AttemptSubmitting && a.snapshot.State != AttemptSubmitted) || a.snapshot.SubmissionKey != key || at.Before(a.snapshot.SubmissionIntentAt) {
 		return ErrSubmissionState
+	}
+	if a.snapshot.State == AttemptSubmitted {
+		if knownProvider && (a.snapshot.ProviderID != providerID || a.snapshot.ProviderRequestID != providerRequestID || a.snapshot.ExternalTaskID != externalTaskID) {
+			return ErrInvalidSubmission
+		}
+	} else if knownProvider {
+		a.snapshot.ProviderID = providerID
+		a.snapshot.ProviderRequestID = providerRequestID
+		a.snapshot.ExternalTaskID = externalTaskID
 	}
 	a.snapshot.State = AttemptUnknown
 	a.snapshot.UnknownAt = at.UTC()

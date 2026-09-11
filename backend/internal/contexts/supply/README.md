@@ -5,11 +5,11 @@
 - 所有权：Provider、PluginVersion、Deployment、ReleasePlan，以及供应商执行前的运行时材料编排
 - 职责：供应商入驻、制品、审核与发布；组合 Execution immutable admission input、Connections credential reference 与外部 SecretProvider
 - 计划负责角色：BE-B（尚未指派实际负责人）
-- 候选公开合同：ProviderProfile、DeploymentDescriptor
+- 候选公开合同：ProviderProfile、DeploymentDescriptor；当前已发布 Executor 与 ProviderStatusReader 运行时合同
 - 边界：runtime 是此领域的外部执行机制
 
 当前实现不会把 credential secret 写入数据库、RunEvent、Attempt 或日志。`supply.deployments` 只保存非秘密 transport 描述；执行角色只读取 opaque `credential_version_ref`，真正 secret 只能经 `SecretProvider` 在内存中取得。现有 Worker lease role 不获得这些读取权限。
 
-HTTP outbound adapter 已实现默认 deny 的精确 host allowlist、DNS/IP 校验与固定拨号、redirect/代理禁用、请求响应上限、timeout、idempotency/auth header 注入以及严格 accepted response 解析。它目前只在本地受控测试中运行，尚未接入生产 Worker dispatch。见 [HTTP Executor 记录](../../../../docs/engineering/2026-09-10-http-executor.md)。
+HTTP outbound adapter 已实现默认 deny 的精确 host allowlist、DNS/IP 校验与固定拨号、redirect/代理禁用、请求响应上限、timeout、idempotency/auth header 注入以及严格 accepted response 解析。Supply public 另发布 ProviderStatusReader；Execution 只能经 outbound adapter 按 durable `provider_id` 精确选择 reader，不允许 fallback 猜测。当前仍没有 production status polling 网络 adapter。见 [HTTP Executor 记录](../../../../docs/engineering/2026-09-10-http-executor.md)与 [Provider Reconciliation](../../../../docs/engineering/2026-09-10-provider-reconciliation.md)。
 
 目录依赖：`adapters → application → domain`；`public` 仅发布稳定合同。跨上下文依赖由出站防腐层访问他域 public，bootstrap 显式装配。

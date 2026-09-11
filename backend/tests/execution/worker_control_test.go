@@ -40,7 +40,7 @@ func TestWorkerControlPersistsSubmissionBoundaryBeforeOutcome(t *testing.T) {
 		t.Fatal(intent, err)
 	}
 	clock.at = clock.at.Add(time.Second)
-	record, err := control.RecordSubmitted(context.Background(), intent, "request/123", "task:abc")
+	record, err := control.RecordSubmitted(context.Background(), intent, "provider_a", "request/123", "task:abc")
 	if err != nil || record.Run.State != domain.Running || record.Attempt.State != domain.AttemptSubmitted {
 		t.Fatal(record, err)
 	}
@@ -60,7 +60,7 @@ func TestWorkerControlPersistsSubmissionBoundaryBeforeOutcome(t *testing.T) {
 		t.Fatal(err)
 	}
 	clock.at = clock.at.Add(time.Second)
-	record, err = control.RecordSubmissionUnknown(context.Background(), intent, "timeout waiting for supplier acknowledgement")
+	record, err = control.RecordSubmissionUnknown(context.Background(), intent, "", "", "", "timeout waiting for supplier acknowledgement")
 	if err != nil || record.Run.State != domain.Reconciling || record.Attempt.State != domain.AttemptUnknown || repo.job.Snapshot().State != domain.JobReconciling {
 		t.Fatal(record, repo.job.Snapshot(), err)
 	}
@@ -109,11 +109,11 @@ func (r *workerRepoFake) BeginSubmission(_ context.Context, token domain.LeaseTo
 	return r.attempt.Snapshot(), nil
 }
 
-func (r *workerRepoFake) RecordSubmitted(_ context.Context, token domain.LeaseToken, key, providerRequestID, externalTaskID string, at time.Time) (domain.Snapshot, domain.AttemptSnapshot, error) {
+func (r *workerRepoFake) RecordSubmitted(_ context.Context, token domain.LeaseToken, key, providerID, providerRequestID, externalTaskID string, at time.Time) (domain.Snapshot, domain.AttemptSnapshot, error) {
 	if r.attempt == nil {
 		return domain.Snapshot{}, domain.AttemptSnapshot{}, domain.ErrLeaseLost
 	}
-	if err := r.attempt.MarkSubmitted(token, at, key, providerRequestID, externalTaskID); err != nil {
+	if err := r.attempt.MarkSubmitted(token, at, key, providerID, providerRequestID, externalTaskID); err != nil {
 		return domain.Snapshot{}, domain.AttemptSnapshot{}, err
 	}
 	if err := r.job.MarkProviderWaiting(token, at); err != nil {
@@ -127,11 +127,11 @@ func (r *workerRepoFake) RecordSubmitted(_ context.Context, token domain.LeaseTo
 	return r.run.Snapshot(), r.attempt.Snapshot(), nil
 }
 
-func (r *workerRepoFake) RecordSubmissionUnknown(_ context.Context, token domain.LeaseToken, key, reason string, at time.Time) (domain.Snapshot, domain.AttemptSnapshot, error) {
+func (r *workerRepoFake) RecordSubmissionUnknown(_ context.Context, token domain.LeaseToken, key, providerID, providerRequestID, externalTaskID, reason string, at time.Time) (domain.Snapshot, domain.AttemptSnapshot, error) {
 	if r.attempt == nil {
 		return domain.Snapshot{}, domain.AttemptSnapshot{}, domain.ErrLeaseLost
 	}
-	if err := r.attempt.MarkUnknown(token, at, key, reason); err != nil {
+	if err := r.attempt.MarkUnknown(token, at, key, providerID, providerRequestID, externalTaskID, reason); err != nil {
 		return domain.Snapshot{}, domain.AttemptSnapshot{}, err
 	}
 	if err := r.job.MarkSubmissionUnknown(token, at); err != nil {

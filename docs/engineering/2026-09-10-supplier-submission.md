@@ -6,7 +6,7 @@
 
 `BeginSubmission` 必须在任何未来网络副作用之前提交 `Attempt=submitting`、唯一 `submission_key` 与 `submission_intent_at`。只有这个事务成功后，dispatcher 才有资格把同一个 key 交给供应商。intent 之前的 lease 可以安全 `ReleaseBeforeSubmit` 或在到期后标记 `expired` 并 requeue；intent 之后绝不能使用这条安全重投路径。
 
-供应商明确接受后，`RecordSubmitted` 在同一 execution 事务中保存 `provider_request_id`、可选 `external_task_id`、`submitted_at`，并把 Run 从 queued v1 推进为 running v2、追加 RunEvent。自 `0010` 起同一事务还把 Job 转为 `provider_waiting` 并清空 Worker lease；远端异步处理不再占用本地执行租约。相同 generation、submission key 与 provider IDs 的重复确认是幂等读取，不增加 Run version。
+供应商明确接受后，`RecordSubmitted` 在同一 execution 事务中保存 `provider_request_id`、可选 `external_task_id`、`submitted_at`，并把 Run 从 queued v1 推进为 running v2、追加 RunEvent。自 `0010` 起同一事务还把 Job 转为 `provider_waiting` 并清空 Worker lease；自 `0011` 起同时保存实际 `provider_id`，因此后续状态查询使用 `(provider_id, provider_request_id, external_task_id)` 明确路由，不猜测 request ID 所属供应商。相同 generation、submission key 与 provider facts 的重复确认是幂等读取，不增加 Run version。
 
 网络 timeout、进程崩溃或 acknowledgement 不可确认时，`RecordSubmissionUnknown`／`RecoverExpired` 把 Attempt 置为 `unknown`，Job 置为 `reconciling / submission_outcome_unknown`，Run 置为 `reconciling`。若 provider IDs 已经确认，它们保留在 unknown Attempt 中供后续查询/对账使用。该 Job 不再 leaseable；旧 Worker 的 fencing token 也不能迟到写入新的 provider 结果。
 
