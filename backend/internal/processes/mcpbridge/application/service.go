@@ -88,10 +88,17 @@ func validID(value string) bool {
 }
 
 func (s *Service) Authenticate(ctx context.Context, token, workspace string) (Caller, error) {
-	if s == nil || s.auth == nil || !validID(workspace) || strings.TrimSpace(token) == "" {
+	if s == nil {
 		return Caller{}, ErrInvalid
 	}
-	caller, err := s.auth.Authenticate(ctx, token)
+	return authenticate(ctx, s.auth, token, workspace)
+}
+
+func authenticate(ctx context.Context, auth Authenticator, token, workspace string) (Caller, error) {
+	if auth == nil || !validID(workspace) || strings.TrimSpace(token) == "" {
+		return Caller{}, ErrInvalid
+	}
+	caller, err := auth.Authenticate(ctx, token)
 	if err != nil {
 		return Caller{}, err
 	}

@@ -1,5 +1,10 @@
 {
   "contract_version": "0.1.0",
+  "implementation_status": "implemented",
+  "sdk": "github.com/modelcontextprotocol/go-sdk@v1.7.0",
+  "protocol_version": "2026-07-28",
+  "transport": "streamable-http-stateless",
+  "endpoint_template": "/mcp/v1/workspaces/{workspace_id}/toolsets/{toolset_version_id}",
   "catalog_tool_version": {
     "immutable_fields": [
       "title",
@@ -38,6 +43,18 @@
       "budget_period",
       "deployment"
     ]
+  },
+  "call_control": {
+    "field": "_mender",
+    "required": ["idempotency_key", "currency", "max_charge_micro"],
+    "stripped_before_business_arguments": true,
+    "business_arguments_validated_against_published_input_schema": true
+  },
+  "call_result": {
+    "mode": "async_run_artifact",
+    "fields": ["run_id", "submission_state", "replayed", "currency", "reserved_micro"],
+    "submission_state": "accepted",
+    "declared_business_output_schema_is_metadata_only_until_artifact_completion": true
   },
   "not_claimed": [
     "synchronous-business-result",

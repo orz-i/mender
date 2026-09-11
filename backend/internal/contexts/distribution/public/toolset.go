@@ -10,7 +10,9 @@ var (
 	ErrUnavailable = errors.New("distribution unavailable")
 )
 
-type Binding struct{ ToolsetVersionID, ToolVersionID, BudgetID, ConnectionID, MCPName string }
+type Binding struct {
+	ToolsetVersionID, ToolID, ToolVersion, ToolVersionID, BudgetID, ConnectionID, MCPName string
+}
 
 type Toolsets interface {
 	ResolveBinding(context.Context, string, string, string, string) (Binding, error)

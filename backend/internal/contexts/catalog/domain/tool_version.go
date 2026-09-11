@@ -49,24 +49,31 @@ func (v ToolVersion) Validate() error {
 	if !validID(v.ID) || !validID(v.ToolID) || !validVersion(v.Version) || !validID(v.ProviderID) || !validID(v.PriceVersionID) || !validID(v.DeploymentRevision) || (v.State != "published" && v.State != "disabled") || v.PublishedAt.IsZero() {
 		return ErrInvalidToolVersion
 	}
-	if len([]rune(v.Title)) < 1 || len([]rune(v.Title)) > 200 || len([]rune(v.Description)) > 4000 || strings.ContainsRune(v.Title, 0) || strings.ContainsRune(v.Description, 0) {
-		return ErrInvalidToolVersion
-	}
-	if v.SideEffect != "read_only" && v.SideEffect != "write" {
-		return ErrInvalidToolVersion
-	}
-	if v.Idempotency != "safe_read" && v.Idempotency != "idempotent" && v.Idempotency != "unsafe" {
-		return ErrInvalidToolVersion
-	}
-	if !objectSchema(v.InputSchema, true) || !objectSchema(v.OutputSchema, false) {
+	if v.MCPPublishable && !v.validDirectContract() {
 		return ErrInvalidToolVersion
 	}
 	return nil
 }
 
+func (v ToolVersion) validDirectContract() bool {
+	if len([]rune(v.Title)) < 1 || len([]rune(v.Title)) > 200 || len([]rune(v.Description)) > 4000 || strings.ContainsRune(v.Title, 0) || strings.ContainsRune(v.Description, 0) {
+		return false
+	}
+	if v.SideEffect != "read_only" && v.SideEffect != "write" {
+		return false
+	}
+	if v.Idempotency != "safe_read" && v.Idempotency != "idempotent" && v.Idempotency != "unsafe" {
+		return false
+	}
+	if !objectSchema(v.InputSchema, true) || !objectSchema(v.OutputSchema, false) {
+		return false
+	}
+	return true
+}
+
 func (v ToolVersion) Callable() bool { return v.Validate() == nil && v.State == "published" }
 
-func (v ToolVersion) DirectPublishable() bool { return v.Callable() && v.MCPPublishable }
+func (v ToolVersion) DirectPublishable() bool { return v.Callable() && v.MCPPublishable && v.validDirectContract() }
 
 func objectSchema(raw string, requireObjectType bool) bool {
 	if len(raw) < 2 || len(raw) > 1<<20 || !json.Valid([]byte(raw)) {

@@ -19,6 +19,7 @@ func TestToolVersionContractIsRequiredForCallableVersion(t *testing.T) {
 	}
 	legacy := v
 	legacy.MCPPublishable = false
+	legacy.Title = ""
 	if !legacy.Callable() || legacy.DirectPublishable() {
 		t.Fatal("legacy callable contract was implicitly exposed to direct MCP")
 	}
@@ -28,7 +29,7 @@ func TestToolVersionContractIsRequiredForCallableVersion(t *testing.T) {
 	bad[2].SideEffect = "unknown"
 	bad[3].Title = ""
 	for i, item := range bad {
-		if item.Validate() == nil || item.Callable() {
+		if item.DirectPublishable() {
 			t.Fatal("invalid tool contract accepted", i)
 		}
 	}

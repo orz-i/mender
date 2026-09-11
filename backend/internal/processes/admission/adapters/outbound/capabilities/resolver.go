@@ -48,6 +48,11 @@ func (r *Resolver) Resolve(ctx context.Context, caller application.Caller, q app
 		}
 		return application.Plan{}, application.ErrUnavailable
 	}
+	// Direct Toolset publication may fix a Connection. Legacy/meta-tool bindings
+	// leave ConnectionID empty and preserve the existing explicit request path.
+	if binding.ConnectionID != "" && binding.ConnectionID != q.ConnectionID {
+		return application.Plan{}, application.ErrForbidden
+	}
 	tool, err := r.catalog.ResolveToolVersion(ctx, binding.ToolVersionID, q.ToolID, q.ToolVersion)
 	if err != nil {
 		if e := mapContext(err); e != nil {

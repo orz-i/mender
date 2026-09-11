@@ -47,6 +47,7 @@ type APIConfig struct {
 	StartRunAPIEnabled       bool
 	AdmissionDatabaseURL     string
 	MCPGatewayEnabled        bool
+	MCPFixedToolsetEnabled   bool
 }
 
 func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
@@ -102,9 +103,19 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	if c.MCPGatewayEnabled && (!c.RunReadAPIEnabled || !c.StartRunAPIEnabled || !c.CoordinatedCancelEnabled) {
 		return c, errors.New("MCP gateway requires Run read, StartRun and coordinated cancellation capabilities")
 	}
+	switch getenv("MENDER_MCP_FIXED_TOOLSET_ENABLED") {
+	case "", "false":
+	case "true":
+		c.MCPFixedToolsetEnabled = true
+	default:
+		return c, errors.New("MENDER_MCP_FIXED_TOOLSET_ENABLED must be true or false")
+	}
+	if c.MCPFixedToolsetEnabled && !c.MCPGatewayEnabled {
+		return c, errors.New("Fixed Toolset MCP requires the authenticated MCP gateway")
+	}
 	switch getenv("MENDER_RUN_API_ENABLED") {
 	case "", "false":
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled {
+		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled {
 			return APIConfig{}, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return c, nil
@@ -138,13 +149,16 @@ func (systemClock) Now() time.Time { return time.Now().UTC().Truncate(time.Micro
 // BuildAPI never migrates, seeds data or falls back to a test repository.
 func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	if !c.RunAPIEnabled {
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled {
+		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled {
 			return nil, nil, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return httpserver.NewRouter(), func() {}, nil
 	}
 	if c.MCPGatewayEnabled && (!c.RunReadAPIEnabled || !c.StartRunAPIEnabled || !c.CoordinatedCancelEnabled) {
 		return nil, nil, errors.New("MCP gateway requires Run read, StartRun and coordinated cancellation capabilities")
+	}
+	if c.MCPFixedToolsetEnabled && !c.MCPGatewayEnabled {
+		return nil, nil, errors.New("Fixed Toolset MCP requires the authenticated MCP gateway")
 	}
 	var codec *runcursor.Codec
 	if c.RunReadAPIEnabled {
@@ -275,6 +289,23 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 		registers = append(registers, func(router *gin.Engine) {
 			router.Any("/mcp/v1/workspaces/:workspace_id", gin.WrapH(mcpHandler))
 		})
+		if c.MCPFixedToolsetEnabled {
+			registry, buildErr := BuildFixedToolRegistry(pool)
+			if buildErr != nil {
+				return failed(buildErr)
+			}
+			fixedBridge, buildErr := mcpapp.NewFixed(mcpidentity.New(identityFacade), mcpadmission.New(admissionfacade.NewAdmission(admission)), registry)
+			if buildErr != nil {
+				return failed(buildErr)
+			}
+			fixedHandler, buildErr := mcphttp.NewFixed(fixedBridge)
+			if buildErr != nil {
+				return failed(buildErr)
+			}
+			registers = append(registers, func(router *gin.Engine) {
+				router.Any("/mcp/v1/workspaces/:workspace_id/toolsets/:toolset_version_id", gin.WrapH(fixedHandler))
+			})
+		}
 	}
 	register := func(router *gin.Engine) {
 		for _, register := range registers {

@@ -154,6 +154,11 @@ console.log('PASS: MCP 2026-07-28 stateless meta-tool contract, stable four-tool
 
 const fixedToolset = json('fixed-toolset-contract.json');
 assert.equal(fixedToolset.contract_version, '0.1.0');
+assert.equal(fixedToolset.implementation_status, 'implemented');
+assert.equal(fixedToolset.sdk, 'github.com/modelcontextprotocol/go-sdk@v1.7.0');
+assert.equal(fixedToolset.protocol_version, '2026-07-28');
+assert.equal(fixedToolset.transport, 'streamable-http-stateless');
+assert.equal(fixedToolset.endpoint_template, '/mcp/v1/workspaces/{workspace_id}/toolsets/{toolset_version_id}');
 assert.deepEqual(fixedToolset.catalog_tool_version.side_effect_values, ['read_only', 'write']);
 assert.deepEqual(fixedToolset.catalog_tool_version.idempotency_values, ['safe_read', 'idempotent', 'unsafe']);
 assert.equal(fixedToolset.catalog_tool_version.input_schema_top_level_type, 'object');
@@ -164,4 +169,11 @@ assert.equal(fixedToolset.toolset_binding.mcp_name_pattern, '^[a-z][a-z0-9_]{0,6
 assert.deepEqual(fixedToolset.toolset_binding.unique_scope, ['workspace_id', 'toolset_version_id', 'mcp_name']);
 for (const field of ['connection_id', 'mcp_name', 'mcp_exposed']) assert.ok(fixedToolset.toolset_binding.direct_mcp_requires.includes(field));
 for (const field of ['tool_id', 'tool_version', 'toolset_id', 'connection_id', 'price_version_id', 'budget_id', 'deployment_revision']) assert.ok(fixedToolset.security.client_cannot_override.includes(field));
+assert.equal(fixedToolset.call_control.field, '_mender');
+assert.deepEqual(fixedToolset.call_control.required, ['idempotency_key', 'currency', 'max_charge_micro']);
+assert.equal(fixedToolset.call_control.stripped_before_business_arguments, true);
+assert.equal(fixedToolset.call_control.business_arguments_validated_against_published_input_schema, true);
+assert.equal(fixedToolset.call_result.mode, 'async_run_artifact');
+assert.equal(fixedToolset.call_result.submission_state, 'accepted');
+for (const field of ['run_id', 'submission_state', 'replayed', 'currency', 'reserved_micro']) assert.ok(fixedToolset.call_result.fields.includes(field));
 console.log('PASS: Fixed Toolset publication contract keeps immutable Tool schemas, stable MCP aliases and server-owned routing controls.');
