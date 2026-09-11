@@ -6,6 +6,7 @@ API、插件、工具和事件的设计合同，供接口评审与实现使用�
 | --- | --- |
 | [public-api.openapi.yaml](public-api.openapi.yaml) | OpenAPI 3.1 消费 API，覆盖工具发现与任务执行 |
 | [run-read.openapi.yaml](run-read.openapi.yaml) | 已实现的授权 Run 列表和有限事件时间线；独立开关、签名游标；已通过隔离 PostgreSQL 子集测试 |
+| [artifact-read.openapi.yaml](artifact-read.openapi.yaml) | 已实现的受保护 Run Artifact list/detail 子集；只包含 bounded inline JSON result，不声明对象存储或签名 URL |
 | [run-query-cancel.openapi.yaml](run-query-cancel.openapi.yaml) | v0.3.0：机器认证查询／取消，可选独立角色的协调取消；默认关闭，已通过本地真实数据库子集测试，不代表商业验收 |
 | [plugin-manifest.schema.json](plugin-manifest.schema.json) | 声明式插件清单与制品摘要约束 |
 | [tool.example.json](tool.example.json) · [http-executor.example.json](http-executor.example.json) | 工具定义与 HTTP 执行映射 |

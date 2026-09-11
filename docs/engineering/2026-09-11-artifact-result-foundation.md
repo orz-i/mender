@@ -35,7 +35,11 @@ Stage 2 的 focused Go tests、`pnpm check:contracts` 和 `pnpm check:architectu
 
 ## Stage 3：集成与权限加固
 
-最后一切片补充 runtime reader 的最小 Artifact SELECT、跨租户、历史回填、最大内容、幂等和 API 集成测试，再执行 `pnpm test:integration:docker`、`pnpm check`、`go test -race -count=1 ./...` 和 `git diff --check`。
+Runtime reader 只获得 Artifact 的 `workspace_id/run_id/id/kind/media_type/content_json/created_at` 列级 SELECT；`source_observation_id` 明确不可读，Artifact 也不可 UPDATE/DELETE。Reconciler 为了 terminal success 原子物化，只新增 Artifact SELECT/INSERT，继续没有 UPDATE/DELETE。
+
+隔离 PostgreSQL 验证覆盖：真实 Provider success 只产生一个 immutable Artifact；Provider replay 不重复物化；非 succeeded observation 不产生成功 Artifact；runtime RLS 隐藏其他 Workspace；受保护 HTTP list/detail 重新鉴权且不泄露 provider control 字段；并使用 integration-build-only migration boundary 创建 `0015` 历史成功结果，再应用完整迁移，验证 `0016` 对已有 succeeded result 的回填。
+
+最终阶段门禁继续执行 `pnpm test:integration:docker`、`pnpm check`、`go test -race -count=1 ./...` 和 `git diff --check`。测试辅助的 partial-migration 入口仅在 `integration` build tag 下存在，生产 operator 仍只能执行完整 `migrations.Apply`。
 
 ## 本阶段明确不包含
 

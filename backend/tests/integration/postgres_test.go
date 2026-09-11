@@ -241,6 +241,9 @@ func TestPostgresRuntimeContract(t *testing.T) {
 	t.Run("usage settlement and quota convergence", func(t *testing.T) {
 		exerciseUsageSettlement(t, ctx, owner, runtime, runtimeURL.String())
 	})
+	t.Run("immutable result Artifacts and protected reads", func(t *testing.T) {
+		exerciseArtifacts(t, ctx, owner, runtime, runtimeURL.String(), keyB)
+	})
 	t.Run("protected HTTP uses durable storage and rechecks key revocation", func(t *testing.T) {
 		h, closeAPI, e := bootstrap.BuildAPI(ctx, bootstrap.APIConfig{RunAPIEnabled: true, DatabaseURL: runtimeURL.String()})
 		must(t, e)

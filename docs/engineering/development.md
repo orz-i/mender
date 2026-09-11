@@ -48,6 +48,8 @@ pnpm dev:api
 | `GET /readyz` | 默认 `503 not_ready`；显式启用的 Run 能力及其数据库／权限核验成功后就绪 |
 | `POST /api/v1/workspaces/{workspace_id}/runs` | 默认未注册；启用后要求机器 Key 与 `run:create`，从已发布 Toolset/ToolVersion、主体 Connection 授权、PriceVersion 与当前 Budget period 解析不可变计划，再复用原子受理事务；当前 Job 仍保持 blocked |
 | `GET /api/v1/workspaces/{workspace_id}/runs/{run_id}` | 默认未注册；启用后要求机器 Key 与 run:read scope |
+| `GET /api/v1/workspaces/{workspace_id}/runs/{run_id}/artifacts` | Run read API 启用后注册；要求同一 Workspace 的 `run:read`，仅返回 immutable Artifact 元数据 |
+| `GET /api/v1/workspaces/{workspace_id}/runs/{run_id}/artifacts/{artifact_id}` | Run read API 启用后注册；要求 `run:read`，返回 <=1 MiB 的 inline `application/json` content，不暴露 Provider control evidence |
 | `POST /api/v1/workspaces/{workspace_id}/runs/{run_id}/cancel` | 默认未注册；要求 run:cancel；可选协调取消可原子停止未执行受理任务并释放原预留，其他路径保持本地取消／意图语义 |
 | Worker SQL 租约控制 | 已实现 Job/Attempt、lease/heartbeat/expiry/fencing 基础；默认 worker idle，显式启用后当前进程只恢复过期 lease，不领取新任务、不调用供应商 |
 | HTTP Supplier Submit / Provider status/cancel | hardened adapter 与 reviewed library composition 已实现；默认命令没有生产 SecretProvider/egress/runtime，所以不访问真实供应商 |
@@ -75,6 +77,8 @@ Worker 租约控制使用独立角色：先由管理员执行 `pnpm db:grant-wor
 应用 `0013_provider_control_endpoints.sql` 后，Supply deployment 可以声明固定 HTTP status/cancel POST endpoint。Provider request/task handle 始终作为有界 JSON body 发送，不拼入 URL。`BuildProviderHTTPControlRuntime` 只能由受审 host 代码显式传入 executor/reconciler 两个独立角色、Provider allowlist、egress policy 与 SecretProvider；默认 `cmd/worker`／API 不读取任何 `MENDER_PROVIDER_*` 环境变量。实现与验证边界见 [Provider HTTP Control Runtime](2026-09-11-provider-control-runtime.md)。
 
 应用 `0014_usage_settlement_contract.sql` 与 `0015_terminal_settlement_jobs.sql` 后，既有固定价格被明确为 `fixed_success_only`，Provider 终态收敛会在同一 Execution 事务创建 settlement job。先由管理员执行 `pnpm db:grant-settlement --role <role>` 为预先存在的独立角色授权；`BuildUsageSettlementRuntime` 启动时会校验 migration digest、最小权限与 RLS。该 runtime 没有后台循环，结算事务也不会执行 Provider、Secret、Webhook 或支付网络调用。实现与验证边界见 [Commerce Usage Settlement](2026-09-11-commerce-usage-settlement.md)。
+
+应用 `0016_execution_artifacts.sql` 后，已有 API runtime 与 reconciler role 都要重新执行对应 grant。Runtime 只新增 Artifact 安全列读取，明确看不到 `source_observation_id`；Reconciler 只增加 Artifact SELECT/INSERT，以便 succeeded Provider Observation 与结果 Artifact 在同一 Execution terminal transaction 中提交。`MENDER_RUN_READ_API_ENABLED=true` 时 Artifact 路径随 Run read handler 一起注册，没有匿名结果 API，也没有对象存储配置。实现、历史回填和真实 PostgreSQL 证据见 [Artifact / Result Foundation](2026-09-11-artifact-result-foundation.md)。
 
 ## 构建与检查
 

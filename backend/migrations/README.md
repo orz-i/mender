@@ -1,6 +1,6 @@
 # 数据迁移
 
-当前迁移为 `0001–0013`。`0013_provider_control_endpoints.sql` 在 Supply-owned immutable deployment descriptor 上增加可选的固定 HTTP status/cancel endpoint；provider request/task handle 只能放进后续受控请求体，不能被拼进 URL。`0012_provider_cancellation.sql` 新增 durable `execution.provider_cancel_intents`、`running/reconciling → cancel_requested` 的 provider-cancel bundle，以及 `fulfilled/superseded` 与 ProviderObservation terminal 的双向约束；取消网络调用在 durable `sending` 后不会自动重发，unknown 只能靠既有 provider status reconciliation 收敛。`0011_provider_reconciliation.sql` 把实际接受 submission 的 `provider_id` 固化到 Attempt/新 observation，使多 Provider 状态查询不依赖 request-id 猜测；`0010_provider_results.sql` 建立 append-only result evidence 与 `provider_waiting/finished`。应用既有库迁移仍由操作员显式执行，不在 API/Worker 启动时自动执行。
+当前迁移为 `0001–0016`。`0016_execution_artifacts.sql` 建立 execution-owned immutable `provider_result` Artifact，并把升级前已经存在的 succeeded Provider Observation 回填为稳定 `art_<run_id>` 结果；deferred bundle 要求新 succeeded observation 与 Artifact 的 source/content/time 在同一事务一致。Artifact v1 只保存 bounded `application/json`，不等于对象存储或下载授权。`0014–0015` 建立 fixed success-only Usage Settlement 与 terminal settlement jobs；`0013` 及以前继续承载 Provider control/result/reconciliation/cancellation。应用既有库迁移仍由操作员显式执行，不在 API/Worker 启动时自动执行。
 
 本轮新增 `0004_atomic_admission.sql`：commerce 预算期／额度预留和 execution 受理／blocked Job／Outbox，含 FORCE RLS 与延迟额度总和约束。0001–0003 内容不变。已有开发数据库应用新增迁移后须重新执行 `pnpm db:grant-runtime --role <查询运行角色>`，仅补充受理关联的两列读取权；不能将 admission writer 或迁移所有者混入查询 API。详情及真实故障注入结果见 [内部原子受理](../../docs/engineering/2026-09-09-atomic-admission.md)。
 
@@ -10,11 +10,11 @@
 
 从仓库根使用 `pnpm db:migrate`，仅读取 `MENDER_ADMIN_DATABASE_URL`。代码按事务＋锁执行并校验已应用摘要，换行归一化；不能覆盖已应用 SQL 或手动修改摘要。没有破坏性自动 down migration，回退需单独评审。
 
-`pnpm db:grant-runtime --role mender_app` 只授予已有角色必要的 SELECT、Run 特定列 UPDATE 和事件 INSERT，不创建角色／密码，不清理历史宽授权。API 拒绝 superuser、BYPASSRLS、表／schema owner、危险角色继承及过宽写权限。迁移管理用户必须和运行用户分开。
+`pnpm db:grant-runtime --role mender_app` 只授予已有角色必要的 SELECT、Run 特定列 UPDATE 和事件 INSERT，不创建角色／密码，不清理历史宽授权。`0016` 后它新增 Artifact 的 workspace/run/id/kind/media_type/content_json/created_at 列级 SELECT，但**没有** `source_observation_id` 读取和任何 Artifact 写权限；查询 API 因而不能反查 Provider control evidence。API 拒绝 superuser、BYPASSRLS、表／schema owner、危险角色继承及过宽写权限。迁移管理用户必须和运行用户分开。
 
 Worker 控制角色使用 `pnpm db:grant-worker --role mender_worker`。`0008` 后它获得 execution.jobs／run_attempts 的必要读写、run_admissions 中 workspace/run/deployment_revision 三列读取，以及 `execution.runs` 的只读与 state/version/updated_at 列更新、`run_events` 仅 INSERT，用于在 fencing 与数据库 bundle 约束下记录供应商提交状态。它仍不能读取 canonical arguments、机器身份、预算/价格、Connection，不能改 Run 身份/创建时间，也不能访问 Outbox 或 cancellation facts。Worker startup 会再次验证角色，不接受 owner/runtime/admission/cancellation 角色替代。完整边界见 [Worker 租约记录](../../docs/engineering/2026-09-10-worker-leases.md)和 [供应商提交协议](../../docs/engineering/2026-09-10-supplier-submission.md)。
 
-Provider result 使用第三个独立执行角色：`pnpm db:grant-reconciler --role mender_reconciler`。该角色可读取 Run/Job/Attempt/result observation 控制事实、追加 `provider_observations`/RunEvent，并只更新 Run state/version/updated_at 与 Job state/blocked_reason/updated_at/stopped_at；它不能读取 `run_admissions`、Identity、Commerce、Connections、Supply、Outbox，也不能修改 Attempt 或既有 observation。完整语义和真实 PostgreSQL 证据见 [Provider Result Lifecycle](../../docs/engineering/2026-09-10-provider-result-lifecycle.md)。
+Provider result 使用第三个独立执行角色：`pnpm db:grant-reconciler --role mender_reconciler`。该角色可读取 Run/Job/Attempt/result observation 控制事实、追加 `provider_observations`/RunEvent/terminal settlement job，并在 success 时同事务 INSERT Artifact；Artifact 与 observation 仍不可 UPDATE/DELETE。它不能读取 `run_admissions`、Identity、Commerce、Connections、Supply、Outbox，也不能修改 Attempt 或既有 observation。完整语义见 [Provider Result Lifecycle](../../docs/engineering/2026-09-10-provider-result-lifecycle.md) 与 [Artifact / Result Foundation](../../docs/engineering/2026-09-11-artifact-result-foundation.md)。
 
 供应商执行材料使用**另一独立角色**：`pnpm db:grant-executor --role mender_executor`。该角色仅可读取 `execution.run_admissions` 的 workspace/run/subject/connection/tool_version/deployment_revision/canonical_arguments、Connections 当前授权与 `credential_version_ref`、`supply.deployments` 以及迁移摘要；它不能读取 identity、commerce、catalog、Worker Job/Attempt/Run/Event/Outbox，也没有任何业务表写权限。`credential_version_ref` 只是 opaque secret-store key，不是 secret 本身。完整边界见 [Supplier Runtime Broker](../../docs/engineering/2026-09-10-supplier-runtime-broker.md)。
 
@@ -29,6 +29,8 @@ Provider result 使用第三个独立执行角色：`pnpm db:grant-reconciler --
 应用 `0012` 后，既有 cancellation role 与 reconciler role 都需要重新授权：分别执行 `pnpm db:grant-cancellation --role <cancellation role>` 和 `pnpm db:grant-reconciler --role <reconciler role>`。Cancellation role 只能读取/插入用户 provider-cancel intent 和读取必要 Attempt provider handles，不能写 `sending/resolved/outcome/unknown` 结果列；Reconciler role 只能 claim/resolve 已有 intent，不能伪造用户取消请求。Runtime/Worker/Admission/Executor 继续被启动自检要求无法访问 `provider_cancel_intents`。完整边界见 [Provider Cancellation](../../docs/engineering/2026-09-10-provider-cancellation.md)。
 
 应用 `0013` 后，既有 executor role 的 `supply.deployments` 表级只读授权自然覆盖新增 control descriptor 列；Reconciler/Worker/Cancellation/API 仍不得获得 Supply schema USAGE。本迁移只保存固定 endpoint 与 POST 方法，不开启网络调用，也不把 provider handle 写入 URL。完整阶段记录见 [Provider HTTP Control Runtime](../../docs/engineering/2026-09-11-provider-control-runtime.md)。
+
+应用 `0016` 后，既有 runtime 与 reconciler 角色都必须重新运行各自 grant 命令。Runtime 只获得上述 Artifact 安全列读取；Reconciler 只增加 Artifact SELECT/INSERT，以便 succeeded Observation、Artifact、settlement job 与 Run/Job terminal 在同一 Execution 事务收敛。隔离 PostgreSQL 套件同时模拟了 `0015 → 0016` 的真实升级：历史 succeeded result 被回填，失败/取消结果不生成 Artifact，RLS、不可变性和跨 Workspace 查询均保持成立。
 
 已有环境应用 `0007` 后还应重新执行 `pnpm db:grant-admission --role <原 admission role>`。该命令会主动撤销旧的 `execution.jobs` 整表 INSERT，再只授予 StartRun 所需的 workspace/run/state/blocked_reason/available_at/created_at/updated_at 列，防止旧 admission role 因新列出现而获得 priority、lease、fencing 或 attempt 配置写入能力。
 

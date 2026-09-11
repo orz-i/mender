@@ -32,6 +32,10 @@ func rollback(tx pgx.Tx) {
 }
 
 func Apply(ctx context.Context, pool *pgxpool.Pool) error {
+	return applySelected(ctx, pool, names)
+}
+
+func applySelected(ctx context.Context, pool *pgxpool.Pool, selected []string) error {
 	tx, err := pool.Begin(ctx)
 	if err != nil {
 		return errors.New("migration connection failed")
@@ -43,7 +47,7 @@ func Apply(ctx context.Context, pool *pgxpool.Pool) error {
 	if _, err = tx.Exec(ctx, `CREATE SCHEMA IF NOT EXISTS mender_meta; CREATE TABLE IF NOT EXISTS mender_meta.schema_migrations (name text PRIMARY KEY, sha256 text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now()); REVOKE ALL ON SCHEMA mender_meta FROM PUBLIC; REVOKE ALL ON mender_meta.schema_migrations FROM PUBLIC;`); err != nil {
 		return errors.New("migration metadata failed")
 	}
-	for _, name := range names {
+	for _, name := range selected {
 		body, err := migrationBody(name)
 		if err != nil {
 			return err
@@ -110,6 +114,7 @@ func GrantRuntime(ctx context.Context, pool *pgxpool.Pool, role string) error {
 		"GRANT SELECT ON identity.workspaces,identity.service_accounts,identity.api_keys,mender_meta.schema_migrations,execution.runs TO " + id,
 		"GRANT UPDATE (state,version,updated_at) ON execution.runs TO " + id,
 		"GRANT SELECT,INSERT ON execution.run_events TO " + id,
+		"GRANT SELECT (workspace_id,run_id,id,kind,media_type,content_json,created_at) ON execution.artifacts TO " + id,
 		"GRANT SELECT (workspace_id,run_id) ON execution.run_admissions TO " + id,
 		"GRANT SELECT ON catalog.tool_versions,distribution.toolset_bindings,commerce.price_versions TO " + id,
 		"GRANT SELECT (workspace_id,id,provider_id,state,revision,created_at,expires_at) ON connections.connections TO " + id,
