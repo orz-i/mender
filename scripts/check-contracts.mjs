@@ -180,7 +180,7 @@ console.log('PASS: Fixed Toolset publication contract keeps immutable Tool schem
 
 const upstreamMCP = json('upstream-mcp-contract.json');
 assert.equal(upstreamMCP.contract_version, '0.1.0');
-assert.equal(upstreamMCP.implementation_status, 'contracts_only');
+assert.equal(upstreamMCP.implementation_status, 'client_adapter_implemented');
 assert.equal(upstreamMCP.sdk, 'github.com/modelcontextprotocol/go-sdk@v1.7.0');
 assert.equal(upstreamMCP.protocol_version, '2026-07-28');
 assert.equal(upstreamMCP.transport, 'streamable-http-stateless');
@@ -195,5 +195,10 @@ assert.equal(upstreamMCP.discovery_snapshot.append_only, true);
 assert.equal(upstreamMCP.discovery_snapshot.untrusted, true);
 assert.equal(upstreamMCP.discovery_snapshot.auto_publish_to_catalog, false);
 assert.equal(upstreamMCP.discovery_snapshot.schema_drift_creates_new_snapshot, true);
-for (const capability of ['network-client-runtime', 'upstream-tools-call', 'oauth', 'resources', 'prompts', 'tasks', 'mrtr', 'agent-as-tool']) assert.ok(upstreamMCP.not_claimed.includes(capability));
-console.log('PASS: upstream MCP contracts pin stateless Tools discovery, reviewed endpoints and append-only untrusted snapshots without claiming network execution.');
+assert.equal(upstreamMCP.call.exact_reviewed_snapshot_required, true);
+assert.equal(upstreamMCP.call.max_automatic_network_retries, 0);
+assert.equal(upstreamMCP.call.known_result_persisted_before_acceptance, true);
+assert.equal(upstreamMCP.call.unknown_network_outcome_is_not_retried, true);
+assert.equal(upstreamMCP.call.result_converges_via_provider_status, true);
+for (const capability of ['production-bootstrap-enabled', 'oauth', 'resources', 'prompts', 'tasks', 'mrtr', 'agent-as-tool']) assert.ok(upstreamMCP.not_claimed.includes(capability));
+console.log('PASS: upstream MCP adapter pins stateless Tools discovery/call to reviewed snapshots, persists known results, disables automatic network retries and keeps unsupported capabilities explicit.');

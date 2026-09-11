@@ -11,7 +11,17 @@
 - `supply.mcp_tool_snapshots` 记录 append-only discovery snapshot：tool name、title/description、input/output Schema、annotations、内容摘要和发现时间。上游描述与 annotations 全部按不可信输入处理。
 - Schema 变化创建新的 snapshot；发现结果**不会自动覆盖或发布** Catalog 的 immutable ToolVersion。
 
+## 第二切片：受控 outbound MCP Client
+
+- MCP SDK 只存在于 `supply/adapters/outbound/mcp`。Supply domain/application、Execution、Admission、Catalog 与 Connections 不依赖 SDK 类型。
+- Client 使用固定 Deployment endpoint，重新执行 host allowlist、地址分类、DNS pinning、TLS、redirect/proxy 禁用与请求/响应大小限制；SDK 自身网络重试显式关闭。
+- 上游认证只使用 Broker 从 Connection/SecretProvider 得到的受控 secret。Adapter 会移除任何已有 `Authorization` / `Proxy-Authorization`，再按 reviewed `none` / `bearer` / `header` 合同注入，因此平台 machine bearer token 没有透传通道。
+- `Discover` 要求 `server/discover` 协商结果仍为 `2026-07-28`、stateless 且声明 Tools capability；`tools/list` 最多读取 20 页/1000 个 Tool，拒绝 cursor 循环和重复 Tool 名。
+- Tool name/title/description/input/output Schema/annotations 被规范化并计算内容 SHA-256，写入 append-only discovery snapshot。未审核 snapshot 不会进入 Catalog 发布合同。
+- `mcp_tool_routes` 把一个 Mender ToolVersion 固定到**精确 snapshot hash + upstream tool name + deployment revision**。每次 `tools/call` 前重新发现并核对 hash；drift 会在真正调用前 fail closed。
+- `tools/call` 不自动网络重试。已知 success / tool-level error 会先写入 Workspace-RLS 的 `supply.mcp_call_results`，再向 Execution 返回 accepted；后续通过既有 Provider Status → Provider Observation → Artifact / Settlement 收敛。网络结果不明或 input-required 不会伪造成失败或成功，只返回 unknown 供现有 reconciliation 语义处理。
+
 ## 尚未完成
 
-本切片尚未开启远程网络调用，也没有实现 `server/discover`、`tools/list`、`tools/call`、OAuth、Resources、Prompts、Tasks、MRTR、Agent/A2A。第二切片才会建立受控 outbound MCP Client adapter，并复用现有 egress/secret 边界。
+Adapter 与本地 loopback MCP Server 单元验证已经存在，但 production bootstrap 仍未启用它；真实 PostgreSQL restricted role、Execution Dispatcher + Provider Reconciler E2E 属于第三切片。OAuth、Resources、Prompts、Tasks、MRTR、Agent/A2A 仍未实现。
 
