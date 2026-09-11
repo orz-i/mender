@@ -1,0 +1,16 @@
+{
+  "contract_version": "0.1.0",
+  "sdk": "github.com/modelcontextprotocol/go-sdk@v1.7.0",
+  "protocol_version": "2026-07-28",
+  "transport": "streamable-http-stateless",
+  "endpoint_template": "/mcp/v1/workspaces/{workspace_id}",
+  "authentication": "Bearer machine API key, bound to path workspace before MCP dispatch",
+  "tools": [
+    {"name":"mender_run_start","required_input":["idempotency_key","tool_id","tool_version","toolset_id","connection_id","arguments","currency","max_charge_micro"],"output":["run_id","execution_state","billing_state","currency","reserved_micro","replayed"]},
+    {"name":"mender_run_get","required_input":["run_id"],"output":["run_id","execution_state","version","created_at","updated_at"]},
+    {"name":"mender_run_cancel","required_input":["run_id"],"optional_input":["reason"],"output":["run_id","execution_state","version","updated_at"]},
+    {"name":"mender_artifact_get","required_input":["run_id","artifact_id"],"output":["artifact_id","kind","media_type","size_bytes","created_at","content_json"]}
+  ],
+  "forbidden_output_fields": ["credential_id","provider_request_id","external_task_id","canonical_arguments","source_observation_id","secret","settlement_job"],
+  "not_claimed": ["fixed-toolset-direct-tools","upstream-mcp-client","oauth","resources","prompts","mrtr","agent-as-tool"]
+}

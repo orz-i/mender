@@ -132,3 +132,22 @@ validate(artifactAPI.components.schemas.ArtifactDetailResponse, {
   meta: { request_id: 'example' },
 }, 'Artifact detail response');
 console.log('PASS: authenticated inline Artifact metadata/content contract; no provider-control identifiers or object-storage claims.');
+
+const mcpTools = json('mcp-meta-tools.json');
+assert.equal(mcpTools.contract_version, '0.1.0');
+assert.equal(mcpTools.sdk, 'github.com/modelcontextprotocol/go-sdk@v1.7.0');
+assert.equal(mcpTools.protocol_version, '2026-07-28');
+assert.equal(mcpTools.transport, 'streamable-http-stateless');
+assert.equal(mcpTools.endpoint_template, '/mcp/v1/workspaces/{workspace_id}');
+const mcpNames = mcpTools.tools.map((tool) => tool.name);
+assert.deepEqual([...mcpNames].sort(), ['mender_artifact_get', 'mender_run_cancel', 'mender_run_get', 'mender_run_start']);
+assert.equal(new Set(mcpNames).size, mcpNames.length);
+const startMetaTool = mcpTools.tools.find((tool) => tool.name === 'mender_run_start');
+assert.deepEqual(startMetaTool.required_input, ['idempotency_key', 'tool_id', 'tool_version', 'toolset_id', 'connection_id', 'arguments', 'currency', 'max_charge_micro']);
+const forbiddenMCP = new Set(mcpTools.forbidden_output_fields);
+for (const tool of mcpTools.tools) {
+  assert.ok(Array.isArray(tool.required_input) && Array.isArray(tool.output));
+  for (const field of tool.output) assert.ok(!forbiddenMCP.has(field), `${tool.name} exposes forbidden field ${field}`);
+}
+for (const name of ['fixed-toolset-direct-tools', 'upstream-mcp-client', 'oauth', 'resources', 'prompts', 'mrtr', 'agent-as-tool']) assert.ok(mcpTools.not_claimed.includes(name));
+console.log('PASS: MCP 2026-07-28 stateless meta-tool contract, stable four-tool surface and forbidden-output policy.');

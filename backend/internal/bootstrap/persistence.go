@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
+	runfacade "github.com/orz-i/mender/backend/internal/contexts/execution/adapters/inbound/facade"
 	runhttp "github.com/orz-i/mender/backend/internal/contexts/execution/adapters/inbound/httpapi"
 	"github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/coordinatedcancel"
 	runcursor "github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/cursor"
@@ -22,9 +23,16 @@ import (
 	"github.com/orz-i/mender/backend/internal/platform/httpserver"
 	database "github.com/orz-i/mender/backend/internal/platform/postgres"
 	cancelfacade "github.com/orz-i/mender/backend/internal/processes/admission/adapters/inbound/cancellation"
+	admissionfacade "github.com/orz-i/mender/backend/internal/processes/admission/adapters/inbound/facade"
 	admissionhttp "github.com/orz-i/mender/backend/internal/processes/admission/adapters/inbound/httpapi"
 	admissionidentityaccess "github.com/orz-i/mender/backend/internal/processes/admission/adapters/outbound/identityaccess"
 	"github.com/orz-i/mender/backend/internal/processes/admission/adapters/outbound/identitycancel"
+	admissionapp "github.com/orz-i/mender/backend/internal/processes/admission/application"
+	mcphttp "github.com/orz-i/mender/backend/internal/processes/mcpbridge/adapters/inbound/httpapi"
+	mcpadmission "github.com/orz-i/mender/backend/internal/processes/mcpbridge/adapters/outbound/admissionaccess"
+	mcpexecution "github.com/orz-i/mender/backend/internal/processes/mcpbridge/adapters/outbound/executionaccess"
+	mcpidentity "github.com/orz-i/mender/backend/internal/processes/mcpbridge/adapters/outbound/identityaccess"
+	mcpapp "github.com/orz-i/mender/backend/internal/processes/mcpbridge/application"
 	"github.com/orz-i/mender/backend/migrations"
 )
 
@@ -38,6 +46,7 @@ type APIConfig struct {
 	CancellationDatabaseURL  string
 	StartRunAPIEnabled       bool
 	AdmissionDatabaseURL     string
+	MCPGatewayEnabled        bool
 }
 
 func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
@@ -83,9 +92,19 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	default:
 		return c, errors.New("MENDER_RUN_READ_API_ENABLED must be true or false")
 	}
+	switch getenv("MENDER_MCP_GATEWAY_ENABLED") {
+	case "", "false":
+	case "true":
+		c.MCPGatewayEnabled = true
+	default:
+		return c, errors.New("MENDER_MCP_GATEWAY_ENABLED must be true or false")
+	}
+	if c.MCPGatewayEnabled && (!c.RunReadAPIEnabled || !c.StartRunAPIEnabled || !c.CoordinatedCancelEnabled) {
+		return c, errors.New("MCP gateway requires Run read, StartRun and coordinated cancellation capabilities")
+	}
 	switch getenv("MENDER_RUN_API_ENABLED") {
 	case "", "false":
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled {
+		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled {
 			return APIConfig{}, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return c, nil
@@ -119,10 +138,13 @@ func (systemClock) Now() time.Time { return time.Now().UTC().Truncate(time.Micro
 // BuildAPI never migrates, seeds data or falls back to a test repository.
 func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	if !c.RunAPIEnabled {
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled {
+		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled {
 			return nil, nil, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return httpserver.NewRouter(), func() {}, nil
+	}
+	if c.MCPGatewayEnabled && (!c.RunReadAPIEnabled || !c.StartRunAPIEnabled || !c.CoordinatedCancelEnabled) {
+		return nil, nil, errors.New("MCP gateway requires Run read, StartRun and coordinated cancellation capabilities")
 	}
 	var codec *runcursor.Codec
 	if c.RunReadAPIEnabled {
@@ -201,8 +223,9 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 		return failed(err)
 	}
 	registers := []func(*gin.Engine){handler.Register}
+	var queries *runapp.Queries
 	if c.RunReadAPIEnabled {
-		queries, err := runapp.NewQueries(repository, access, codec, systemClock{})
+		queries, err = runapp.NewQueries(repository, access, codec, systemClock{})
 		if err != nil {
 			return failed(err)
 		}
@@ -212,6 +235,7 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 		}
 		registers = append(registers, readHandler.Register)
 	}
+	var admission *admissionapp.Service
 	if c.StartRunAPIEnabled {
 		if c.AdmissionDatabaseURL == "" {
 			return failed(errors.New("StartRun API requires a separate admission database role"))
@@ -229,7 +253,7 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 			return failed(err)
 		}
 		startAccess := admissionidentityaccess.New(identityFacade)
-		admission, err := BuildAdmission(start, admissionPool, startAccess, resolver)
+		admission, err = BuildAdmission(start, admissionPool, startAccess, resolver)
 		if err != nil {
 			return failed(err)
 		}
@@ -238,6 +262,19 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 			return failed(err)
 		}
 		registers = append(registers, startHandler.Register)
+	}
+	if c.MCPGatewayEnabled {
+		bridge, buildErr := mcpapp.New(mcpidentity.New(identityFacade), mcpadmission.New(admissionfacade.NewAdmission(admission)), mcpexecution.New(runfacade.NewRuns(runs, queries)))
+		if buildErr != nil {
+			return failed(buildErr)
+		}
+		mcpHandler, buildErr := mcphttp.New(bridge)
+		if buildErr != nil {
+			return failed(buildErr)
+		}
+		registers = append(registers, func(router *gin.Engine) {
+			router.Any("/mcp/v1/workspaces/:workspace_id", gin.WrapH(mcpHandler))
+		})
 	}
 	register := func(router *gin.Engine) {
 		for _, register := range registers {
