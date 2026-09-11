@@ -20,7 +20,7 @@ var contexts = map[string]bool{
 	"execution": true, "commerce": true, "supply": true, "governance": true,
 }
 
-var processes = map[string]bool{"process:admission": true, "process:settlement": true}
+var processes = map[string]bool{"process:admission": true, "process:settlement": true, "process:mcpbridge": true}
 
 // Pure imports are an explicit allowlist. Adding one requires a boundary review.
 var pureImports = map[string]bool{
