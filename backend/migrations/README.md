@@ -1,6 +1,6 @@
 # 数据迁移
 
-当前迁移为 `0001–0012`。`0012_provider_cancellation.sql` 新增 durable `execution.provider_cancel_intents`、`running/reconciling → cancel_requested` 的 provider-cancel bundle，以及 `fulfilled/superseded` 与 ProviderObservation terminal 的双向约束；取消网络调用在 durable `sending` 后不会自动重发，unknown 只能靠既有 provider status reconciliation 收敛。`0011_provider_reconciliation.sql` 把实际接受 submission 的 `provider_id` 固化到 Attempt/新 observation，使多 Provider 状态查询不依赖 request-id 猜测；`0010_provider_results.sql` 建立 append-only result evidence 与 `provider_waiting/finished`。应用既有库迁移仍由操作员显式执行，不在 API/Worker 启动时自动执行。
+当前迁移为 `0001–0013`。`0013_provider_control_endpoints.sql` 在 Supply-owned immutable deployment descriptor 上增加可选的固定 HTTP status/cancel endpoint；provider request/task handle 只能放进后续受控请求体，不能被拼进 URL。`0012_provider_cancellation.sql` 新增 durable `execution.provider_cancel_intents`、`running/reconciling → cancel_requested` 的 provider-cancel bundle，以及 `fulfilled/superseded` 与 ProviderObservation terminal 的双向约束；取消网络调用在 durable `sending` 后不会自动重发，unknown 只能靠既有 provider status reconciliation 收敛。`0011_provider_reconciliation.sql` 把实际接受 submission 的 `provider_id` 固化到 Attempt/新 observation，使多 Provider 状态查询不依赖 request-id 猜测；`0010_provider_results.sql` 建立 append-only result evidence 与 `provider_waiting/finished`。应用既有库迁移仍由操作员显式执行，不在 API/Worker 启动时自动执行。
 
 本轮新增 `0004_atomic_admission.sql`：commerce 预算期／额度预留和 execution 受理／blocked Job／Outbox，含 FORCE RLS 与延迟额度总和约束。0001–0003 内容不变。已有开发数据库应用新增迁移后须重新执行 `pnpm db:grant-runtime --role <查询运行角色>`，仅补充受理关联的两列读取权；不能将 admission writer 或迁移所有者混入查询 API。详情及真实故障注入结果见 [内部原子受理](../../docs/engineering/2026-09-09-atomic-admission.md)。
 
@@ -27,6 +27,8 @@ Provider result 使用第三个独立执行角色：`pnpm db:grant-reconciler --
 应用 `0011` 后，对既有 worker role 再执行 `pnpm db:grant-worker --role <worker role>`，以增加 `run_attempts.provider_id` 这一列的受限 UPDATE；这是 `RecordSubmitted` 固化实际 provider identity 所需的唯一新 Worker 写能力。Reconciler 已拥有 `run_attempts`／`provider_observations` 的表级只读／append 权限，不需要 Supply/Connections schema USAGE，也不能通过这些上下文反查路由。完整路由与轮询边界见 [Provider Reconciliation](../../docs/engineering/2026-09-10-provider-reconciliation.md)。
 
 应用 `0012` 后，既有 cancellation role 与 reconciler role 都需要重新授权：分别执行 `pnpm db:grant-cancellation --role <cancellation role>` 和 `pnpm db:grant-reconciler --role <reconciler role>`。Cancellation role 只能读取/插入用户 provider-cancel intent 和读取必要 Attempt provider handles，不能写 `sending/resolved/outcome/unknown` 结果列；Reconciler role 只能 claim/resolve 已有 intent，不能伪造用户取消请求。Runtime/Worker/Admission/Executor 继续被启动自检要求无法访问 `provider_cancel_intents`。完整边界见 [Provider Cancellation](../../docs/engineering/2026-09-10-provider-cancellation.md)。
+
+应用 `0013` 后，既有 executor role 的 `supply.deployments` 表级只读授权自然覆盖新增 control descriptor 列；Reconciler/Worker/Cancellation/API 仍不得获得 Supply schema USAGE。本迁移只保存固定 endpoint 与 POST 方法，不开启网络调用，也不把 provider handle 写入 URL。完整阶段记录见 [Provider HTTP Control Runtime](../../docs/engineering/2026-09-11-provider-control-runtime.md)。
 
 已有环境应用 `0007` 后还应重新执行 `pnpm db:grant-admission --role <原 admission role>`。该命令会主动撤销旧的 `execution.jobs` 整表 INSERT，再只授予 StartRun 所需的 workspace/run/state/blocked_reason/available_at/created_at/updated_at 列，防止旧 admission role 因新列出现而获得 priority、lease、fencing 或 attempt 配置写入能力。
 
