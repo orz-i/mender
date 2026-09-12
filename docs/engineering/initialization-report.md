@@ -2,6 +2,14 @@
 
 ## 当前实现
 
+### 2026-09-12 当前基线
+
+Mender 已进入“可靠执行内核 + MCP 集成基础已验证，向可运行纵向 Alpha 收口”的阶段。当前实际实现已经超过本文件下方 2026-09-10 的早期描述：公共 StartRun、Worker lease/dispatch 基础、HTTP Provider submit/status/cancel、Provider reconciliation、fixed-success-only Usage Settlement、Provider Result Artifact、MCP Meta-Tool、Fixed Toolset MCP 以及 Upstream MCP Client 都已有实现和真实隔离 PostgreSQL 验证。最新切片见 [Runnable Vertical Alpha Foundation](2026-09-12-runnable-alpha-foundation.md)。
+
+所有 StartRun 入口现在共享 ToolVersion 业务参数 Schema 校验：Schema 在 Admission 的 outbound capability adapter 中解释，REST／MCP 不再各维护一套规则，非法参数在 Connection/Pricing 和 quota reservation 前拒绝。受审 Worker runtime host 也已建立有界周期，可显式组合 dispatch、Provider Control/Reconciliation 与 Usage Settlement；默认 `cmd/worker` 仍不提供生产 SecretProvider 或 egress runtime，因此继续 fail closed。
+
+本轮重新通过 `pnpm check`、真实隔离 PostgreSQL、Go race 与 `git diff --check` 的最终证据以 2026-09-12 阶段记录和会话 checkpoint 为准。下方标注 2026-09-10 的段落保留作为历史演进，不再作为“当前缺失能力”清单。
+
 2026-09-10 更新：已新增带预留任务的协调取消与原周期额度释放。独立开关、取消角色、真实验证与当前边界以[阶段五收尾记录](2026-09-10-coordinated-cancellation.md)为准；下方早期记录不代表最新能力仍缺失。
 
 Docker／专用测试环境阻塞已解除：用户完成隔离 PostgreSQL 测试，本轮也在当前工作树复核通过。新增内部原子受理、commerce 额度预留，以及同事务 Run／blocked Job／Outbox，见 [原子受理记录](2026-09-09-atomic-admission.md)。没有公共创建、实际收费或 Worker 执行入口；Run 列表仍需独立开关和安全注入的签名密钥。
@@ -29,9 +37,9 @@ Docker／专用测试环境阻塞已解除：用户完成隔离 PostgreSQL 测�
 | 本地 API 请求 | 存活 `200`、未就绪 `503`、业务路径 `404` |
 | Console / Admin 浏览器检查 | 页面导航、真实状态查询、重试、键盘操作与窄屏布局通过 |
 
-## 待实现
+## 待实现／待产品化
 
-人类登录／OIDC、成员管理、真实能力目录与授权连接、创建权限／计价适配、执行中任务的上游取消、可执行 Worker、Outbox 投递、MCP／Agent、账本／结算和完整审计按[实施计划](../planning/README.md)推进。内部原子受理已通过本机真实 PostgreSQL 子集测试，但不等于完整业务入口或商业验收。前期 [execution 切片](2026-09-09-execution-foundation.md) 与 [身份持久化记录](2026-09-09-identity-postgres.md) 中的环境限制保留为历史证据，最新状态见本轮记录。
+人类登录／OIDC、成员管理、面向用户的完整 Catalog／Connection／Toolset 管理、生产 SecretProvider 与受审运行配置、Outbox 对外投递、Webhook、Agent/A2A、对象存储、真实支付／复式账本／退款和完整 governance 业务能力仍按[实施计划](../planning/README.md)推进。默认 Worker 不自动构造 Supplier runtime；当前前端仍未提供 Run Explorer 等完整业务界面。已有子集通过真实 PostgreSQL 不等于商业平台或 G0–G5 已验收。
 
 | 任务 | 已有基础 | 后续验收重点 |
 | --- | --- | --- |

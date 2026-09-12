@@ -51,9 +51,9 @@ pnpm dev:api
 | `GET /api/v1/workspaces/{workspace_id}/runs/{run_id}/artifacts` | Run read API 启用后注册；要求同一 Workspace 的 `run:read`，仅返回 immutable Artifact 元数据 |
 | `GET /api/v1/workspaces/{workspace_id}/runs/{run_id}/artifacts/{artifact_id}` | Run read API 启用后注册；要求 `run:read`，返回 <=1 MiB 的 inline `application/json` content，不暴露 Provider control evidence |
 | `POST /api/v1/workspaces/{workspace_id}/runs/{run_id}/cancel` | 默认未注册；要求 run:cancel；可选协调取消可原子停止未执行受理任务并释放原预留，其他路径保持本地取消／意图语义 |
-| Worker SQL 租约控制 | 已实现 Job/Attempt、lease/heartbeat/expiry/fencing 基础；默认 worker idle，显式启用后当前进程只恢复过期 lease，不领取新任务、不调用供应商 |
-| HTTP Supplier Submit / Provider status/cancel | hardened adapter 与 reviewed library composition 已实现；默认命令没有生产 SecretProvider/egress/runtime，所以不访问真实供应商 |
-| Usage Settlement | terminal Provider fact 会原子创建 pending settlement job；reviewed settlement runtime 可用专用角色将 held quota 转成 consumed/released quota，但默认 API/Worker 不调度它，也不做 payment/revenue accounting |
+| Worker SQL 租约／runtime host | Job/Attempt、lease/heartbeat/expiry/fencing 与 serial dispatch 已实现；ReviewedWorkerServices 可在同一有界 poll 周期显式调度 Provider Control/Reconciliation 和 Usage Settlement；默认 worker 未注入能力时仍不会访问供应商 |
+| HTTP Supplier Submit / Provider status/cancel | hardened adapter、Broker 与 reviewed runtime 已实现；只有受信 host 显式注入 SecretProvider、egress policy 和独立角色才可运行，默认命令不从环境猜测这些能力 |
+| Usage Settlement | terminal Provider fact 会原子创建 pending settlement job；reviewed runtime 可通过 Worker host 每 Workspace 每周期最多 claim 一项；仍只是 quota settlement，不是 payment/revenue accounting |
 | `POST /mcp/v1/workspaces/{workspace_id}` | 默认未注册；显式启用后只接受 MCP `2026-07-28` stateless Streamable HTTP，Bearer machine Key 在进入官方 SDK 前绑定 Workspace；暴露四个 `mender_*` 平台元工具 |
 | 固定 Toolset direct MCP tools、上游 MCP Client、Agent、callback/webhook | 尚未开放 |
 
@@ -67,6 +67,8 @@ pnpm dev:api
 
 公开 StartRun 还需 `MENDER_RUN_START_API_ENABLED=true` 和同库独立受限的 `MENDER_ADMISSION_DATABASE_URL`。已有角色使用 `pnpm db:grant-admission --role mender_admission` 授权；机器 Key 必须显式包含 `run:create`。API 读角色只读计划事实且不能读取 `connections.credential_version_ref` 或预算金额列；admission 写角色不能读取 Catalog/Connection/Price 源表。完整边界和测试证据见 [StartRun 收尾记录](2026-09-10-public-start-run.md)。
 
+从 2026-09-12 起，已发布 ToolVersion 只要存在 `input_schema`，REST StartRun、`mender_run_start` 和 Fixed Toolset MCP 最终都由共享 Admission Resolver 在 quota 预留前验证 canonical business arguments。JSON Schema 具体实现留在 outbound adapter，且不会加载远程 `$ref`；Fixed Toolset MCP 不再拥有第二套业务 Schema 判定。历史没有 Schema 的 ToolVersion 暂保留兼容路径，后续发布治理应逐步消除该例外。
+
 协调取消还需 `MENDER_RUN_COORDINATED_CANCEL_ENABLED=true` 和同库独立受限的 `MENDER_CANCELLATION_DATABASE_URL`。已有角色使用 `pnpm db:grant-cancellation --role mender_cancel` 授权，完整安全配置见[协调取消收尾记录](2026-09-10-coordinated-cancellation.md)。不要将管理连接或读角色复用为取消角色。
 
 Worker 租约控制使用独立角色：先由管理员执行 `pnpm db:grant-worker --role mender_worker`，再给 Worker 进程配置 `MENDER_WORKER_DATABASE_URL`、稳定且非秘密的 `MENDER_WORKER_ID` 与显式 `MENDER_WORKER_WORKSPACES`。`MENDER_WORKER_CONTROL_ENABLED=true` 才连接控制数据库。若要求 dispatch，还需显式 deployment revisions、lease TTL、heartbeat interval 与 activation limit；但默认 `cmd/worker` 不提供 SecretProvider/reviewed supplier runtime，所以 `MENDER_WORKER_DISPATCH_ENABLED=true` 会在数据库/网络前失败关闭。受审调用方可以通过独立 executor DB 角色、egress allowlist、SecretProvider 组合 `BuildSupplierHTTPExecutor`，再显式注入 `RunWorkerWithReviewedRuntime`。当前 supervisor 单进程最多一个活动 submission。完整边界见 [Worker 租约记录](2026-09-10-worker-leases.md)、[HTTP Executor](2026-09-10-http-executor.md)与 [Supplier Dispatch Supervisor](2026-09-10-dispatch-supervisor.md)。
@@ -75,7 +77,7 @@ Worker 租约控制使用独立角色：先由管理员执行 `pnpm db:grant-wor
 
 应用 `0008_supplier_submission.sql` 后，已有 worker role 必须再次执行 `pnpm db:grant-worker --role <role>`。应用层此时具备 durable intent、accepted provider IDs、unknown/reconciling 与 lease-expiry no-blind-retry 协议，但 `cmd/worker` 仍不会 activation/lease，也没有 HTTP/MCP/Agent supplier adapter；详情见 [供应商提交协议](2026-09-10-supplier-submission.md)。
 
-应用 `0013_provider_control_endpoints.sql` 后，Supply deployment 可以声明固定 HTTP status/cancel POST endpoint。Provider request/task handle 始终作为有界 JSON body 发送，不拼入 URL。`BuildProviderHTTPControlRuntime` 只能由受审 host 代码显式传入 executor/reconciler 两个独立角色、Provider allowlist、egress policy 与 SecretProvider；默认 `cmd/worker`／API 不读取任何 `MENDER_PROVIDER_*` 环境变量。实现与验证边界见 [Provider HTTP Control Runtime](2026-09-11-provider-control-runtime.md)。
+应用 `0013_provider_control_endpoints.sql` 后，Supply deployment 可以声明固定 HTTP status/cancel POST endpoint。Provider request/task handle 始终作为有界 JSON body 发送，不拼入 URL。`BuildProviderHTTPControlRuntime` 只能由受审 host 代码显式传入 executor/reconciler 两个独立角色、Provider allowlist、egress policy 与 SecretProvider；默认 `cmd/worker`／API 不读取任何 `MENDER_PROVIDER_*` 环境变量。`ReviewedWorkerServices` 现在提供统一的受审调度容器，但不会替调用方创建上述能力；实现与验证边界见 [Provider HTTP Control Runtime](2026-09-11-provider-control-runtime.md) 与 [Runnable Vertical Alpha Foundation](2026-09-12-runnable-alpha-foundation.md)。
 
 应用 `0014_usage_settlement_contract.sql` 与 `0015_terminal_settlement_jobs.sql` 后，既有固定价格被明确为 `fixed_success_only`，Provider 终态收敛会在同一 Execution 事务创建 settlement job。先由管理员执行 `pnpm db:grant-settlement --role <role>` 为预先存在的独立角色授权；`BuildUsageSettlementRuntime` 启动时会校验 migration digest、最小权限与 RLS。该 runtime 没有后台循环，结算事务也不会执行 Provider、Secret、Webhook 或支付网络调用。实现与验证边界见 [Commerce Usage Settlement](2026-09-11-commerce-usage-settlement.md)。
 

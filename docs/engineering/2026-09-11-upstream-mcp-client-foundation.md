@@ -30,3 +30,7 @@
 
 OAuth、Resources、Prompts、Tasks、MRTR、Agent/A2A 仍未实现；没有声明任何公网 Provider 已经生产接入。
 
+## 2026-09-12 验证补充
+
+上一阶段记录中的“Docker daemon 不可用”只描述当时宿主环境，不再代表当前门禁状态。2026-09-12 在当前 `main` 后续基线上重新执行 `pnpm test:integration:docker` 已通过真实隔离 PostgreSQL；Upstream MCP discovery/call/result convergence 与其余 migration/RLS/admission/provider-control 链路共同通过并清理自有容器。该结果仍只证明本地受控 fixture，不代表公网 MCP Provider、OAuth 或未实现能力已经生产验证。
+
