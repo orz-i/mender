@@ -25,7 +25,7 @@ Go 首次构建会根据 `go.sum` 下载模块，也可先在 `backend/` 执行 
 | `pnpm dev:api` | API，默认绑定 `127.0.0.1:18080` |
 | `pnpm dev:worker` | 空闲 Worker；尚无数据库或任务消费 |
 
-Go 也可在 `backend/` 直接运行 `go run ./cmd/api` 或 `go run ./cmd/worker`。Console 与 Admin 的本地端口独立；这只是构建和开发入口隔离，人类登录与后台会话仍待实现。机器 Key 只用于显式启用的消费接口，不应粘贴进前端页面或聊天。
+Go 也可在 `backend/` 直接运行 `go run ./cmd/api` 或 `go run ./cmd/worker`。Console 与 Admin 的本地端口独立；Console OIDC/browser session、Workspace 选择和短时 Run delegation 已有受控 Alpha，公开注册/邀请仍未开放。Machine Key 只用于显式启用的服务/Agent 消费接口，不应粘贴进前端页面或聊天。
 
 ## 配置
 
@@ -57,7 +57,7 @@ pnpm dev:api
 | `POST /mcp/v1/workspaces/{workspace_id}` | 默认未注册；显式启用后只接受 MCP `2026-07-28` stateless Streamable HTTP，Bearer machine Key 在进入官方 SDK 前绑定 Workspace；暴露四个 `mender_*` 平台元工具 |
 | 固定 Toolset direct MCP tools、上游 MCP Client、Agent、callback/webhook | 尚未开放 |
 
-前端 `/` 提供 Alpha 导航，`/status` 发送真实健康请求；`/workspaces` 在 Console OIDC 启用后读取 HttpOnly server-side session 与当前 Workspace membership；`/connections` 使用独立 Connection manager 角色列出安全元数据并允许 Owner/Admin 发起 CSRF 保护的撤销；`/runs` 是 Execution 产品切片。后端已经增加显式、短时的 Human → Run delegation surface：OIDC Cookie 本身不能访问 Run API，delegation 只包含 `run:read` 与可选 `run:cancel`，没有 `run:create`。Console UI 将在下一切片从临时 Machine Key 入口切换到 delegation；任何 bearer token 都不写入浏览器持久存储或 URL，最终权限和状态仍由后端裁决。详见 [Console Run Explorer](2026-09-12-console-run-explorer.md)、[Workspace Console Alpha](2026-09-12-workspace-console-alpha.md)、[Connection self-service Alpha](2026-09-12-connection-self-service-alpha.md) 与 [Human → Run delegation Alpha](2026-09-12-human-run-delegation-alpha.md)。
+前端 `/` 提供 Alpha 导航，`/status` 发送真实健康请求；`/workspaces` 在 Console OIDC 启用后读取 HttpOnly server-side session 与当前 Workspace membership；`/connections` 使用独立 Connection manager 角色列出安全元数据并允许 Owner/Admin 发起 CSRF 保护的撤销；`/runs` 通过显式短时 Human → Run delegation 读取/取消 Execution。OIDC Cookie 本身不能访问 Run API；delegation 只包含 `run:read` 与可选 `run:cancel`，没有 `run:create`，token 只保存在页面内存。Machine `/api/v1` 入口继续用于服务/Agent identity，Console 使用独立 `/api/console/v1` delegated surface。详见 [Console Run Explorer](2026-09-12-console-run-explorer.md)、[Workspace Console Alpha](2026-09-12-workspace-console-alpha.md)、[Connection self-service Alpha](2026-09-12-connection-self-service-alpha.md) 与 [Human → Run delegation Alpha](2026-09-12-human-run-delegation-alpha.md)。
 
 ### 可选持久化子集
 

@@ -16,4 +16,4 @@ Mender Console now exposes the first human Connection management slice on top of
 
 This slice intentionally does not create or upload BYOK secrets, start OAuth authorization, rotate credentials, edit Connection grants or expose supplier account contents. Creation requires a separately reviewed secret-ingestion/OAuth flow so the browser never becomes a durable secret store. Existing operator/database fixtures remain the way to seed Connection credentials during Alpha.
 
-Run execution authorization is unchanged: the Run API still uses scoped Machine Keys. Human OIDC session and Connection access do not imply `run:create`, `run:cancel` or billing authority.
+Machine Run APIs remain unchanged for Agent/service identities. Console now has a separate explicit short-lived Human→Run delegation for read/cancel; Connection access still does not imply `run:create` or billing authority, and the OIDC Cookie itself is never accepted as a Run credential.

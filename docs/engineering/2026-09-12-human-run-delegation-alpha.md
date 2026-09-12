@@ -36,4 +36,4 @@ The first two use the browser session + CSRF. The Run endpoints require the newl
 
 ## Not delivered
 
-This slice does not add human `run:create`, billing authority, delegated Toolset mutation, public user registration or indefinite browser execution credentials. Console adoption of the delegation flow is the next slice; until then the existing Run Explorer UI may still show its Alpha Machine Key form.
+This slice does not add human `run:create`, billing authority, delegated Toolset mutation, public user registration or indefinite browser execution credentials. The following Console slice adopted this contract and removed the Run Explorer Machine Key input; the Machine `/api/v1` surface remains separate for Agent/service identities.

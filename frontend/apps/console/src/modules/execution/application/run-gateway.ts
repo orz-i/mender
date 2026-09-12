@@ -2,7 +2,10 @@ import type { Run, RunArtifact, RunEvent, RunState } from '../domain/run';
 
 export interface RunAccess {
   workspaceId: string;
-  machineToken: string;
+  delegatedToken: string;
+  delegationId: string;
+  expiresAt: string;
+  canCancel: boolean;
 }
 
 export interface RunPage {
@@ -17,6 +20,8 @@ export interface RunEvents {
 }
 
 export interface RunGateway {
+  connect(workspaceId: string, signal?: AbortSignal): Promise<RunAccess>;
+  disconnect(access: RunAccess, signal?: AbortSignal): Promise<void>;
   list(access: RunAccess, options: { state?: RunState; cursor?: string; limit?: number }, signal?: AbortSignal): Promise<RunPage>;
   get(access: RunAccess, runId: string, signal?: AbortSignal): Promise<Run>;
   events(access: RunAccess, runId: string, signal?: AbortSignal): Promise<RunEvents>;

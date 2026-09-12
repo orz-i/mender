@@ -91,7 +91,7 @@ function requireId(value: string, name: string) {
 function requireAccess(access: Access) {
   requireId(access.workspaceId, 'Workspace ID');
   if (access.token.length < 1 || access.token.length > 240 || /\s/.test(access.token)) {
-    throw new Error('机器凭据格式无效');
+    throw new Error('Run 凭据格式无效');
   }
 }
 
@@ -126,6 +126,10 @@ function parseRun(value: unknown): RunRecord {
     createdAt: string(raw.created_at),
     updatedAt: string(raw.updated_at),
   };
+}
+
+export function createConsoleRunsClient(baseUrl = '', fetcher: typeof fetch = fetch) {
+  return createRunsClient(baseUrl, fetcher, '/api/console/v1');
 }
 
 function parseEvent(value: unknown): RunEventRecord {
@@ -187,9 +191,10 @@ async function jsonRequest(fetcher: typeof fetch, url: string, access: Access, i
   return response.json() as Promise<unknown>;
 }
 
-export function createRunsClient(baseUrl = '', fetcher: typeof fetch = fetch) {
+export function createRunsClient(baseUrl = '', fetcher: typeof fetch = fetch, apiPrefix = '/api/v1') {
   const base = baseUrl.replace(/\/$/, '');
-  const runBase = (workspaceId: string) => `${base}/api/v1/workspaces/${encodeURIComponent(workspaceId)}/runs`;
+  if (!apiPrefix.startsWith('/') || apiPrefix.endsWith('/') || apiPrefix.includes('?') || apiPrefix.includes('#')) throw new Error('Run API prefix 无效');
+  const runBase = (workspaceId: string) => `${base}${apiPrefix}/workspaces/${encodeURIComponent(workspaceId)}/runs`;
   return {
     async listRuns(request: ListRunsRequest): Promise<Page<RunRecord>> {
       requireAccess(request);

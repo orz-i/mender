@@ -79,6 +79,8 @@ h2 { font-size: 18px; font-weight: 600; margin: 0 0 10px; }
 .credential-panel { border: 1px solid var(--border); background: #fff; border-radius: 14px; padding: 26px; margin-bottom: 28px; display: grid; grid-template-columns: minmax(220px, .8fr) minmax(420px, 1.2fr); gap: 28px; }
 .credential-panel p, .muted-copy { color: #65766d; font-size: 13px; line-height: 1.75; margin: 0; }
 .credential-form { display: grid; grid-template-columns: 1fr 1.4fr auto; align-items: end; gap: 12px; }
+.run-delegation-form { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.run-delegation-form .error-panel { grid-column: 1 / -1; }
 .credential-form label, .run-controls label, .cancel-reason { display: grid; gap: 7px; font-size: 11px; color: #66776e; font-weight: 600; }
 .credential-form input, .run-controls select, .cancel-reason textarea { width: 100%; border: 1px solid var(--border); border-radius: 8px; background: #fbfcfb; color: var(--foreground); font: inherit; font-size: 13px; padding: 10px 11px; outline: none; }
 .credential-form input:focus, .run-controls select:focus, .cancel-reason textarea:focus { border-color: var(--ring); box-shadow: 0 0 0 2px #24594a1f; }
@@ -166,6 +168,7 @@ h2 { font-size: 18px; font-weight: 600; margin: 0 0 10px; }
   .connection-state { align-self: flex-start; margin-top: -20px; margin-bottom: 20px; }
   .credential-panel { padding: 20px; }
   .credential-form { grid-template-columns: 1fr; }
+  .run-delegation-form { grid-template-columns: 1fr; }
   .credential-actions { grid-column: auto; }
   .run-controls { width: 100%; align-items: stretch; }
   .run-controls label { flex: 1; }
