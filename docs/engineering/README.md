@@ -11,6 +11,7 @@
 | [PR 模板](../../.github/pull_request_template.md) | 变更用例、合同、数据与验证记录 |
 | [2026-09-12 Runnable Vertical Alpha](2026-09-12-runnable-alpha-foundation.md) | 共享 StartRun Schema 校验、受审 Worker runtime host 与真实数据库证据 |
 | [2026-09-12 Runnable Alpha 第二批](2026-09-12-runnable-alpha-second-slice.md) | mounted SecretProvider、显式 reviewed worker host 配置、Provider Control 与 Usage Settlement 证据 |
+| [2026-09-12 Console Run Explorer](2026-09-12-console-run-explorer.md) | 首个真实 Console Execution 工作流、内存机器凭据边界与受保护 Run API 映射 |
 
 工具链以根 [toolchain.versions.json](../../toolchain.versions.json) 为准，依赖由 pnpm 与 Go 锁文件固定。治理规则中的版本约束待 G0 评审。
 

@@ -14,7 +14,7 @@ export function Shell({ label, navigation, children }: {
           <span>Mender<span className="brand-label">{label}</span></span>
         </a>
         <nav aria-label="主导航">{navigation}</nav>
-        <div className="sidebar-footer"><span className="small-dot" />初始化预览</div>
+        <div className="sidebar-footer"><span className="small-dot" />纵向 Alpha</div>
       </aside>
       <div className="workspace">
         <header className="topbar"><span>{label}</span><span className="preview-badge">开发版本 · 0.1</span></header>

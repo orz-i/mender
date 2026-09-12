@@ -39,7 +39,7 @@ Docker／专用测试环境阻塞已解除：用户完成隔离 PostgreSQL 测�
 
 ## 待实现／待产品化
 
-人类登录／OIDC、成员管理、面向用户的完整 Catalog／Connection／Toolset 管理、生产 SecretProvider 与受审运行配置、Outbox 对外投递、Webhook、Agent/A2A、对象存储、真实支付／复式账本／退款和完整 governance 业务能力仍按[实施计划](../planning/README.md)推进。默认 Worker 不自动构造 Supplier runtime；当前前端仍未提供 Run Explorer 等完整业务界面。已有子集通过真实 PostgreSQL 不等于商业平台或 G0–G5 已验收。
+人类登录／OIDC、成员管理、面向用户的完整 Catalog／Connection／Toolset 管理、云厂商/KMS SecretProvider、Outbox 对外投递、Webhook、Agent/A2A、对象存储、真实支付／复式账本／退款和完整 governance 业务能力仍按[实施计划](../planning/README.md)推进。默认 Worker 仍不自动开启 Supplier runtime；只有显式 reviewed host 配置才会装配 mounted SecretProvider／Provider Control／Settlement。Console 已增加最小 Run Explorer，但仍使用开发 Alpha 的内存 machine Key 输入，不等于完整用户控制台或人类认证。已有子集通过真实 PostgreSQL 不等于商业平台或 G0–G5 已验收。
 
 | 任务 | 已有基础 | 后续验收重点 |
 | --- | --- | --- |
