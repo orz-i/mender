@@ -12,6 +12,7 @@
 | [2026-09-12 Runnable Vertical Alpha](2026-09-12-runnable-alpha-foundation.md) | 共享 StartRun Schema 校验、受审 Worker runtime host 与真实数据库证据 |
 | [2026-09-12 Runnable Alpha 第二批](2026-09-12-runnable-alpha-second-slice.md) | mounted SecretProvider、显式 reviewed worker host 配置、Provider Control 与 Usage Settlement 证据 |
 | [2026-09-12 Console Run Explorer](2026-09-12-console-run-explorer.md) | 首个真实 Console Execution 工作流、内存机器凭据边界与受保护 Run API 映射 |
+| [2026-09-12 Human session / OIDC foundation](2026-09-12-human-session-oidc-foundation.md) | OIDC+PKCE、HttpOnly server-side session、CSRF、Workspace membership 与最小数据库角色 |
 
 工具链以根 [toolchain.versions.json](../../toolchain.versions.json) 为准，依赖由 pnpm 与 Go 锁文件固定。治理规则中的版本约束待 G0 评审。
 

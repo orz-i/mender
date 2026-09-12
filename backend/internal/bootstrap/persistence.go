@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -17,8 +19,11 @@ import (
 	runpg "github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/postgres"
 	runapp "github.com/orz-i/mender/backend/internal/contexts/execution/application"
 	"github.com/orz-i/mender/backend/internal/contexts/identity/adapters/inbound/facade"
+	identityhttp "github.com/orz-i/mender/backend/internal/contexts/identity/adapters/inbound/httpapi"
 	"github.com/orz-i/mender/backend/internal/contexts/identity/adapters/outbound/keycodec"
+	identityoidc "github.com/orz-i/mender/backend/internal/contexts/identity/adapters/outbound/oidc"
 	identitypg "github.com/orz-i/mender/backend/internal/contexts/identity/adapters/outbound/postgres"
+	"github.com/orz-i/mender/backend/internal/contexts/identity/adapters/outbound/sessioncodec"
 	identityapp "github.com/orz-i/mender/backend/internal/contexts/identity/application"
 	"github.com/orz-i/mender/backend/internal/platform/httpserver"
 	database "github.com/orz-i/mender/backend/internal/platform/postgres"
@@ -37,21 +42,84 @@ import (
 )
 
 type APIConfig struct {
-	RunAPIEnabled            bool
-	RunReadAPIEnabled        bool
-	DatabaseURL              string
-	CursorSigningKey         []byte
-	CoordinatedCancelEnabled bool
-	ProviderCancelEnabled    bool
-	CancellationDatabaseURL  string
-	StartRunAPIEnabled       bool
-	AdmissionDatabaseURL     string
-	MCPGatewayEnabled        bool
-	MCPFixedToolsetEnabled   bool
+	RunAPIEnabled             bool
+	RunReadAPIEnabled         bool
+	DatabaseURL               string
+	CursorSigningKey          []byte
+	CoordinatedCancelEnabled  bool
+	ProviderCancelEnabled     bool
+	CancellationDatabaseURL   string
+	StartRunAPIEnabled        bool
+	AdmissionDatabaseURL      string
+	MCPGatewayEnabled         bool
+	MCPFixedToolsetEnabled    bool
+	ConsoleOIDCEnabled        bool
+	BrowserSessionDatabaseURL string
+	OIDCIssuer                string
+	OIDCClientID              string
+	OIDCClientSecretFile      string
+	OIDCRedirectURL           string
+	FlowSigningKeyFile        string
+	ConsoleCookieSecure       bool
+	ConsoleSessionTTL         time.Duration
+}
+
+func loadConsoleSecrets(clientSecretFile, signingKeyFile string) (string, []byte, error) {
+	clientSecretRaw, err := os.ReadFile(clientSecretFile)
+	if err != nil {
+		return "", nil, errors.New("OIDC client secret unavailable")
+	}
+	clientSecret := strings.TrimSpace(string(clientSecretRaw))
+	if clientSecret == "" || len(clientSecret) > 4096 {
+		return "", nil, errors.New("OIDC client secret unavailable")
+	}
+	keyRaw, err := os.ReadFile(signingKeyFile)
+	if err != nil {
+		return "", nil, errors.New("OIDC flow signing key unavailable")
+	}
+	encoded := strings.TrimSpace(string(keyRaw))
+	key, err := base64.RawURLEncoding.Strict().DecodeString(encoded)
+	if err != nil || len(encoded) != 43 || len(key) != 32 || base64.RawURLEncoding.EncodeToString(key) != encoded {
+		return "", nil, errors.New("OIDC flow signing key must be 32-byte unpadded base64url")
+	}
+	return clientSecret, key, nil
 }
 
 func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
-	var c APIConfig
+	c := APIConfig{ConsoleCookieSecure: true, ConsoleSessionTTL: 8 * time.Hour}
+	switch getenv("MENDER_CONSOLE_OIDC_ENABLED") {
+	case "", "false":
+	case "true":
+		c.ConsoleOIDCEnabled = true
+		c.BrowserSessionDatabaseURL = getenv("MENDER_BROWSER_SESSION_DATABASE_URL")
+		c.OIDCIssuer = strings.TrimSpace(getenv("MENDER_CONSOLE_OIDC_ISSUER"))
+		c.OIDCClientID = strings.TrimSpace(getenv("MENDER_CONSOLE_OIDC_CLIENT_ID"))
+		c.OIDCClientSecretFile = strings.TrimSpace(getenv("MENDER_CONSOLE_OIDC_CLIENT_SECRET_FILE"))
+		c.OIDCRedirectURL = strings.TrimSpace(getenv("MENDER_CONSOLE_OIDC_REDIRECT_URL"))
+		c.FlowSigningKeyFile = strings.TrimSpace(getenv("MENDER_CONSOLE_FLOW_SIGNING_KEY_FILE"))
+		if c.BrowserSessionDatabaseURL == "" || c.OIDCIssuer == "" || c.OIDCClientID == "" || c.OIDCClientSecretFile == "" || c.OIDCRedirectURL == "" || c.FlowSigningKeyFile == "" {
+			return APIConfig{}, errors.New("Console OIDC requires session database, issuer, client, redirect and mounted secret files")
+		}
+		switch getenv("MENDER_CONSOLE_COOKIE_SECURE") {
+		case "", "true":
+		case "false":
+			c.ConsoleCookieSecure = false
+			if !(strings.HasPrefix(c.OIDCRedirectURL, "http://127.0.0.1:") || strings.HasPrefix(c.OIDCRedirectURL, "http://localhost:")) {
+				return APIConfig{}, errors.New("insecure Console cookie is only allowed for loopback OIDC redirect")
+			}
+		default:
+			return APIConfig{}, errors.New("MENDER_CONSOLE_COOKIE_SECURE must be true or false")
+		}
+		if raw := getenv("MENDER_CONSOLE_SESSION_TTL"); raw != "" {
+			ttl, err := time.ParseDuration(raw)
+			if err != nil || ttl < 5*time.Minute || ttl > 24*time.Hour {
+				return APIConfig{}, errors.New("Console session TTL must be between 5m and 24h")
+			}
+			c.ConsoleSessionTTL = ttl
+		}
+	default:
+		return c, errors.New("MENDER_CONSOLE_OIDC_ENABLED must be true or false")
+	}
 	switch getenv("MENDER_RUN_START_API_ENABLED") {
 	case "", "false":
 	case "true":
@@ -115,7 +183,7 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	}
 	switch getenv("MENDER_RUN_API_ENABLED") {
 	case "", "false":
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled {
+		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled {
 			return APIConfig{}, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return c, nil
@@ -149,7 +217,7 @@ func (systemClock) Now() time.Time { return time.Now().UTC().Truncate(time.Micro
 // BuildAPI never migrates, seeds data or falls back to a test repository.
 func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	if !c.RunAPIEnabled {
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled {
+		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled {
 			return nil, nil, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return httpserver.NewRouter(), func() {}, nil
@@ -176,7 +244,11 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	}
 	var cancelPool *pgxpool.Pool
 	var admissionPool *pgxpool.Pool
+	var browserSessionPool *pgxpool.Pool
 	closePools := func() {
+		if browserSessionPool != nil {
+			browserSessionPool.Close()
+		}
 		if admissionPool != nil {
 			admissionPool.Close()
 		}
@@ -237,6 +309,48 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 		return failed(err)
 	}
 	registers := []func(*gin.Engine){handler.Register}
+	if c.ConsoleOIDCEnabled {
+		browserSessionPool, err = database.Open(start, c.BrowserSessionDatabaseURL)
+		if err != nil {
+			return failed(err)
+		}
+		readerCfg, sessionCfg := pool.Config().ConnConfig, browserSessionPool.Config().ConnConfig
+		if readerCfg.Host != sessionCfg.Host || readerCfg.Port != sessionCfg.Port || readerCfg.Database != sessionCfg.Database || readerCfg.User == sessionCfg.User {
+			return failed(errors.New("browser sessions require the same database with a distinct restricted role"))
+		}
+		if err = migrations.Verify(start, browserSessionPool); err != nil {
+			return failed(err)
+		}
+		if err = database.BrowserSessionRole(start, browserSessionPool); err != nil {
+			return failed(err)
+		}
+		clientSecret, key, readErr := loadConsoleSecrets(c.OIDCClientSecretFile, c.FlowSigningKeyFile)
+		if readErr != nil {
+			return failed(readErr)
+		}
+		oidcClient, buildErr := identityoidc.New(start, identityoidc.Config{Issuer: c.OIDCIssuer, ClientID: c.OIDCClientID, ClientSecret: clientSecret, RedirectURL: c.OIDCRedirectURL})
+		if buildErr != nil {
+			return failed(buildErr)
+		}
+		codec := sessioncodec.Codec{}
+		sessions, buildErr := identityapp.NewHumanSessionService(identitypg.NewHumanSessions(browserSessionPool), codec, systemClock{}, c.ConsoleSessionTTL)
+		if buildErr != nil {
+			return failed(buildErr)
+		}
+		login, buildErr := identityapp.NewLoginService(oidcClient, sessions, codec, systemClock{})
+		if buildErr != nil {
+			return failed(buildErr)
+		}
+		flow, buildErr := identityhttp.NewFlowCookieCodec(key)
+		if buildErr != nil {
+			return failed(buildErr)
+		}
+		consoleHandler, buildErr := identityhttp.New(login, sessions, flow, c.ConsoleCookieSecure)
+		if buildErr != nil {
+			return failed(buildErr)
+		}
+		registers = append(registers, consoleHandler.Register)
+	}
 	var queries *runapp.Queries
 	if c.RunReadAPIEnabled {
 		queries, err = runapp.NewQueries(repository, access, codec, systemClock{})
@@ -333,6 +447,14 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 				return err
 			}
 			return database.AdmissionRole(ctx, admissionPool)
+		}
+		if browserSessionPool != nil {
+			if err := migrations.Verify(ctx, browserSessionPool); err != nil {
+				return err
+			}
+			if err := database.BrowserSessionRole(ctx, browserSessionPool); err != nil {
+				return err
+			}
 		}
 		return nil
 	}

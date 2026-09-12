@@ -24,6 +24,7 @@
     "test:integration:docker": "node scripts/test-postgres.mjs",
     "db:migrate": "node scripts/backend.mjs run ./cmd/operator migrate",
     "db:grant-runtime": "node scripts/backend.mjs run ./cmd/operator grant-runtime",
+	"db:grant-browser-session": "node scripts/backend.mjs run ./cmd/operator grant-browser-session",
     "db:grant-admission": "node scripts/backend.mjs run ./cmd/operator grant-admission",
     "db:grant-cancellation": "node scripts/backend.mjs run ./cmd/operator grant-cancellation",
     "db:grant-worker": "node scripts/backend.mjs run ./cmd/operator grant-worker",
