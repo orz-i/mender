@@ -88,6 +88,14 @@ func TestWorkerControlIsDisabledByDefaultAndFailsClosed(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "explicitly reviewed executor runtime") {
 		t.Fatal("dispatch without reviewed runtime did not fail before database access", err)
 	}
+	background, err := NewReviewedWorkerServices(nil, nil, &ReviewedUsageSettlementRuntime{service: &fakeSettlementRunner{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = runWorker(context.Background(), logger, func(string) string { return "" }, background)
+	if err == nil || !strings.Contains(err.Error(), "require worker control") {
+		t.Fatal("background runtime without explicit worker scope did not fail closed", err)
+	}
 }
 
 func TestDisabledWorkerStopsWithoutDatabase(t *testing.T) {

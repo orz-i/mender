@@ -14,6 +14,7 @@ import (
 	runapp "github.com/orz-i/mender/backend/internal/contexts/execution/application"
 	rundomain "github.com/orz-i/mender/backend/internal/contexts/execution/domain"
 	database "github.com/orz-i/mender/backend/internal/platform/postgres"
+	settlementapp "github.com/orz-i/mender/backend/internal/processes/settlement/application"
 	"github.com/orz-i/mender/backend/migrations"
 )
 
@@ -174,6 +175,83 @@ func NewReviewedDispatchRuntime(executor runapp.Executor) (*ReviewedDispatchRunt
 	return &ReviewedDispatchRuntime{executor: executor}, nil
 }
 
+// ReviewedWorkerServices is an explicit capability set assembled by a trusted
+// host. The default worker entrypoint still has no SecretProvider, supplier
+// egress policy, provider-control runtime or settlement principal.
+type ReviewedWorkerServices struct {
+	dispatch        *ReviewedDispatchRuntime
+	providerControl *ReviewedProviderControlRuntime
+	settlement      *ReviewedUsageSettlementRuntime
+}
+
+func NewReviewedWorkerServices(dispatch *ReviewedDispatchRuntime, providerControl *ReviewedProviderControlRuntime, settlement *ReviewedUsageSettlementRuntime) (*ReviewedWorkerServices, error) {
+	if dispatch == nil && providerControl == nil && settlement == nil {
+		return nil, errors.New("reviewed worker services require at least one capability")
+	}
+	return &ReviewedWorkerServices{dispatch: dispatch, providerControl: providerControl, settlement: settlement}, nil
+}
+
+type ReviewedRuntimeCycleResult struct {
+	ProviderControlCycles          int
+	ProviderCancellationsHandled   int
+	ProviderReconciliationsHandled int
+	SettlementsHandled             int
+}
+
+// RunReviewedRuntimeCycle performs bounded background convergence. For every
+// explicitly configured Workspace it makes at most one provider-control call
+// and one settlement claim. It does not construct secrets, select tenants,
+// create goroutines, or loop on its own.
+func RunReviewedRuntimeCycle(ctx context.Context, logger *slog.Logger, workspaces []rundomain.WorkspaceID, services *ReviewedWorkerServices) (ReviewedRuntimeCycleResult, error) {
+	var result ReviewedRuntimeCycleResult
+	if services == nil || (services.providerControl == nil && services.settlement == nil) {
+		return result, nil
+	}
+	if logger == nil || len(workspaces) == 0 || len(workspaces) > 64 {
+		return result, errors.New("reviewed runtime cycle is not safely configured")
+	}
+	for _, workspace := range workspaces {
+		if !workspace.IsValid() {
+			return result, errors.New("reviewed runtime cycle contains invalid workspace")
+		}
+	}
+	for _, workspace := range workspaces {
+		if err := ctx.Err(); err != nil {
+			return result, err
+		}
+		if services.providerControl != nil {
+			cycle, err := services.providerControl.ControlOne(ctx, workspace)
+			if err != nil {
+				return result, err
+			}
+			result.ProviderControlCycles++
+			if cycle.CancellationHandled {
+				result.ProviderCancellationsHandled++
+			}
+			if cycle.ReconciliationHandled {
+				result.ProviderReconciliationsHandled++
+			}
+			if cycle.CancellationHandled || cycle.ReconciliationHandled {
+				logger.Info("provider control cycle handled durable work", "workspace_id", string(workspace), "cancellation_handled", cycle.CancellationHandled, "cancellation_outcome_unknown", cycle.CancellationOutcomeUnknown, "reconciliation_handled", cycle.ReconciliationHandled)
+			}
+		}
+		if services.settlement != nil {
+			receipt, err := services.settlement.SettleOne(ctx, string(workspace))
+			switch {
+			case err == nil:
+				result.SettlementsHandled++
+				logger.Info("usage settlement handled durable work", "workspace_id", string(workspace), "charged_micro", receipt.ChargedMicro)
+			case errors.Is(err, settlementapp.ErrNoWork):
+			case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+				return result, err
+			default:
+				return result, err
+			}
+		}
+	}
+	return result, nil
+}
+
 func BuildDispatchSupervisor(control *runapp.WorkerControl, c WorkerConfig, runtime *ReviewedDispatchRuntime) (*runapp.DispatchSupervisor, error) {
 	if control == nil || !c.DispatchEnabled || runtime == nil || runtime.executor == nil {
 		return nil, errors.New("worker dispatch requires an explicitly reviewed executor runtime")
@@ -191,15 +269,18 @@ func nonFatalDispatchError(err error) bool {
 	return errors.Is(err, runapp.ErrNoWork) || errors.Is(err, runapp.ErrExecutorOutcomeUnknown) || errors.Is(err, runapp.ErrInvalidExecutorResponse) || errors.Is(err, runapp.ErrWorkerLeaseLost)
 }
 
-func runWorker(ctx context.Context, logger *slog.Logger, getenv func(string) string, runtime *ReviewedDispatchRuntime) error {
+func runWorker(ctx context.Context, logger *slog.Logger, getenv func(string) string, services *ReviewedWorkerServices) error {
 	c, err := LoadWorkerConfig(getenv)
 	if err != nil {
 		return err
 	}
-	if c.DispatchEnabled && runtime == nil {
+	if c.DispatchEnabled && (services == nil || services.dispatch == nil) {
 		return errors.New("worker dispatch requires an explicitly reviewed executor runtime")
 	}
 	if !c.ControlEnabled {
+		if services != nil && (services.providerControl != nil || services.settlement != nil) {
+			return errors.New("reviewed background services require worker control and explicit workspaces")
+		}
 		logger.Info("worker started", "mode", "idle", "task_processing_enabled", false)
 		<-ctx.Done()
 		logger.Info("worker stopped gracefully")
@@ -212,7 +293,7 @@ func runWorker(ctx context.Context, logger *slog.Logger, getenv func(string) str
 	defer closeResources()
 	var supervisor *runapp.DispatchSupervisor
 	if c.DispatchEnabled {
-		supervisor, err = BuildDispatchSupervisor(control, c, runtime)
+		supervisor, err = BuildDispatchSupervisor(control, c, services.dispatch)
 		if err != nil {
 			return err
 		}
@@ -249,6 +330,9 @@ func runWorker(ctx context.Context, logger *slog.Logger, getenv func(string) str
 				return e
 			}
 		}
+		if _, e := RunReviewedRuntimeCycle(ctx, logger, c.Workspaces, services); e != nil {
+			return e
+		}
 		return nil
 	}
 	if err = cycle(); err != nil {
@@ -283,5 +367,16 @@ func RunWorker(ctx context.Context, logger *slog.Logger) error {
 }
 
 func RunWorkerWithReviewedRuntime(ctx context.Context, logger *slog.Logger, runtime *ReviewedDispatchRuntime) error {
-	return runWorker(ctx, logger, os.Getenv, runtime)
+	services, err := NewReviewedWorkerServices(runtime, nil, nil)
+	if err != nil {
+		return err
+	}
+	return runWorker(ctx, logger, os.Getenv, services)
+}
+
+func RunWorkerWithReviewedServices(ctx context.Context, logger *slog.Logger, services *ReviewedWorkerServices) error {
+	if services == nil {
+		return errors.New("reviewed worker services are required")
+	}
+	return runWorker(ctx, logger, os.Getenv, services)
 }

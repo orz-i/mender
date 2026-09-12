@@ -17,10 +17,14 @@ import (
 
 type UsageSettlementRuntimeConfig struct{ DatabaseURL string }
 
+type usageSettlementRunner interface {
+	SettleOne(context.Context, string) (settlementapp.Receipt, error)
+}
+
 // ReviewedUsageSettlementRuntime is a bounded library composition. It has no
 // scheduler and performs no network calls; a reviewed host chooses workspaces
 // and cadence later.
-type ReviewedUsageSettlementRuntime struct{ service *settlementapp.Service }
+type ReviewedUsageSettlementRuntime struct{ service usageSettlementRunner }
 
 func (r *ReviewedUsageSettlementRuntime) SettleOne(ctx context.Context, workspace string) (settlementapp.Receipt, error) {
 	if r == nil || r.service == nil {

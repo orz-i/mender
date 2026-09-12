@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -20,6 +21,7 @@ import (
 	runpg "github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/postgres"
 	runapp "github.com/orz-i/mender/backend/internal/contexts/execution/application"
 	"github.com/orz-i/mender/backend/internal/contexts/execution/application/ports"
+	rundomain "github.com/orz-i/mender/backend/internal/contexts/execution/domain"
 	"github.com/orz-i/mender/backend/internal/contexts/identity/adapters/outbound/keycodec"
 	database "github.com/orz-i/mender/backend/internal/platform/postgres"
 	"github.com/orz-i/mender/backend/migrations"
@@ -148,11 +150,14 @@ VALUES('ws_control_runtime',$1,'sa_control_runtime','key_control_runtime',$1||'_
 	}, secrets)
 	must(t, err)
 	defer closeControl()
+	services, err := bootstrap.NewReviewedWorkerServices(nil, controlRuntime, nil)
+	must(t, err)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	statusSubmission := seedAccepted("run_control_status", "provider/request-control-status")
-	cycle, err := controlRuntime.ControlOne(ctx, "ws_control_runtime")
+	cycle, err := bootstrap.RunReviewedRuntimeCycle(ctx, logger, []rundomain.WorkspaceID{"ws_control_runtime"}, services)
 	must(t, err)
-	if cycle.CancellationHandled || cycle.CancellationOutcomeUnknown || !cycle.ReconciliationHandled || statusCalls.Load() != 1 || cancelCalls.Load() != 0 {
+	if cycle.ProviderControlCycles != 1 || cycle.ProviderCancellationsHandled != 0 || cycle.ProviderReconciliationsHandled != 1 || cycle.SettlementsHandled != 0 || statusCalls.Load() != 1 || cancelCalls.Load() != 0 {
 		t.Fatal("status control cycle did not use the bounded reviewed path", cycle, statusCalls.Load(), cancelCalls.Load())
 	}
 	var runState, jobState string
@@ -167,9 +172,9 @@ VALUES('ws_control_runtime',$1,'sa_control_runtime','key_control_runtime',$1||'_
 	must(t, err)
 	_, err = requests.Request(ctx, ports.Caller{WorkspaceID: "ws_control_runtime", SubjectID: "sa_control_runtime", CredentialID: "key_control_runtime"}, "run_control_cancel", "stop")
 	must(t, err)
-	cycle, err = controlRuntime.ControlOne(ctx, "ws_control_runtime")
+	cycle, err = bootstrap.RunReviewedRuntimeCycle(ctx, logger, []rundomain.WorkspaceID{"ws_control_runtime"}, services)
 	must(t, err)
-	if !cycle.CancellationHandled || cycle.CancellationOutcomeUnknown || cycle.ReconciliationHandled || cancelCalls.Load() != 1 || statusCalls.Load() != 1 {
+	if cycle.ProviderControlCycles != 1 || cycle.ProviderCancellationsHandled != 1 || cycle.ProviderReconciliationsHandled != 0 || cycle.SettlementsHandled != 0 || cancelCalls.Load() != 1 || statusCalls.Load() != 1 {
 		t.Fatal("cancel control cycle did not converge exactly once", cycle, statusCalls.Load(), cancelCalls.Load())
 	}
 	var cancelState string
