@@ -25,6 +25,9 @@ import (
 	"github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/filesecret"
 	supplyapp "github.com/orz-i/mender/backend/internal/contexts/supply/application"
 	database "github.com/orz-i/mender/backend/internal/platform/postgres"
+	launchidentity "github.com/orz-i/mender/backend/internal/processes/consolelaunch/adapters/outbound/identityaccess"
+	launchpg "github.com/orz-i/mender/backend/internal/processes/consolelaunch/adapters/outbound/postgres"
+	launchapp "github.com/orz-i/mender/backend/internal/processes/consolelaunch/application"
 	"github.com/orz-i/mender/backend/migrations"
 )
 
@@ -72,8 +75,10 @@ func exerciseHumanBrowserSessions(t *testing.T, ctx context.Context, owner *pgxp
 	t.Helper()
 	sessionsPool, _ := openTemporaryRole(t, ctx, owner, runtimeDSN, "mender_browser_session_", migrations.GrantBrowserSession)
 	connectionPool, _ := openTemporaryRole(t, ctx, owner, runtimeDSN, "mender_connection_manager_", migrations.GrantConnectionManager)
+	launchPool, _ := openTemporaryRole(t, ctx, owner, runtimeDSN, "mender_console_launch_", migrations.GrantRuntime)
 	must(t, database.BrowserSessionRole(ctx, sessionsPool))
 	must(t, database.ConnectionManagerRole(ctx, connectionPool))
+	must(t, database.RuntimeRole(ctx, launchPool))
 	if database.BrowserSessionRole(ctx, owner) == nil {
 		t.Fatal("owner accepted as browser-session principal")
 	}
@@ -112,6 +117,29 @@ func exerciseHumanBrowserSessions(t *testing.T, ctx context.Context, owner *pgxp
 	must(t, err)
 	actor, err := humanAccess.Authenticate(ctx, issued.SessionToken)
 	must(t, err)
+	_, err = owner.Exec(ctx, `INSERT INTO catalog.tool_versions(id,tool_id,version,provider_id,price_version_id,deployment_revision,title,description,input_schema,output_schema,side_effect,idempotency,mcp_publishable,state,published_at) VALUES('tool_human_launch_v1','tool_human_launch','1.0.0','provider_human_alpha','price_human_launch_v1','deploy_human_launch_v1','Human Search','Reviewed human launch option','{"type":"object","additionalProperties":false,"required":["query"],"properties":{"query":{"type":"string","minLength":1}}}'::jsonb,'{"type":"object"}'::jsonb,'read_only','safe_read',false,'published',$1)`, base)
+	must(t, err)
+	_, err = owner.Exec(ctx, `INSERT INTO distribution.toolset_bindings(workspace_id,toolset_version_id,tool_id,tool_version_label,tool_version_id,budget_id,connection_id,state,published_at) VALUES('ws_human_alpha','set_human_launch_v1','tool_human_launch','1.0.0','tool_human_launch_v1','budget_human_launch','conn_human_alpha','published',$1)`, base)
+	must(t, err)
+	_, err = owner.Exec(ctx, `INSERT INTO commerce.price_versions(id,tool_version_id,currency,reserve_micro,charge_micro,billing_policy,starts_at,ends_at,active) VALUES('price_human_launch_v1','tool_human_launch_v1','USD',75,75,'fixed_success_only',$1,$2,true)`, base, base.Add(2*time.Hour))
+	must(t, err)
+	_, err = owner.Exec(ctx, `INSERT INTO commerce.budget_periods(workspace_id,budget_id,period_id,currency,starts_at,ends_at,limit_micro) VALUES('ws_human_alpha','budget_human_launch','period_human_launch','USD',$1,$2,1000)`, base, base.Add(2*time.Hour))
+	must(t, err)
+	_, err = owner.Exec(ctx, `INSERT INTO connections.connection_grants(workspace_id,connection_id,subject_id,active,created_at,expires_at) VALUES('ws_human_alpha','conn_human_alpha','user_human_alpha',true,$1,$2)`, base, base.Add(2*time.Hour))
+	must(t, err)
+	launchAccess := launchidentity.New(identityfacade.NewHuman(service))
+	launchService, err := launchapp.New(launchAccess, launchpg.New(launchPool), clock)
+	must(t, err)
+	launchActor, err := launchAccess.Authenticate(ctx, issued.SessionToken)
+	must(t, err)
+	launchOptions, err := launchService.List(ctx, launchActor, "ws_human_alpha")
+	must(t, err)
+	if len(launchOptions) != 1 || launchOptions[0].ToolsetVersionID != "set_human_launch_v1" || launchOptions[0].ConnectionID != "conn_human_alpha" || launchOptions[0].ReserveMicro != 75 || launchOptions[0].Currency != "USD" {
+		t.Fatal("human launch discovery did not return the safe callable projection", launchOptions)
+	}
+	if _, err = launchService.List(ctx, launchActor, "ws_other"); !errors.Is(err, launchapp.ErrForbidden) {
+		t.Fatal("human launch discovery crossed Workspace membership", err)
+	}
 	vault, err := filesecret.New(t.TempDir())
 	must(t, err)
 	oauthService, err := connectionapp.NewOAuth(humanAccess, connectionpg.New(connectionPool), &integrationOAuthProvider{at: clock.at}, connectionsupplycredentials.New(vault), &integrationOAuthRandom{}, clock, 10*time.Minute)

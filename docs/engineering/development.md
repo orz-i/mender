@@ -59,6 +59,8 @@ pnpm dev:api
 
 前端 `/` 提供 Alpha 导航，`/status` 发送真实健康请求；`/workspaces` 在 Console OIDC 启用后读取 HttpOnly server-side session 与当前 Workspace membership；`/connections` 使用独立 Connection manager 角色列出安全元数据、允许 Owner/Admin 撤销，并可启动一个服务端 reviewed OAuth Provider 的 PKCE 创建流程；`/runs` 通过显式短时 Human → Run delegation 读取/取消 Execution。OIDC Cookie 本身不能访问 Run API；delegation 只包含 `run:read` 与可选 `run:cancel`，没有 `run:create`，token 只保存在页面内存。Machine `/api/v1` 入口继续用于服务/Agent identity，Console 使用独立 `/api/console/v1` delegated surface。详见 [Console Run Explorer](2026-09-12-console-run-explorer.md)、[Workspace Console Alpha](2026-09-12-workspace-console-alpha.md)、[Connection self-service Alpha](2026-09-12-connection-self-service-alpha.md)、[Reviewed OAuth Connection Alpha](2026-09-12-connection-oauth-alpha.md) 与 [Human → Run delegation Alpha](2026-09-12-human-run-delegation-alpha.md)。
 
+可选 `MENDER_CONSOLE_LAUNCH_DISCOVERY_ENABLED=true` 后，`GET /api/console/v1/workspaces/{workspace_id}/launch-options` 通过当前 Human Membership + Workspace RLS 返回发布中的 Toolset/ToolVersion 与当前用户可用 Connection 的安全启动投影。它只暴露输入 Schema、Provider/Connection 标识、币种和 reserve quote，不暴露 credential ref、预算 ID/余额，也不等于 `run:create` 授权。详见 [Human launch discovery Alpha](2026-09-12-human-launch-discovery-alpha.md)。
+
 ### 可选持久化子集
 
 保持 `MENDER_RUN_API_ENABLED=false` 时，不会创建数据库连接或迁移。启用时配置受限的 `MENDER_DATABASE_URL`；管理操作使用单独进程的 `MENDER_ADMIN_DATABASE_URL`。不得将迁移所有者或 superuser 配给 API。完整准备步骤、发行／撤销命令、回环测试库要求与限制见 [身份与 PostgreSQL 切片](2026-09-09-identity-postgres.md)。

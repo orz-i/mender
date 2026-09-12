@@ -41,6 +41,10 @@ import (
 	admissionidentityaccess "github.com/orz-i/mender/backend/internal/processes/admission/adapters/outbound/identityaccess"
 	"github.com/orz-i/mender/backend/internal/processes/admission/adapters/outbound/identitycancel"
 	admissionapp "github.com/orz-i/mender/backend/internal/processes/admission/application"
+	consolelaunchhttp "github.com/orz-i/mender/backend/internal/processes/consolelaunch/adapters/inbound/httpapi"
+	consolelaunchidentity "github.com/orz-i/mender/backend/internal/processes/consolelaunch/adapters/outbound/identityaccess"
+	consolelaunchpg "github.com/orz-i/mender/backend/internal/processes/consolelaunch/adapters/outbound/postgres"
+	consolelaunchapp "github.com/orz-i/mender/backend/internal/processes/consolelaunch/application"
 	mcphttp "github.com/orz-i/mender/backend/internal/processes/mcpbridge/adapters/inbound/httpapi"
 	mcpadmission "github.com/orz-i/mender/backend/internal/processes/mcpbridge/adapters/outbound/admissionaccess"
 	mcpexecution "github.com/orz-i/mender/backend/internal/processes/mcpbridge/adapters/outbound/executionaccess"
@@ -72,6 +76,7 @@ type APIConfig struct {
 	ConsoleSessionTTL               time.Duration
 	ConsoleRunDelegationEnabled     bool
 	ConsoleRunDelegationTTL         time.Duration
+	ConsoleLaunchDiscoveryEnabled   bool
 	ConsoleConnectionsEnabled       bool
 	ConnectionManagerDatabaseURL    string
 	ConsoleConnectionOAuthEnabled   bool
@@ -167,6 +172,16 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 		}
 	default:
 		return c, errors.New("MENDER_CONSOLE_CONNECTIONS_ENABLED must be true or false")
+	}
+	switch getenv("MENDER_CONSOLE_LAUNCH_DISCOVERY_ENABLED") {
+	case "", "false":
+	case "true":
+		if !c.ConsoleOIDCEnabled {
+			return APIConfig{}, errors.New("Console launch discovery requires Console OIDC")
+		}
+		c.ConsoleLaunchDiscoveryEnabled = true
+	default:
+		return c, errors.New("MENDER_CONSOLE_LAUNCH_DISCOVERY_ENABLED must be true or false")
 	}
 	switch getenv("MENDER_CONSOLE_CONNECTION_OAUTH_ENABLED") {
 	case "", "false":
@@ -315,7 +330,7 @@ func (systemClock) Now() time.Time { return time.Now().UTC().Truncate(time.Micro
 // BuildAPI never migrates, seeds data or falls back to a test repository.
 func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	if !c.RunAPIEnabled {
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleConnectionsEnabled || c.ConsoleConnectionOAuthEnabled {
+		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleConnectionsEnabled || c.ConsoleConnectionOAuthEnabled {
 			return nil, nil, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return httpserver.NewRouter(), func() {}, nil
@@ -325,6 +340,9 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	}
 	if c.ConsoleRunDelegationEnabled && (!c.ConsoleOIDCEnabled || !c.RunReadAPIEnabled) {
 		return nil, nil, errors.New("Console Run delegation requires Console OIDC and Run read API")
+	}
+	if c.ConsoleLaunchDiscoveryEnabled && !c.ConsoleOIDCEnabled {
+		return nil, nil, errors.New("Console launch discovery requires Console OIDC")
 	}
 	if c.ConsoleConnectionOAuthEnabled && (!c.ConsoleOIDCEnabled || !c.ConsoleConnectionsEnabled) {
 		return nil, nil, errors.New("Connection OAuth requires Console OIDC and Console Connections")
@@ -461,6 +479,19 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 			return failed(buildErr)
 		}
 		registers = append(registers, consoleHandler.Register)
+		humanIdentity := facade.NewHuman(sessions)
+		if c.ConsoleLaunchDiscoveryEnabled {
+			launchAccess := consolelaunchidentity.New(humanIdentity)
+			launchService, launchErr := consolelaunchapp.New(launchAccess, consolelaunchpg.New(pool), systemClock{})
+			if launchErr != nil {
+				return failed(launchErr)
+			}
+			launchHandler, launchErr := consolelaunchhttp.New(launchService)
+			if launchErr != nil {
+				return failed(launchErr)
+			}
+			registers = append(registers, launchHandler.Register)
+		}
 		if c.ConsoleRunDelegationEnabled {
 			delegations, buildErr := identityapp.NewRunDelegationService(identitypg.NewRunDelegations(browserSessionPool, browserSessionPool), sessions, sessionTokenCodec, systemClock{}, c.ConsoleRunDelegationTTL)
 			if buildErr != nil {
@@ -527,7 +558,7 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 			if buildErr = database.ConnectionManagerRole(start, connectionManagerPool); buildErr != nil {
 				return failed(buildErr)
 			}
-			humanAccess := connectionidentityaccess.NewHuman(facade.NewHuman(sessions))
+			humanAccess := connectionidentityaccess.NewHuman(humanIdentity)
 			connectionService, serviceErr := connectionapp.NewHuman(connectionpg.New(connectionManagerPool), humanAccess)
 			if serviceErr != nil {
 				return failed(serviceErr)
