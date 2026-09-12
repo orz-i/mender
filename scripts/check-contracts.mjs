@@ -98,19 +98,23 @@ console.log('PASS: authenticated Run query/cancel v0.3.0 schemas, cancellation e
 
 const readAPI = parse(readFileSync(join(root, 'run-read.openapi.yaml'), 'utf8'));
 assert.equal(readAPI.openapi, '3.1.0');
-assert.equal(Object.keys(readAPI.paths).length, 2);
+assert.equal(readAPI.info.version, '0.2.0');
+assert.equal(Object.keys(readAPI.paths).length, 4);
+assert.ok(readAPI.components.securitySchemes.MachineKey);
+assert.ok(readAPI.components.securitySchemes.RunDelegation);
 const readIDs = new Set();
 for (const [path, item] of Object.entries(readAPI.paths)) {
   const expected = [...path.matchAll(/\{([^}]+)\}/g)].map((match) => match[1]).sort();
   assert.deepEqual(item.parameters.filter((p) => p.in === 'path' && p.required).map((p) => p.name).sort(), expected);
   assert.ok(item.get.operationId && !readIDs.has(item.get.operationId)); readIDs.add(item.get.operationId);
+  if (path.startsWith('/api/console/')) assert.deepEqual(item.get.security, [{ RunDelegation: [] }]);
   const ref = item.get.responses['200'].content['application/json'].schema.$ref;
   assert.ok(readAPI.components.schemas[ref.split('/').at(-1)]);
 }
 validate(readAPI.components.schemas.RunListResponse, { data: [], meta: { request_id: 'example', next_cursor: null } }, 'Run list empty response');
 validate(readAPI.components.schemas.RunListResponse, { data: [{ run_id: 'run_a', workspace_id: 'ws_a', execution_state: 'queued', version: '1', created_at: '2026-09-09T00:00:00Z', updated_at: '2026-09-09T00:00:00Z' }], meta: { request_id: 'example', next_cursor: 'opaque.example' } }, 'Run list response');
 validate(readAPI.components.schemas.EventListResponse, { data: [{ version: '2', event_type: 'run.state_changed', execution_state: 'canceled', occurred_at: '2026-09-09T00:00:00Z', subject_id: 'subject_a', reason: 'example only' }], meta: { request_id: 'example', next_cursor: null, through_version: '2' } }, 'Run event response');
-console.log('PASS: authorized Run list / finite event timeline schemas, local response refs and examples; no database execution claimed.');
+console.log('PASS: machine + delegated Console Run list / finite event timeline schemas, signed cursor watermark contract and local response examples.');
 
 const artifactAPI = parse(readFileSync(join(root, 'artifact-read.openapi.yaml'), 'utf8'));
 assert.equal(artifactAPI.openapi, '3.1.0');

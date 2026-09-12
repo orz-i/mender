@@ -21,20 +21,37 @@ test('lists protected runs without placing the machine token in the URL', async 
   assert.equal(page.nextCursor, 'cursor_a');
 });
 
-test('loads detail, events and artifacts from the existing protected surface', async () => {
+test('loads detail, paged events and artifact content from the existing protected surface', async () => {
   const urls = [];
   const client = createRunsClient('', async (url) => {
     urls.push(url);
-    if (url.endsWith('/events?limit=100')) return Response.json({ data: [{ version: '2', event_type: 'run.state_changed', execution_state: 'running', occurred_at: '2026-09-12T00:00:02Z', subject_id: 'sa_a', reason: '' }], meta: { request_id: 'req_e', next_cursor: null, through_version: '2' } });
-    if (url.endsWith('/artifacts')) return Response.json({ data: [{ artifact_id: 'artifact_a', kind: 'result', media_type: 'application/json', size_bytes: 12, created_at: '2026-09-12T00:00:03Z' }], meta: { request_id: 'req_art' } });
+    if (url.endsWith('/events?limit=1')) return Response.json({ data: [{ version: '2', event_type: 'run.state_changed', execution_state: 'running', occurred_at: '2026-09-12T00:00:02Z', subject_id: 'sa_a', reason: '' }], meta: { request_id: 'req_e1', next_cursor: 'cursor_e', through_version: '3' } });
+    if (url.endsWith('/events?limit=1&cursor=cursor_e')) return Response.json({ data: [{ version: '3', event_type: 'run.state_changed', execution_state: 'succeeded', occurred_at: '2026-09-12T00:00:03Z', subject_id: 'worker', reason: '' }], meta: { request_id: 'req_e2', next_cursor: null, through_version: '3' } });
+    if (url.endsWith('/artifacts/artifact_a')) return Response.json({ data: { artifact_id: 'artifact_a', kind: 'provider_result', media_type: 'application/json', size_bytes: 12, created_at: '2026-09-12T00:00:04Z', content: { answer: 42 } }, meta: { request_id: 'req_art_detail' } });
+    if (url.endsWith('/artifacts')) return Response.json({ data: [{ artifact_id: 'artifact_a', kind: 'provider_result', media_type: 'application/json', size_bytes: 12, created_at: '2026-09-12T00:00:04Z' }], meta: { request_id: 'req_art' } });
     return Response.json({ data: run('running'), meta: { request_id: 'req_run' } });
   });
   const access = { workspaceId: 'ws_a', token: 'mender_live_test.secret', runId: 'run_a' };
-  const [detail, events, artifacts] = await Promise.all([client.getRun(access), client.listRunEvents(access), client.listRunArtifacts(access)]);
+  const [detail, events, artifacts, artifact] = await Promise.all([client.getRun(access), client.listRunEvents({ ...access, limit: 1 }), client.listRunArtifacts(access), client.getRunArtifact({ ...access, artifactId: 'artifact_a' })]);
   assert.equal(detail.executionState, 'running');
   assert.equal(events.items[0].version, '2');
+  assert.equal(events.nextCursor, 'cursor_e');
+  const page2 = await client.listRunEvents({ ...access, limit: 1, cursor: events.nextCursor, expectedThroughVersion: events.throughVersion });
+  assert.equal(page2.items[0].executionState, 'succeeded');
+  assert.equal(page2.throughVersion, '3');
   assert.equal(artifacts.items[0].artifactId, 'artifact_a');
-  assert.equal(urls.length, 3);
+  assert.deepEqual(artifact.content, { answer: 42 });
+  assert.equal(urls.length, 5);
+});
+
+test('event pagination and artifact detail fail closed on watermark or contract drift', async () => {
+  const access = { workspaceId: 'ws_a', token: 'mender_live_test.secret', runId: 'run_a' };
+  const drift = createRunsClient('', async (url) => {
+    if (url.includes('/events')) return Response.json({ data: [{ version: '4', event_type: 'run.state_changed', execution_state: 'running', occurred_at: '2026-09-12T00:00:02Z', subject_id: 'sa_a', reason: '' }], meta: { request_id: 'req', next_cursor: null, through_version: '3' } });
+    return Response.json({ data: { artifact_id: 'artifact_a', kind: 'provider_result', media_type: 'text/plain', size_bytes: 2, created_at: '2026-09-12T00:00:04Z', content: {} }, meta: { request_id: 'req' } });
+  });
+  await assert.rejects(drift.listRunEvents({ ...access, expectedThroughVersion: '3' }), /顺序或 watermark/);
+  await assert.rejects(drift.getRunArtifact({ ...access, artifactId: 'artifact_a' }), /Artifact/);
 });
 
 test('cancels with strict JSON and surfaces API errors without token leakage', async () => {

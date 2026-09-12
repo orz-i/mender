@@ -35,6 +35,10 @@ export interface ArtifactRecord {
   createdAt: string;
 }
 
+export interface ArtifactDetailRecord extends ArtifactRecord {
+  content: unknown;
+}
+
 export interface Page<T> {
   items: T[];
   nextCursor: string | null;
@@ -74,11 +78,22 @@ interface RunRequest extends Access {
   signal?: AbortSignal;
 }
 
+interface EventRequest extends RunRequest {
+  limit?: number;
+  cursor?: string;
+  expectedThroughVersion?: string;
+}
+
+interface ArtifactRequest extends RunRequest {
+  artifactId: string;
+}
+
 interface CancelRunRequest extends RunRequest {
   reason: string;
 }
 
 const idPattern = /^[A-Za-z0-9_-]{1,128}$/;
+const artifactIdPattern = /^[A-Za-z0-9._:-]{1,160}$/;
 const states = new Set<RunExecutionState>([
   'queued', 'running', 'waiting_input', 'cancel_requested', 'reconciling',
   'succeeded', 'failed', 'canceled', 'timed_out',
@@ -107,7 +122,15 @@ function string(value: unknown, message = '服务返回了无法识别的响应'
 
 function optionalCursor(value: unknown) {
   if (value === null || value === undefined) return null;
-  return string(value);
+  const cursor = string(value);
+  if (cursor.length < 1 || cursor.length > 2048) throw new Error('服务返回了无效的分页游标');
+  return cursor;
+}
+
+function revision(value: unknown, message = '服务返回了无效的 Run revision') {
+  const raw = string(value, message);
+  if (!/^[1-9][0-9]*$/.test(raw)) throw new Error(message);
+  return BigInt(raw);
 }
 
 function parseState(value: unknown): RunExecutionState {
@@ -135,6 +158,7 @@ export function createConsoleRunsClient(baseUrl = '', fetcher: typeof fetch = fe
 function parseEvent(value: unknown): RunEventRecord {
   const raw = object(value);
   if (raw.event_type !== 'run.state_changed') throw new Error('服务返回了未知的 Run 事件');
+  revision(raw.version, '服务返回了无效的 Run event revision');
   return {
     version: string(raw.version),
     eventType: raw.event_type,
@@ -150,10 +174,16 @@ function parseArtifact(value: unknown): ArtifactRecord {
   if (typeof raw.size_bytes !== 'number' || !Number.isSafeInteger(raw.size_bytes) || raw.size_bytes < 0) {
     throw new Error('服务返回了无法识别的 Artifact');
   }
+  const artifactId = string(raw.artifact_id);
+  const kind = string(raw.kind);
+  const mediaType = string(raw.media_type);
+  if (!artifactIdPattern.test(artifactId) || kind !== 'provider_result' || mediaType !== 'application/json' || raw.size_bytes > 1_048_576) {
+    throw new Error('服务返回了无法识别的 Artifact');
+  }
   return {
-    artifactId: string(raw.artifact_id),
-    kind: string(raw.kind),
-    mediaType: string(raw.media_type),
+    artifactId,
+    kind,
+    mediaType,
     sizeBytes: raw.size_bytes,
     createdAt: string(raw.created_at),
   };
@@ -221,13 +251,28 @@ export function createRunsClient(baseUrl = '', fetcher: typeof fetch = fetch, ap
       if (item.workspaceId !== request.workspaceId || item.runId !== request.runId) throw new Error('服务返回了错误的 Run');
       return item;
     },
-    async listRunEvents(request: RunRequest): Promise<RunEventsPage> {
+    async listRunEvents(request: EventRequest): Promise<RunEventsPage> {
       requireId(request.runId, 'Run ID');
-      const raw = object(await jsonRequest(fetcher, `${runBase(request.workspaceId)}/${encodeURIComponent(request.runId)}/events?limit=100`, request, { signal: requestSignal(request.signal) }));
+      const limit = request.limit ?? 20;
+      if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new Error('Run Event 分页数量无效');
+      if (request.cursor !== undefined && (request.cursor.length < 1 || request.cursor.length > 2048)) throw new Error('Run Event cursor 无效');
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (request.cursor) params.set('cursor', request.cursor);
+      const raw = object(await jsonRequest(fetcher, `${runBase(request.workspaceId)}/${encodeURIComponent(request.runId)}/events?${params}`, request, { signal: requestSignal(request.signal) }));
       if (!Array.isArray(raw.data)) throw new Error('服务返回了无法识别的 Run 事件');
       const meta = object(raw.meta);
+      const throughVersion = string(meta.through_version);
+      const through = revision(throughVersion, '服务返回了无效的 through_version');
+      if (request.expectedThroughVersion !== undefined && request.expectedThroughVersion !== throughVersion) throw new Error('Run Event 分页快照发生漂移');
+      const items = raw.data.map(parseEvent);
+      let previous = 1n;
+      for (const item of items) {
+        const current = revision(item.version, '服务返回了无效的 Run event revision');
+        if (current <= previous || current > through) throw new Error('Run Event 分页顺序或 watermark 无效');
+        previous = current;
+      }
       return {
-        items: raw.data.map(parseEvent), nextCursor: optionalCursor(meta.next_cursor), requestId: string(meta.request_id), throughVersion: string(meta.through_version),
+        items, nextCursor: optionalCursor(meta.next_cursor), requestId: string(meta.request_id), throughVersion,
       };
     },
     async listRunArtifacts(request: RunRequest): Promise<Page<ArtifactRecord>> {
@@ -236,6 +281,15 @@ export function createRunsClient(baseUrl = '', fetcher: typeof fetch = fetch, ap
       if (!Array.isArray(raw.data)) throw new Error('服务返回了无法识别的 Artifact 列表');
       const meta = object(raw.meta);
       return { items: raw.data.map(parseArtifact), nextCursor: null, requestId: string(meta.request_id) };
+    },
+    async getRunArtifact(request: ArtifactRequest): Promise<ArtifactDetailRecord> {
+      requireId(request.runId, 'Run ID');
+      if (!artifactIdPattern.test(request.artifactId)) throw new Error('Artifact ID 格式无效');
+      const raw = object(await jsonRequest(fetcher, `${runBase(request.workspaceId)}/${encodeURIComponent(request.runId)}/artifacts/${encodeURIComponent(request.artifactId)}`, request, { signal: requestSignal(request.signal) }));
+      const data = object(raw.data);
+      const metadata = parseArtifact(data);
+      if (metadata.artifactId !== request.artifactId || !Object.prototype.hasOwnProperty.call(data, 'content')) throw new Error('服务返回了错误的 Artifact');
+      return { ...metadata, content: data.content };
     },
     async cancelRun(request: CancelRunRequest): Promise<RunRecord> {
       requireId(request.runId, 'Run ID');

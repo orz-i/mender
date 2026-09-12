@@ -1,10 +1,11 @@
 openapi: 3.1.0
 info:
   title: Mender authenticated Run list and finite timeline subset
-  version: 0.1.0
+  version: 0.2.0
   description: >-
     Requires both Run API and Run read API feature flags plus a protected cursor key.
-    Machine run:read scope covers its Workspace. No admission, billing, SSE or Worker execution.
+    Machine run:read scope covers its Workspace. Console routes use an explicit short-lived Human Run delegation.
+    Browser session cookies are not Run credentials. No admission, billing, SSE or Worker execution is implied by this read contract.
     List order is created_at DESC, id COLLATE C DESC; mutable state filtering is a live view, not a cross-request MVCC snapshot.
     Event cursors pin the first page's upper Run revision. Start a fresh traversal to observe newer events.
     Cursors are signed, not encrypted, expire in 15 minutes and bind caller, credential, Workspace, query kind, state and limit.
@@ -46,9 +47,45 @@ paths:
         '404': {description: Run not found in authorized Workspace}
         '503': {description: Dependency or stored projection unavailable}
         '504': {description: Request deadline exceeded}
+  /api/console/v1/workspaces/{workspace_id}/runs:
+    parameters:
+      - {name: workspace_id, in: path, required: true, schema: {type: string, pattern: '^[A-Za-z0-9_-]{1,128}$'}}
+    get:
+      operationId: listDelegatedRuns
+      security: [{RunDelegation: []}]
+      parameters:
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+        - {name: cursor, in: query, schema: {type: string, minLength: 1, maxLength: 2048}}
+        - {name: state, in: query, schema: {type: string, enum: [queued, running, waiting_input, cancel_requested, reconciling, succeeded, failed, canceled, timed_out]}}
+      responses:
+        '200': {description: 'Run list authorized by the current explicit run:read delegation', content: {application/json: {schema: {$ref: '#/components/schemas/RunListResponse'}}}}
+        '400': {description: 'Invalid, duplicate or unknown query parameter; invalid, mismatched or expired cursor'}
+        '401': {description: Missing, invalid, expired or revoked Run delegation}
+        '403': {description: Workspace, membership or delegated scope denied}
+        '503': {description: Dependency unavailable}
+        '504': {description: Request deadline exceeded}
+  /api/console/v1/workspaces/{workspace_id}/runs/{run_id}/events:
+    parameters:
+      - {name: workspace_id, in: path, required: true, schema: {type: string, pattern: '^[A-Za-z0-9_-]{1,128}$'}}
+      - {name: run_id, in: path, required: true, schema: {type: string, pattern: '^[A-Za-z0-9_-]{1,128}$'}}
+    get:
+      operationId: listDelegatedRunEvents
+      security: [{RunDelegation: []}]
+      parameters:
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+        - {name: cursor, in: query, schema: {type: string, minLength: 1, maxLength: 2048}}
+      responses:
+        '200': {description: 'Ascending event revisions pinned to the first page through_version', content: {application/json: {schema: {$ref: '#/components/schemas/EventListResponse'}}}}
+        '400': {description: Invalid query or cursor; state filter not allowed}
+        '401': {description: Missing, invalid, expired or revoked Run delegation}
+        '403': {description: Workspace, membership or delegated run:read denied}
+        '404': {description: Run not found in authorized Workspace}
+        '503': {description: Dependency or stored projection unavailable}
+        '504': {description: Request deadline exceeded}
 components:
   securitySchemes:
     MachineKey: {type: http, scheme: bearer, description: 'Server-issued random machine API Key; never a client-provided subject identity'}
+    RunDelegation: {type: http, scheme: bearer, description: 'Explicit short-lived human Run delegation; browser session cookie is not a Run credential'}
   schemas:
     RunItem: &RunItem
       type: object
