@@ -50,9 +50,9 @@
     "ses_b73cf5f6073d42c5861409ba81162d3b": {
       "path": "docs/session/ses_b73cf5f6073d42c5861409ba81162d3b.md",
       "title": "Mender 当前完成情况与开发进度审计",
-      "status": "active",
+      "status": "completed",
       "created_at": "unix:1789198336",
-      "updated_at": "unix:1789199747",
+      "updated_at": "unix:1789199930",
       "parent_session_id": "ses_f2a20bc1f63049ef830f96688cbf0475"
     },
     "ses_f2a20bc1f63049ef830f96688cbf0475": {
