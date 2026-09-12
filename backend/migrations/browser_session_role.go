@@ -27,11 +27,13 @@ func GrantBrowserSession(ctx context.Context, pool *pgxpool.Pool, role string) e
 	defer rollback(tx)
 	for _, sql := range []string{
 		"GRANT USAGE ON SCHEMA identity,mender_meta TO " + id,
-		"GRANT SELECT ON mender_meta.schema_migrations,identity.workspaces,identity.users,identity.workspace_memberships,identity.oidc_identities,identity.browser_sessions,identity.run_delegations TO " + id,
+		"GRANT SELECT ON mender_meta.schema_migrations,identity.workspaces,identity.users,identity.workspace_memberships,identity.oidc_identities,identity.browser_sessions,identity.run_delegations,identity.run_start_delegations TO " + id,
 		"GRANT INSERT (digest,user_id,csrf_digest,created_at,expires_at,revoked_at) ON identity.browser_sessions TO " + id,
 		"GRANT UPDATE (revoked_at) ON identity.browser_sessions TO " + id,
 		"GRANT INSERT (id,digest,workspace_id,user_id,scopes,created_at,expires_at,revoked_at) ON identity.run_delegations TO " + id,
 		"GRANT UPDATE (revoked_at) ON identity.run_delegations TO " + id,
+		"GRANT INSERT (id,digest,workspace_id,user_id,toolset_version_id,tool_id,tool_version,tool_version_id,connection_id,currency,max_charge_micro,idempotency_key,created_at,expires_at,revoked_at) ON identity.run_start_delegations TO " + id,
+		"GRANT UPDATE (revoked_at) ON identity.run_start_delegations TO " + id,
 	} {
 		if _, err = tx.Exec(ctx, sql); err != nil {
 			return errors.New("browser-session grant failed")

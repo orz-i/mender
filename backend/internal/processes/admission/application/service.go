@@ -20,7 +20,16 @@ var (
 	ErrCommitUnconfirmed = errors.New("admission commit unconfirmed; retry the same idempotency key")
 )
 
-type Caller struct{ WorkspaceID, SubjectID, CredentialID string }
+type StartConstraint struct {
+	ToolsetVersionID, ToolID, ToolVersion, ToolVersionID, ConnectionID, Currency string
+	MaxChargeMicro                                                               int64
+	IdempotencyKey                                                               string
+}
+
+type Caller struct {
+	WorkspaceID, SubjectID, CredentialID string
+	Start                                *StartConstraint
+}
 type Request struct {
 	IdempotencyKey, ToolID, ToolVersion, ToolsetVersionID, ConnectionID, Currency, MaxChargeMicro string
 	Arguments                                                                                     []byte
@@ -153,6 +162,11 @@ func (s *Service) Admit(ctx context.Context, c Caller, q Request) (Receipt, erro
 	cap, err := amount(q.MaxChargeMicro)
 	if err != nil || !validKey(q.IdempotencyKey) || !validVersion(q.ToolVersion) || len(q.Currency) != 3 || strings.Trim(q.Currency, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") != "" {
 		return Receipt{}, ErrInvalid
+	}
+	if c.Start != nil {
+		if !ValidID(c.Start.ToolsetVersionID) || !ValidID(c.Start.ToolID) || !validVersion(c.Start.ToolVersion) || !ValidID(c.Start.ToolVersionID) || !ValidID(c.Start.ConnectionID) || len(c.Start.Currency) != 3 || strings.Trim(c.Start.Currency, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") != "" || c.Start.MaxChargeMicro < 0 || !validKey(c.Start.IdempotencyKey) {
+			return Receipt{}, ErrInvalid
+		}
 	}
 	// Every attempt, including replays, requires current authorization before any durable lookup.
 	if err = s.auth.Authorize(ctx, c, q); err != nil {

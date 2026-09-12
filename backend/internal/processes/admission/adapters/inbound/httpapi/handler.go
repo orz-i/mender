@@ -32,7 +32,11 @@ func New(service *application.Service, authenticator application.Authenticator) 
 }
 
 func (h *Handler) Register(router *gin.Engine) {
-	router.POST("/api/v1/workspaces/:workspace_id/runs", h.startRun)
+	h.RegisterAt(router, "/api/v1")
+}
+
+func (h *Handler) RegisterAt(router *gin.Engine, prefix string) {
+	router.POST(prefix+"/workspaces/:workspace_id/runs", h.startRun)
 }
 
 type toolRef struct{ ToolID, Version string }
@@ -158,7 +162,7 @@ func failure(c *gin.Context, requestID string, status int, code, message string)
 func failError(c *gin.Context, requestID string, err error) {
 	switch {
 	case errors.Is(err, application.ErrUnauthenticated):
-		failure(c, requestID, 401, "UNAUTHENTICATED", "A valid machine credential is required.")
+		failure(c, requestID, 401, "UNAUTHENTICATED", "A valid Run credential is required.")
 	case errors.Is(err, application.ErrForbidden):
 		failure(c, requestID, 403, "FORBIDDEN", "Operation is not permitted.")
 	case errors.Is(err, application.ErrConflict):

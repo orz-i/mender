@@ -40,6 +40,7 @@ import (
 	admissionhttp "github.com/orz-i/mender/backend/internal/processes/admission/adapters/inbound/httpapi"
 	admissionidentityaccess "github.com/orz-i/mender/backend/internal/processes/admission/adapters/outbound/identityaccess"
 	"github.com/orz-i/mender/backend/internal/processes/admission/adapters/outbound/identitycancel"
+	admissionidentitystart "github.com/orz-i/mender/backend/internal/processes/admission/adapters/outbound/identitystart"
 	admissionapp "github.com/orz-i/mender/backend/internal/processes/admission/application"
 	consolelaunchhttp "github.com/orz-i/mender/backend/internal/processes/consolelaunch/adapters/inbound/httpapi"
 	consolelaunchidentity "github.com/orz-i/mender/backend/internal/processes/consolelaunch/adapters/outbound/identityaccess"
@@ -76,6 +77,8 @@ type APIConfig struct {
 	ConsoleSessionTTL               time.Duration
 	ConsoleRunDelegationEnabled     bool
 	ConsoleRunDelegationTTL         time.Duration
+	ConsoleHumanStartEnabled        bool
+	ConsoleHumanStartDelegationTTL  time.Duration
 	ConsoleLaunchDiscoveryEnabled   bool
 	ConsoleConnectionsEnabled       bool
 	ConnectionManagerDatabaseURL    string
@@ -125,7 +128,7 @@ func loadConsoleSecrets(clientSecretFile, signingKeyFile string) (string, []byte
 }
 
 func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
-	c := APIConfig{ConsoleCookieSecure: true, ConsoleSessionTTL: 8 * time.Hour, ConsoleRunDelegationTTL: 10 * time.Minute, ConnectionOAuthFlowTTL: 10 * time.Minute}
+	c := APIConfig{ConsoleCookieSecure: true, ConsoleSessionTTL: 8 * time.Hour, ConsoleRunDelegationTTL: 10 * time.Minute, ConsoleHumanStartDelegationTTL: 5 * time.Minute, ConnectionOAuthFlowTTL: 10 * time.Minute}
 	switch getenv("MENDER_CONSOLE_OIDC_ENABLED") {
 	case "", "false":
 	case "true":
@@ -227,6 +230,23 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	default:
 		return c, errors.New("MENDER_RUN_START_API_ENABLED must be true or false")
 	}
+	switch getenv("MENDER_CONSOLE_HUMAN_START_ENABLED") {
+	case "", "false":
+	case "true":
+		c.ConsoleHumanStartEnabled = true
+		if !c.ConsoleOIDCEnabled || !c.ConsoleLaunchDiscoveryEnabled || !c.StartRunAPIEnabled {
+			return APIConfig{}, errors.New("Console Human StartRun requires Console OIDC, launch discovery and StartRun API")
+		}
+		if raw := getenv("MENDER_CONSOLE_HUMAN_START_DELEGATION_TTL"); raw != "" {
+			ttl, err := time.ParseDuration(raw)
+			if err != nil || ttl < time.Minute || ttl > 10*time.Minute {
+				return APIConfig{}, errors.New("Console Human StartRun delegation TTL must be between 1m and 10m")
+			}
+			c.ConsoleHumanStartDelegationTTL = ttl
+		}
+	default:
+		return c, errors.New("MENDER_CONSOLE_HUMAN_START_ENABLED must be true or false")
+	}
 	switch getenv("MENDER_RUN_COORDINATED_CANCEL_ENABLED") {
 	case "", "false":
 	case "true":
@@ -296,7 +316,7 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	}
 	switch getenv("MENDER_RUN_API_ENABLED") {
 	case "", "false":
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleConnectionsEnabled {
+		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleConnectionsEnabled || c.ConsoleConnectionOAuthEnabled {
 			return APIConfig{}, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return c, nil
@@ -330,7 +350,7 @@ func (systemClock) Now() time.Time { return time.Now().UTC().Truncate(time.Micro
 // BuildAPI never migrates, seeds data or falls back to a test repository.
 func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	if !c.RunAPIEnabled {
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleConnectionsEnabled || c.ConsoleConnectionOAuthEnabled {
+		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleConnectionsEnabled || c.ConsoleConnectionOAuthEnabled {
 			return nil, nil, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return httpserver.NewRouter(), func() {}, nil
@@ -343,6 +363,9 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	}
 	if c.ConsoleLaunchDiscoveryEnabled && !c.ConsoleOIDCEnabled {
 		return nil, nil, errors.New("Console launch discovery requires Console OIDC")
+	}
+	if c.ConsoleHumanStartEnabled && (!c.ConsoleOIDCEnabled || !c.ConsoleLaunchDiscoveryEnabled || !c.StartRunAPIEnabled) {
+		return nil, nil, errors.New("Console Human StartRun requires Console OIDC, launch discovery and StartRun API")
 	}
 	if c.ConsoleConnectionOAuthEnabled && (!c.ConsoleOIDCEnabled || !c.ConsoleConnectionsEnabled) {
 		return nil, nil, errors.New("Connection OAuth requires Console OIDC and Console Connections")
@@ -371,6 +394,7 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	var admissionPool *pgxpool.Pool
 	var browserSessionPool *pgxpool.Pool
 	var connectionManagerPool *pgxpool.Pool
+	var startDelegationFacade *facade.RunStartDelegations
 	closePools := func() {
 		if connectionManagerPool != nil {
 			connectionManagerPool.Close()
@@ -491,6 +515,18 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 				return failed(launchErr)
 			}
 			registers = append(registers, launchHandler.Register)
+		}
+		if c.ConsoleHumanStartEnabled {
+			startDelegations, buildErr := identityapp.NewRunStartDelegationService(identitypg.NewRunStartDelegations(browserSessionPool, browserSessionPool), sessions, sessionTokenCodec, systemClock{}, c.ConsoleHumanStartDelegationTTL)
+			if buildErr != nil {
+				return failed(buildErr)
+			}
+			startDelegationFacade = facade.NewRunStartDelegations(startDelegations)
+			startDelegationHandler, buildErr := identityhttp.NewRunStartDelegationHandler(sessions, startDelegations)
+			if buildErr != nil {
+				return failed(buildErr)
+			}
+			registers = append(registers, startDelegationHandler.Register)
 		}
 		if c.ConsoleRunDelegationEnabled {
 			delegations, buildErr := identityapp.NewRunDelegationService(identitypg.NewRunDelegations(browserSessionPool, browserSessionPool), sessions, sessionTokenCodec, systemClock{}, c.ConsoleRunDelegationTTL)
@@ -640,6 +676,21 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 			return failed(err)
 		}
 		registers = append(registers, startHandler.Register)
+		if c.ConsoleHumanStartEnabled {
+			if startDelegationFacade == nil {
+				return failed(errors.New("Console Human StartRun delegation is not configured"))
+			}
+			humanStartAccess := admissionidentitystart.New(startDelegationFacade)
+			humanAdmission, buildErr := BuildAdmission(start, admissionPool, humanStartAccess, resolver)
+			if buildErr != nil {
+				return failed(buildErr)
+			}
+			humanStartHandler, buildErr := admissionhttp.New(humanAdmission, humanStartAccess)
+			if buildErr != nil {
+				return failed(buildErr)
+			}
+			registers = append(registers, func(router *gin.Engine) { humanStartHandler.RegisterAt(router, "/api/console/v1") })
+		}
 	}
 	if c.MCPGatewayEnabled {
 		bridge, buildErr := mcpapp.New(mcpidentity.New(identityFacade), mcpadmission.New(admissionfacade.NewAdmission(admission)), mcpexecution.New(runfacade.NewRuns(runs, queries)))

@@ -18,6 +18,7 @@
 | [2026-09-12 Human → Run delegation Alpha](2026-09-12-human-run-delegation-alpha.md) | 短时显式 Run delegation、CSRF mint/revoke、当前 Membership 重校验与 Machine Key 隔离 |
 | [2026-09-12 Reviewed OAuth Connection Alpha](2026-09-12-connection-oauth-alpha.md) | reviewed Provider OAuth + PKCE、服务端 Secret Vault、Connection/Grant 创建与 Console 发起授权 |
 | [2026-09-12 Human launch discovery Alpha](2026-09-12-human-launch-discovery-alpha.md) | 服务端按 Membership/RLS/发布状态过滤 Toolset + Tool + Connection 启动投影，不授予 run:create |
+| [2026-09-12 Human StartRun delegation Alpha](2026-09-12-human-start-run-delegation-alpha.md) | 精确绑定 Toolset/ToolVersion/Connection/费用上限/Idempotency-Key 的短时 run:create capability，复用原子 Admission |
 
 工具链以根 [toolchain.versions.json](../../toolchain.versions.json) 为准，依赖由 pnpm 与 Go 锁文件固定。治理规则中的版本约束待 G0 评审。
 

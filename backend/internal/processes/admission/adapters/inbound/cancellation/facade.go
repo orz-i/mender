@@ -11,7 +11,7 @@ type Facade struct{ service *application.Cancellation }
 
 func New(s *application.Cancellation) *Facade { return &Facade{s} }
 func (f *Facade) Cancel(ctx context.Context, c pub.CancelCaller, id, reason string) (pub.CancelResult, error) {
-	r, e := f.service.Cancel(ctx, application.Caller(c), id, reason)
+	r, e := f.service.Cancel(ctx, application.Caller{WorkspaceID: c.WorkspaceID, SubjectID: c.SubjectID, CredentialID: c.CredentialID}, id, reason)
 	if e != nil {
 		switch {
 		case errors.Is(e, context.Canceled), errors.Is(e, context.DeadlineExceeded):

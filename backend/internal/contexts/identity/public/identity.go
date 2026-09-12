@@ -37,3 +37,20 @@ type RunDelegations interface {
 	AuthenticateRunDelegation(context.Context, string) (RunDelegationPrincipal, error)
 	AuthorizeRunDelegation(context.Context, RunDelegationPrincipal, string, string) error
 }
+
+type RunStartConstraint struct {
+	ToolsetVersionID, ToolID, ToolVersion, ToolVersionID string
+	ConnectionID, Currency                               string
+	MaxChargeMicro                                       int64
+	IdempotencyKey                                       string
+}
+
+type RunStartDelegationPrincipal struct {
+	DelegationID, WorkspaceID, UserID string
+	Constraint                        RunStartConstraint
+}
+
+type RunStartDelegations interface {
+	AuthenticateRunStartDelegation(context.Context, string) (RunStartDelegationPrincipal, error)
+	AuthorizeRunStartDelegation(context.Context, RunStartDelegationPrincipal, string, RunStartConstraint) error
+}

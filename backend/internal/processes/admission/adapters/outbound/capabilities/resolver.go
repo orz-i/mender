@@ -142,6 +142,9 @@ func (r *Resolver) Resolve(ctx context.Context, caller application.Caller, q app
 		}
 		return application.Plan{}, application.ErrUnavailable
 	}
+	if caller.Start != nil && binding.ToolVersionID != caller.Start.ToolVersionID {
+		return application.Plan{}, application.ErrForbidden
+	}
 	// Direct Toolset publication may fix a Connection. Legacy/meta-tool bindings
 	// leave ConnectionID empty and preserve the existing explicit request path.
 	if binding.ConnectionID != "" && binding.ConnectionID != q.ConnectionID {

@@ -91,3 +91,64 @@ func (f *RunDelegations) AuthorizeRunDelegation(ctx context.Context, principal i
 }
 
 var _ identity.RunDelegations = (*RunDelegations)(nil)
+
+type RunStartDelegations struct {
+	service *application.RunStartDelegationService
+}
+
+func NewRunStartDelegations(service *application.RunStartDelegationService) *RunStartDelegations {
+	return &RunStartDelegations{service: service}
+}
+
+func publicStartConstraint(value application.RunStartConstraint) identity.RunStartConstraint {
+	return identity.RunStartConstraint{
+		ToolsetVersionID: value.ToolsetVersionID,
+		ToolID:           value.ToolID,
+		ToolVersion:      value.ToolVersion,
+		ToolVersionID:    value.ToolVersionID,
+		ConnectionID:     value.ConnectionID,
+		Currency:         value.Currency,
+		MaxChargeMicro:   value.MaxChargeMicro,
+		IdempotencyKey:   value.IdempotencyKey,
+	}
+}
+
+func applicationStartConstraint(value identity.RunStartConstraint) application.RunStartConstraint {
+	return application.RunStartConstraint{
+		ToolsetVersionID: value.ToolsetVersionID,
+		ToolID:           value.ToolID,
+		ToolVersion:      value.ToolVersion,
+		ToolVersionID:    value.ToolVersionID,
+		ConnectionID:     value.ConnectionID,
+		Currency:         value.Currency,
+		MaxChargeMicro:   value.MaxChargeMicro,
+		IdempotencyKey:   value.IdempotencyKey,
+	}
+}
+
+func (f *RunStartDelegations) AuthenticateRunStartDelegation(ctx context.Context, raw string) (identity.RunStartDelegationPrincipal, error) {
+	if f == nil || f.service == nil {
+		return identity.RunStartDelegationPrincipal{}, identity.ErrUnavailable
+	}
+	principal, err := f.service.Authenticate(ctx, raw)
+	return identity.RunStartDelegationPrincipal{
+		DelegationID: principal.DelegationID,
+		WorkspaceID:  principal.WorkspaceID,
+		UserID:       principal.UserID,
+		Constraint:   publicStartConstraint(principal.Constraint),
+	}, mapError(err)
+}
+
+func (f *RunStartDelegations) AuthorizeRunStartDelegation(ctx context.Context, principal identity.RunStartDelegationPrincipal, workspace string, request identity.RunStartConstraint) error {
+	if f == nil || f.service == nil {
+		return identity.ErrUnavailable
+	}
+	return mapError(f.service.Authorize(ctx, application.RunStartDelegationPrincipal{
+		DelegationID: principal.DelegationID,
+		WorkspaceID:  principal.WorkspaceID,
+		UserID:       principal.UserID,
+		Constraint:   applicationStartConstraint(principal.Constraint),
+	}, workspace, applicationStartConstraint(request)))
+}
+
+var _ identity.RunStartDelegations = (*RunStartDelegations)(nil)

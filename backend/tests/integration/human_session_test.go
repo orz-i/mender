@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/orz-i/mender/backend/internal/bootstrap"
 	connectionidentityaccess "github.com/orz-i/mender/backend/internal/contexts/connections/adapters/outbound/identityaccess"
 	connectionpg "github.com/orz-i/mender/backend/internal/contexts/connections/adapters/outbound/postgres"
 	connectionsupplycredentials "github.com/orz-i/mender/backend/internal/contexts/connections/adapters/outbound/supplycredentials"
@@ -25,6 +26,8 @@ import (
 	"github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/filesecret"
 	supplyapp "github.com/orz-i/mender/backend/internal/contexts/supply/application"
 	database "github.com/orz-i/mender/backend/internal/platform/postgres"
+	admissionidentitystart "github.com/orz-i/mender/backend/internal/processes/admission/adapters/outbound/identitystart"
+	admissionapp "github.com/orz-i/mender/backend/internal/processes/admission/application"
 	launchidentity "github.com/orz-i/mender/backend/internal/processes/consolelaunch/adapters/outbound/identityaccess"
 	launchpg "github.com/orz-i/mender/backend/internal/processes/consolelaunch/adapters/outbound/postgres"
 	launchapp "github.com/orz-i/mender/backend/internal/processes/consolelaunch/application"
@@ -76,6 +79,7 @@ func exerciseHumanBrowserSessions(t *testing.T, ctx context.Context, owner *pgxp
 	sessionsPool, _ := openTemporaryRole(t, ctx, owner, runtimeDSN, "mender_browser_session_", migrations.GrantBrowserSession)
 	connectionPool, _ := openTemporaryRole(t, ctx, owner, runtimeDSN, "mender_connection_manager_", migrations.GrantConnectionManager)
 	launchPool, _ := openTemporaryRole(t, ctx, owner, runtimeDSN, "mender_console_launch_", migrations.GrantRuntime)
+	admissionPool, _ := openTemporaryRole(t, ctx, owner, runtimeDSN, "mender_human_admission_", migrations.GrantAdmission)
 	must(t, database.BrowserSessionRole(ctx, sessionsPool))
 	must(t, database.ConnectionManagerRole(ctx, connectionPool))
 	must(t, database.RuntimeRole(ctx, launchPool))
@@ -139,6 +143,51 @@ func exerciseHumanBrowserSessions(t *testing.T, ctx context.Context, owner *pgxp
 	}
 	if _, err = launchService.List(ctx, launchActor, "ws_other"); !errors.Is(err, launchapp.ErrForbidden) {
 		t.Fatal("human launch discovery crossed Workspace membership", err)
+	}
+	startDelegationService, err := identityapp.NewRunStartDelegationService(identitypg.NewRunStartDelegations(sessionsPool, sessionsPool), service, sessioncodec.Codec{}, clock, 5*time.Minute)
+	must(t, err)
+	startDelegation, err := startDelegationService.Issue(ctx, principal, "ws_human_alpha", identityapp.RunStartConstraint{
+		ToolsetVersionID: "set_human_launch_v1", ToolID: "tool_human_launch", ToolVersion: "1.0.0", ToolVersionID: "tool_human_launch_v1",
+		ConnectionID: "conn_human_alpha", Currency: "USD", MaxChargeMicro: 75, IdempotencyKey: "human-start-alpha-0001",
+	})
+	must(t, err)
+	if startDelegation.Token == "" || startDelegation.DelegationID == "" {
+		t.Fatal("invalid Human StartRun delegation")
+	}
+	var storedStartDigest string
+	must(t, owner.QueryRow(ctx, `SELECT digest FROM identity.run_start_delegations WHERE id=$1`, startDelegation.DelegationID).Scan(&storedStartDigest))
+	if storedStartDigest == startDelegation.Token || len(storedStartDigest) != 64 {
+		t.Fatal("raw Human StartRun token was persisted")
+	}
+	startAccess := admissionidentitystart.New(identityfacade.NewRunStartDelegations(startDelegationService))
+	startCaller, err := startAccess.Authenticate(ctx, startDelegation.Token)
+	must(t, err)
+	if startCaller.Start == nil || startCaller.Start.ToolVersionID != "tool_human_launch_v1" || startCaller.CredentialID != startDelegation.DelegationID {
+		t.Fatal("Human StartRun delegation did not project exact Admission capability", startCaller)
+	}
+	resolver, err := bootstrap.BuildAdmissionResolver(launchPool)
+	must(t, err)
+	humanAdmission, err := bootstrap.BuildAdmission(ctx, admissionPool, startAccess, resolver)
+	must(t, err)
+	receipt, err := humanAdmission.Admit(ctx, startCaller, admissionapp.Request{
+		IdempotencyKey: "human-start-alpha-0001", ToolID: "tool_human_launch", ToolVersion: "1.0.0", ToolsetVersionID: "set_human_launch_v1",
+		ConnectionID: "conn_human_alpha", Arguments: []byte(`{"query":"hello"}`), Currency: "USD", MaxChargeMicro: "75",
+	})
+	must(t, err)
+	if receipt.RunID == "" || receipt.Replayed {
+		t.Fatal("Human StartRun was not admitted as a new durable Run", receipt)
+	}
+	var admittedSubject, admittedCredential, admittedToolVersion string
+	var reservedMicro int64
+	must(t, owner.QueryRow(ctx, `SELECT a.subject_id,a.credential_id,a.tool_version_id,r.amount_micro FROM execution.run_admissions a JOIN commerce.reservations r ON r.workspace_id=a.workspace_id AND r.id=a.reservation_id WHERE a.workspace_id='ws_human_alpha' AND a.run_id=$1`, receipt.RunID).Scan(&admittedSubject, &admittedCredential, &admittedToolVersion, &reservedMicro))
+	if admittedSubject != "user_human_alpha" || admittedCredential != startDelegation.DelegationID || admittedToolVersion != "tool_human_launch_v1" || reservedMicro != 75 {
+		t.Fatal("Human StartRun bypassed constrained Admission facts", admittedSubject, admittedCredential, admittedToolVersion, reservedMicro)
+	}
+	if err = startAccess.Authorize(ctx, startCaller, admissionapp.Request{IdempotencyKey: "human-start-alpha-0001", ToolsetVersionID: "set_human_launch_v1", ToolID: "tool_human_launch", ToolVersion: "1.0.0", ConnectionID: "conn_human_alpha", Currency: "USD", MaxChargeMicro: "76"}); !errors.Is(err, admissionapp.ErrForbidden) {
+		t.Fatal("Human StartRun delegation raised the approved charge cap", err)
+	}
+	if err = startAccess.Authorize(ctx, startCaller, admissionapp.Request{IdempotencyKey: "human-start-alpha-0002", ToolsetVersionID: "set_human_launch_v1", ToolID: "tool_human_launch", ToolVersion: "1.0.0", ConnectionID: "conn_human_alpha", Currency: "USD", MaxChargeMicro: "75"}); !errors.Is(err, admissionapp.ErrForbidden) {
+		t.Fatal("Human StartRun delegation authorized a second logical Run", err)
 	}
 	vault, err := filesecret.New(t.TempDir())
 	must(t, err)
@@ -213,6 +262,9 @@ func exerciseHumanBrowserSessions(t *testing.T, ctx context.Context, owner *pgxp
 	must(t, err)
 	_, err = owner.Exec(ctx, `UPDATE identity.workspace_memberships SET role='viewer' WHERE workspace_id='ws_human_alpha' AND user_id='user_human_alpha'`)
 	must(t, err)
+	if err = startAccess.Authorize(ctx, startCaller, admissionapp.Request{IdempotencyKey: "human-start-alpha-0001", ToolsetVersionID: "set_human_launch_v1", ToolID: "tool_human_launch", ToolVersion: "1.0.0", ConnectionID: "conn_human_alpha", Currency: "USD", MaxChargeMicro: "75"}); !errors.Is(err, admissionapp.ErrForbidden) {
+		t.Fatal("viewer retained Human StartRun authority", err)
+	}
 	if err = delegatedAccess.Authorize(ctx, delegatedCaller, runports.CancelRun, probeRun); !errors.Is(err, runports.ErrForbidden) {
 		t.Fatal("viewer retained delegated cancel authority", err)
 	}
