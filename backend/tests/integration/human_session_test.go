@@ -11,6 +11,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/orz-i/mender/backend/internal/bootstrap"
+	commerceidentityaccess "github.com/orz-i/mender/backend/internal/contexts/commerce/adapters/outbound/identityaccess"
+	commercepg "github.com/orz-i/mender/backend/internal/contexts/commerce/adapters/outbound/postgres"
+	commerceapp "github.com/orz-i/mender/backend/internal/contexts/commerce/application"
 	connectionidentityaccess "github.com/orz-i/mender/backend/internal/contexts/connections/adapters/outbound/identityaccess"
 	connectionpg "github.com/orz-i/mender/backend/internal/contexts/connections/adapters/outbound/postgres"
 	connectionsupplycredentials "github.com/orz-i/mender/backend/internal/contexts/connections/adapters/outbound/supplycredentials"
@@ -78,10 +81,12 @@ func exerciseHumanBrowserSessions(t *testing.T, ctx context.Context, owner *pgxp
 	t.Helper()
 	sessionsPool, _ := openTemporaryRole(t, ctx, owner, runtimeDSN, "mender_browser_session_", migrations.GrantBrowserSession)
 	connectionPool, _ := openTemporaryRole(t, ctx, owner, runtimeDSN, "mender_connection_manager_", migrations.GrantConnectionManager)
+	observerPool, _ := openTemporaryRole(t, ctx, owner, runtimeDSN, "mender_commerce_observer_", migrations.GrantCommerceObserver)
 	launchPool, _ := openTemporaryRole(t, ctx, owner, runtimeDSN, "mender_console_launch_", migrations.GrantRuntime)
 	admissionPool, _ := openTemporaryRole(t, ctx, owner, runtimeDSN, "mender_human_admission_", migrations.GrantAdmission)
 	must(t, database.BrowserSessionRole(ctx, sessionsPool))
 	must(t, database.ConnectionManagerRole(ctx, connectionPool))
+	must(t, database.CommerceObserverRole(ctx, observerPool))
 	must(t, database.RuntimeRole(ctx, launchPool))
 	if database.BrowserSessionRole(ctx, owner) == nil {
 		t.Fatal("owner accepted as browser-session principal")
@@ -183,6 +188,22 @@ func exerciseHumanBrowserSessions(t *testing.T, ctx context.Context, owner *pgxp
 	if admittedSubject != "user_human_alpha" || admittedCredential != startDelegation.DelegationID || admittedToolVersion != "tool_human_launch_v1" || reservedMicro != 75 {
 		t.Fatal("Human StartRun bypassed constrained Admission facts", admittedSubject, admittedCredential, admittedToolVersion, reservedMicro)
 	}
+	usageAccess := commerceidentityaccess.NewHuman(identityfacade.NewHuman(service))
+	usageService, err := commerceapp.NewUsageService(commercepg.NewObservability(observerPool), usageAccess)
+	must(t, err)
+	usageActor, err := usageAccess.Authenticate(ctx, issued.SessionToken)
+	must(t, err)
+	usageSnapshot, err := usageService.Snapshot(ctx, usageActor, "ws_human_alpha")
+	must(t, err)
+	if len(usageSnapshot.BudgetPeriods) != 1 || usageSnapshot.BudgetPeriods[0].LimitMicro != 1000 || usageSnapshot.BudgetPeriods[0].ReservedMicro != 75 || usageSnapshot.BudgetPeriods[0].AvailableMicro() != 925 {
+		t.Fatal("Human usage budget projection mismatch", usageSnapshot.BudgetPeriods)
+	}
+	if len(usageSnapshot.Entries) != 1 || usageSnapshot.Entries[0].RunID != string(receipt.RunID) || usageSnapshot.Entries[0].QuotaState != "held" || usageSnapshot.Entries[0].ReservedMicro != 75 {
+		t.Fatal("Human usage entry projection mismatch", usageSnapshot.Entries)
+	}
+	if _, err = usageService.Snapshot(ctx, usageActor, "ws_other"); !errors.Is(err, commerceapp.ErrObservabilityForbidden) {
+		t.Fatal("Human usage projection crossed Workspace membership", err)
+	}
 	if err = startAccess.Authorize(ctx, startCaller, admissionapp.Request{IdempotencyKey: "human-start-alpha-0001", ToolsetVersionID: "set_human_launch_v1", ToolID: "tool_human_launch", ToolVersion: "1.0.0", ConnectionID: "conn_human_alpha", Currency: "USD", MaxChargeMicro: "76"}); !errors.Is(err, admissionapp.ErrForbidden) {
 		t.Fatal("Human StartRun delegation raised the approved charge cap", err)
 	}
@@ -221,6 +242,16 @@ func exerciseHumanBrowserSessions(t *testing.T, ctx context.Context, owner *pgxp
 	for _, item := range connections {
 		if item.ConnectionID == oauthCompleted.Connection.ConnectionID && item.ProviderID == "provider_human_oauth" && item.State == "active" {
 			foundOAuth = true
+		}
+	}
+	for _, sql := range []string{
+		`SELECT id FROM commerce.price_versions LIMIT 1`,
+		`SELECT reservation_id FROM commerce.usage_settlements LIMIT 1`,
+		`UPDATE commerce.budget_periods SET limit_micro=limit_micro WHERE workspace_id='ws_human_alpha'`,
+		`SELECT id FROM execution.runs LIMIT 1`,
+	} {
+		if _, err = observerPool.Exec(ctx, sql); err == nil {
+			t.Fatal("commerce-observer role exceeded read-only safe projection", sql)
 		}
 	}
 	if !foundOAuth {
@@ -270,6 +301,9 @@ func exerciseHumanBrowserSessions(t *testing.T, ctx context.Context, owner *pgxp
 	}
 	if err = delegatedAccess.Authorize(ctx, delegatedCaller, runports.ReadRun, probeRun); err != nil {
 		t.Fatal("viewer lost delegated read authority", err)
+	}
+	if _, err = usageService.Snapshot(ctx, usageActor, "ws_human_alpha"); err != nil {
+		t.Fatal("viewer lost read-only usage visibility", err)
 	}
 	if _, err = connectionService.Revoke(ctx, actor, "ws_human_alpha", "conn_human_viewer", clock.at.Add(3*time.Second)); !errors.Is(err, connectionapp.ErrForbidden) {
 		t.Fatal("viewer membership revoked Connection", err)

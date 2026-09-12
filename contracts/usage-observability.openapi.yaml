@@ -1,0 +1,96 @@
+openapi: 3.1.0
+info:
+  title: Mender Human quota usage observability subset
+  version: 0.1.0
+  description: >-
+    Read-only quota observability for the authenticated Human Console. The
+    browser session proves current Human identity; Workspace membership is
+    re-authorized server-side and Commerce data is read through a separate
+    RLS-bound database role. Micro amounts are canonical base-10 strings so
+    clients never require floating point. This is quota visibility, not a
+    payment wallet, revenue ledger, invoice, refund or billing-admin API.
+servers:
+  - url: http://127.0.0.1:18080
+security:
+  - BrowserSession: []
+paths:
+  /api/console/v1/workspaces/{workspace_id}/usage:
+    parameters:
+      - name: workspace_id
+        in: path
+        required: true
+        schema: {type: string, pattern: '^[A-Za-z0-9_-]{1,128}$'}
+    get:
+      operationId: getHumanWorkspaceQuotaUsage
+      responses:
+        '200':
+          description: Bounded budget-period and recent reservation projections.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UsageResponse'}
+        '400': {description: Invalid Workspace or any query string}
+        '401': {description: Missing, invalid, expired or revoked Browser Session}
+        '403': {description: Current Human membership does not allow usage:read}
+        '503': {description: Commerce projection or observer dependency unavailable}
+        '504': {description: Request deadline exceeded}
+components:
+  securitySchemes:
+    BrowserSession:
+      type: apiKey
+      in: cookie
+      name: mender_session
+      description: HttpOnly server-side Human session; membership is re-authorized on every request.
+  schemas:
+    Micro:
+      type: string
+      pattern: '^(0|[1-9][0-9]{0,18})$'
+    BudgetPeriod:
+      type: object
+      additionalProperties: false
+      required: [budget_id, period_id, currency, starts_at, ends_at, active, limit_micro, consumed_micro, reserved_micro, available_micro, revision]
+      properties:
+        budget_id: {type: string}
+        period_id: {type: string}
+        currency: {type: string, pattern: '^[A-Z]{3}$'}
+        starts_at: {type: string, format: date-time}
+        ends_at: {type: string, format: date-time}
+        active: {type: boolean}
+        limit_micro: {$ref: '#/components/schemas/Micro'}
+        consumed_micro: {$ref: '#/components/schemas/Micro'}
+        reserved_micro: {$ref: '#/components/schemas/Micro'}
+        available_micro: {$ref: '#/components/schemas/Micro'}
+        revision: {type: string, pattern: '^[1-9][0-9]*$'}
+    UsageEntry:
+      type: object
+      additionalProperties: false
+      required: [run_id, budget_id, period_id, currency, quota_state, reserved_micro, charged_micro, released_micro, outcome, created_at, finalized_at]
+      properties:
+        run_id: {type: string}
+        budget_id: {type: string}
+        period_id: {type: string}
+        currency: {type: string, pattern: '^[A-Z]{3}$'}
+        quota_state: {type: string, enum: [held, released, settled]}
+        reserved_micro: {$ref: '#/components/schemas/Micro'}
+        charged_micro:
+          oneOf:
+            - {$ref: '#/components/schemas/Micro'}
+            - {type: 'null'}
+        released_micro: {$ref: '#/components/schemas/Micro'}
+        outcome:
+          type: [string, 'null']
+          enum: [succeeded, failed, canceled, null]
+        created_at: {type: string, format: date-time}
+        finalized_at: {type: [string, 'null'], format: date-time}
+    UsageData:
+      type: object
+      additionalProperties: false
+      required: [budget_periods, usage_entries]
+      properties:
+        budget_periods: {type: array, maxItems: 100, items: {$ref: '#/components/schemas/BudgetPeriod'}}
+        usage_entries: {type: array, maxItems: 100, items: {$ref: '#/components/schemas/UsageEntry'}}
+    UsageResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data: {$ref: '#/components/schemas/UsageData'}

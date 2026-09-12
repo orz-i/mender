@@ -140,6 +140,34 @@ validate(artifactAPI.components.schemas.ArtifactDetailResponse, {
 }, 'Artifact detail response');
 console.log('PASS: machine + delegated Console inline Artifact metadata/content contract; bounded JSON and no provider-control identifiers/object-storage claims.');
 
+const usageAPI = parse(readFileSync(join(root, 'usage-observability.openapi.yaml'), 'utf8'));
+assert.equal(usageAPI.openapi, '3.1.0');
+assert.equal(usageAPI.info.version, '0.1.0');
+assert.equal(Object.keys(usageAPI.paths).length, 1);
+assert.deepEqual(usageAPI.security, [{ BrowserSession: [] }]);
+const usagePath = usageAPI.paths['/api/console/v1/workspaces/{workspace_id}/usage'];
+assert.ok(usagePath?.get?.operationId);
+assert.equal(usagePath.get.parameters, undefined, 'Usage endpoint intentionally accepts no query parameters');
+validate({ $ref: '#/components/schemas/UsageResponse', components: usageAPI.components }, {
+  data: {
+    budget_periods: [{
+      budget_id: 'budget_a', period_id: 'period_a', currency: 'USD',
+      starts_at: '2026-09-12T00:00:00Z', ends_at: '2026-10-12T00:00:00Z', active: true,
+      limit_micro: '1000000', consumed_micro: '125000', reserved_micro: '75000', available_micro: '800000', revision: '4',
+    }],
+    usage_entries: [{
+      run_id: 'run_a', budget_id: 'budget_a', period_id: 'period_a', currency: 'USD', quota_state: 'settled',
+      reserved_micro: '200000', charged_micro: '125000', released_micro: '75000', outcome: 'succeeded',
+      created_at: '2026-09-12T00:00:00Z', finalized_at: '2026-09-12T00:01:00Z',
+    }],
+  },
+}, 'Human quota observability response');
+const usageSerialized = JSON.stringify(usageAPI);
+for (const forbidden of ['reservation_id', 'price_version_id', 'settlement_job_id', 'provider_request_id', 'credential_version_ref']) {
+  assert.ok(!usageSerialized.includes(forbidden), `Usage contract exposes forbidden internal field ${forbidden}`);
+}
+console.log('PASS: Human Console quota observability contract uses exact micro strings, current membership and no payment/admin semantics.');
+
 const mcpTools = json('mcp-meta-tools.json');
 assert.equal(mcpTools.contract_version, '0.1.0');
 assert.equal(mcpTools.sdk, 'github.com/modelcontextprotocol/go-sdk@v1.7.0');

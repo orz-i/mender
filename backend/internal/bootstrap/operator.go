@@ -20,10 +20,10 @@ import (
 // Only issue-key intentionally prints a generated secret, once, after durable insertion.
 func RunOperator(ctx context.Context, args []string, getenv func(string) string, out, errOut io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("operator requires migrate, grant-runtime, grant-browser-session, grant-connection-manager, grant-admission, grant-cancellation, grant-worker, grant-executor, grant-mcp-connector, grant-reconciler, grant-settlement, provision-human, issue-key or revoke-key")
+		return errors.New("operator requires migrate, grant-runtime, grant-browser-session, grant-connection-manager, grant-commerce-observer, grant-admission, grant-cancellation, grant-worker, grant-executor, grant-mcp-connector, grant-reconciler, grant-settlement, provision-human, issue-key or revoke-key")
 	}
 	command := args[0]
-	if command != "migrate" && command != "grant-runtime" && command != "grant-browser-session" && command != "grant-connection-manager" && command != "grant-admission" && command != "grant-cancellation" && command != "grant-worker" && command != "grant-executor" && command != "grant-mcp-connector" && command != "grant-reconciler" && command != "grant-settlement" && command != "provision-human" && command != "issue-key" && command != "revoke-key" {
+	if command != "migrate" && command != "grant-runtime" && command != "grant-browser-session" && command != "grant-connection-manager" && command != "grant-commerce-observer" && command != "grant-admission" && command != "grant-cancellation" && command != "grant-worker" && command != "grant-executor" && command != "grant-mcp-connector" && command != "grant-reconciler" && command != "grant-settlement" && command != "provision-human" && command != "issue-key" && command != "revoke-key" {
 		return errors.New("unknown operator command")
 	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
@@ -82,6 +82,12 @@ func RunOperator(ctx context.Context, args []string, getenv func(string) string,
 		return err
 	}
 	switch command {
+	case "grant-commerce-observer":
+		if err = migrations.GrantCommerceObserver(ctx, pool, *role); err != nil {
+			return err
+		}
+		_, err = io.WriteString(out, "Restricted commerce-observer grants applied.\n")
+		return err
 	case "grant-connection-manager":
 		if err = migrations.GrantConnectionManager(ctx, pool, *role); err != nil {
 			return err

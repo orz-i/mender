@@ -11,6 +11,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
+	commercehttp "github.com/orz-i/mender/backend/internal/contexts/commerce/adapters/inbound/httpapi"
+	commerceidentityaccess "github.com/orz-i/mender/backend/internal/contexts/commerce/adapters/outbound/identityaccess"
+	commercepg "github.com/orz-i/mender/backend/internal/contexts/commerce/adapters/outbound/postgres"
+	commerceapp "github.com/orz-i/mender/backend/internal/contexts/commerce/application"
 	connectionhttp "github.com/orz-i/mender/backend/internal/contexts/connections/adapters/inbound/httpapi"
 	connectionidentityaccess "github.com/orz-i/mender/backend/internal/contexts/connections/adapters/outbound/identityaccess"
 	connectionoauth "github.com/orz-i/mender/backend/internal/contexts/connections/adapters/outbound/oauth"
@@ -80,6 +84,8 @@ type APIConfig struct {
 	ConsoleHumanStartEnabled        bool
 	ConsoleHumanStartDelegationTTL  time.Duration
 	ConsoleLaunchDiscoveryEnabled   bool
+	ConsoleUsageEnabled             bool
+	CommerceObserverDatabaseURL     string
 	ConsoleConnectionsEnabled       bool
 	ConnectionManagerDatabaseURL    string
 	ConsoleConnectionOAuthEnabled   bool
@@ -185,6 +191,20 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 		c.ConsoleLaunchDiscoveryEnabled = true
 	default:
 		return c, errors.New("MENDER_CONSOLE_LAUNCH_DISCOVERY_ENABLED must be true or false")
+	}
+	switch getenv("MENDER_CONSOLE_USAGE_ENABLED") {
+	case "", "false":
+	case "true":
+		if !c.ConsoleOIDCEnabled {
+			return APIConfig{}, errors.New("Console Usage requires Console OIDC")
+		}
+		c.ConsoleUsageEnabled = true
+		c.CommerceObserverDatabaseURL = getenv("MENDER_COMMERCE_OBSERVER_DATABASE_URL")
+		if c.CommerceObserverDatabaseURL == "" {
+			return APIConfig{}, errors.New("Console Usage requires a separate commerce-observer database role")
+		}
+	default:
+		return c, errors.New("MENDER_CONSOLE_USAGE_ENABLED must be true or false")
 	}
 	switch getenv("MENDER_CONSOLE_CONNECTION_OAUTH_ENABLED") {
 	case "", "false":
@@ -316,7 +336,7 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	}
 	switch getenv("MENDER_RUN_API_ENABLED") {
 	case "", "false":
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleConnectionsEnabled || c.ConsoleConnectionOAuthEnabled {
+		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleConnectionOAuthEnabled {
 			return APIConfig{}, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return c, nil
@@ -350,7 +370,7 @@ func (systemClock) Now() time.Time { return time.Now().UTC().Truncate(time.Micro
 // BuildAPI never migrates, seeds data or falls back to a test repository.
 func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	if !c.RunAPIEnabled {
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleConnectionsEnabled || c.ConsoleConnectionOAuthEnabled {
+		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleConnectionOAuthEnabled {
 			return nil, nil, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return httpserver.NewRouter(), func() {}, nil
@@ -363,6 +383,9 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	}
 	if c.ConsoleLaunchDiscoveryEnabled && !c.ConsoleOIDCEnabled {
 		return nil, nil, errors.New("Console launch discovery requires Console OIDC")
+	}
+	if c.ConsoleUsageEnabled && !c.ConsoleOIDCEnabled {
+		return nil, nil, errors.New("Console Usage requires Console OIDC")
 	}
 	if c.ConsoleHumanStartEnabled && (!c.ConsoleOIDCEnabled || !c.ConsoleLaunchDiscoveryEnabled || !c.StartRunAPIEnabled) {
 		return nil, nil, errors.New("Console Human StartRun requires Console OIDC, launch discovery and StartRun API")
@@ -394,8 +417,12 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	var admissionPool *pgxpool.Pool
 	var browserSessionPool *pgxpool.Pool
 	var connectionManagerPool *pgxpool.Pool
+	var commerceObserverPool *pgxpool.Pool
 	var startDelegationFacade *facade.RunStartDelegations
 	closePools := func() {
+		if commerceObserverPool != nil {
+			commerceObserverPool.Close()
+		}
 		if connectionManagerPool != nil {
 			connectionManagerPool.Close()
 		}
@@ -504,6 +531,32 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 		}
 		registers = append(registers, consoleHandler.Register)
 		humanIdentity := facade.NewHuman(sessions)
+		if c.ConsoleUsageEnabled {
+			commerceObserverPool, buildErr = database.Open(start, c.CommerceObserverDatabaseURL)
+			if buildErr != nil {
+				return failed(buildErr)
+			}
+			observerCfg := commerceObserverPool.Config().ConnConfig
+			if readerCfg.Host != observerCfg.Host || readerCfg.Port != observerCfg.Port || readerCfg.Database != observerCfg.Database || observerCfg.User == readerCfg.User || observerCfg.User == sessionCfg.User {
+				return failed(errors.New("Console Usage requires the same database with a distinct restricted role"))
+			}
+			if buildErr = migrations.Verify(start, commerceObserverPool); buildErr != nil {
+				return failed(buildErr)
+			}
+			if buildErr = database.CommerceObserverRole(start, commerceObserverPool); buildErr != nil {
+				return failed(buildErr)
+			}
+			usageAccess := commerceidentityaccess.NewHuman(humanIdentity)
+			usageService, serviceErr := commerceapp.NewUsageService(commercepg.NewObservability(commerceObserverPool), usageAccess)
+			if serviceErr != nil {
+				return failed(serviceErr)
+			}
+			usageHandler, handlerErr := commercehttp.NewUsage(usageService, usageAccess)
+			if handlerErr != nil {
+				return failed(handlerErr)
+			}
+			registers = append(registers, usageHandler.Register)
+		}
 		if c.ConsoleLaunchDiscoveryEnabled {
 			launchAccess := consolelaunchidentity.New(humanIdentity)
 			launchService, launchErr := consolelaunchapp.New(launchAccess, consolelaunchpg.New(pool), systemClock{})
@@ -747,7 +800,9 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 			if err := migrations.Verify(ctx, admissionPool); err != nil {
 				return err
 			}
-			return database.AdmissionRole(ctx, admissionPool)
+			if err := database.AdmissionRole(ctx, admissionPool); err != nil {
+				return err
+			}
 		}
 		if browserSessionPool != nil {
 			if err := migrations.Verify(ctx, browserSessionPool); err != nil {
@@ -762,6 +817,14 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 				return err
 			}
 			if err := database.ConnectionManagerRole(ctx, connectionManagerPool); err != nil {
+				return err
+			}
+		}
+		if commerceObserverPool != nil {
+			if err := migrations.Verify(ctx, commerceObserverPool); err != nil {
+				return err
+			}
+			if err := database.CommerceObserverRole(ctx, commerceObserverPool); err != nil {
 				return err
 			}
 		}
