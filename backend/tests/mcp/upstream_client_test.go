@@ -22,6 +22,29 @@ type upstreamBroker struct {
 	invocation application.PreparedInvocation
 }
 
+func TestUpstreamMCPResponseLimitFailsClosed(t *testing.T) {
+	fixture := newUpstreamFixture(t)
+	secret, _ := application.NewSecret([]byte("upstream-secret"))
+	deployment := upstreamDeployment(fixture.server.URL)
+	deployment.MaxResponseBytes = 64
+	broker := &upstreamBroker{discovery: application.PreparedMCPDiscovery{
+		WorkspaceID: "ws_a", Deployment: deployment,
+		Credential: application.CredentialReference{ConnectionID: "conn_upstream", ProviderID: "provider_upstream", CredentialVersionRef: "secret_ref", Revision: 1, ValidUntil: time.Now().Add(time.Hour)},
+		Secret:     secret,
+	}}
+	recorder := &snapshotRecorder{}
+	client, err := mcpclient.New(broker, &routeRepo{}, recorder, &resultRepo{}, mcpclient.EgressPolicy{AllowedHosts: []string{"127.0.0.1"}, AllowHTTP: true, AllowLoopback: true}, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = client.Discover(context.Background(), application.MCPDiscoveryRef{WorkspaceID: "ws_a", SubjectID: "sa_a", ConnectionID: "conn_upstream", DeploymentRevision: "deploy_upstream"}); err == nil {
+		t.Fatal("oversized upstream MCP response was accepted")
+	}
+	if len(recorder.items) != 0 {
+		t.Fatal("oversized discovery response produced a durable snapshot")
+	}
+}
+
 func (b *upstreamBroker) PrepareMCPDiscovery(context.Context, application.MCPDiscoveryRef, time.Time) (application.PreparedMCPDiscovery, error) {
 	return b.discovery, nil
 }

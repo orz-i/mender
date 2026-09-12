@@ -18,6 +18,25 @@ func (bootstrapSecretProvider) ResolveSecret(context.Context, supplyapp.SecretRe
 	return supplyapp.NewSecret([]byte("not-used"))
 }
 
+func TestSupplierMCPRuntimeRejectsUnsafeDatabaseRoleCompositionBeforeConnecting(t *testing.T) {
+	base := SupplierMCPRuntimeConfig{
+		WorkerDatabaseURL:    "postgres://worker:pw@127.0.0.1:5432/mender?sslmode=disable",
+		ConnectorDatabaseURL: "postgres://worker:pw@127.0.0.1:5432/mender?sslmode=disable",
+		AllowedHosts:         []string{"mcp.example"},
+	}
+	if runtime, closeIt, err := BuildSupplierMCPRuntime(context.Background(), base, bootstrapSecretProvider{}); err == nil || runtime != nil || closeIt != nil || !strings.Contains(err.Error(), "distinct restricted role") {
+		t.Fatal(runtime != nil, closeIt != nil, err)
+	}
+	base.ConnectorDatabaseURL = "postgres://mcp_connector:pw@127.0.0.1:5432/other?sslmode=disable"
+	if runtime, closeIt, err := BuildSupplierMCPRuntime(context.Background(), base, bootstrapSecretProvider{}); err == nil || runtime != nil || closeIt != nil || !strings.Contains(err.Error(), "same database") {
+		t.Fatal(runtime != nil, closeIt != nil, err)
+	}
+	base.ConnectorDatabaseURL = "postgres://mcp_connector:pw@127.0.0.1:5432/mender?sslmode=disable"
+	if runtime, closeIt, err := BuildSupplierMCPRuntime(context.Background(), base, nil); err == nil || runtime != nil || closeIt != nil {
+		t.Fatal("nil MCP secret provider was accepted", runtime != nil, closeIt != nil, err)
+	}
+}
+
 type fakeControlCancel struct {
 	err   error
 	calls int

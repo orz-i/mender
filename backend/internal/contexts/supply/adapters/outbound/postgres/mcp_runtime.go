@@ -2,6 +2,8 @@ package postgres
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"time"
 
@@ -70,8 +72,8 @@ func (r *MCPRuntime) SaveMCPCallResult(ctx context.Context, value application.MC
 	var same bool
 	err = tx.QueryRow(ctx, `SELECT deployment_revision=$4 AND provider_id=$5 AND provider_request_id=$6 AND state=$7
  AND result_json IS NOT DISTINCT FROM CASE WHEN $8='' THEN NULL ELSE $8::jsonb END
- AND error_code IS NOT DISTINCT FROM NULLIF($9,'') AND observed_at=$10
- FROM supply.mcp_call_results WHERE workspace_id=$1 AND run_id=$2 AND submission_key=$3`, value.WorkspaceID, value.RunID, value.SubmissionKey, value.DeploymentRevision, value.ProviderID, value.ProviderRequestID, value.State, value.ResultJSON, value.ErrorCode, value.ObservedAt).Scan(&same)
+	 AND error_code IS NOT DISTINCT FROM NULLIF($9,'')
+	 FROM supply.mcp_call_results WHERE workspace_id=$1 AND run_id=$2 AND submission_key=$3`, value.WorkspaceID, value.RunID, value.SubmissionKey, value.DeploymentRevision, value.ProviderID, value.ProviderRequestID, value.State, value.ResultJSON, value.ErrorCode).Scan(&same)
 	if err != nil || !same {
 		return application.ErrMCPResultUnavailable
 	}
@@ -123,7 +125,8 @@ func (r *MCPRuntime) QueryStatus(ctx context.Context, query supply.StatusQuery) 
 	if value.State == "failed" {
 		state = supply.StatusFailed
 	}
-	return supply.StatusObservation{ObservationID: "mcp." + value.SubmissionKey, State: state, ResultJSON: value.ResultJSON, ErrorCode: value.ErrorCode, ObservedAt: value.ObservedAt}, nil
+	digest := sha256.Sum256([]byte(value.ProviderRequestID))
+	return supply.StatusObservation{ObservationID: "mcp." + hex.EncodeToString(digest[:]), State: state, ResultJSON: value.ResultJSON, ErrorCode: value.ErrorCode, ObservedAt: value.ObservedAt}, nil
 }
 
 var _ application.MCPToolRouteRepository = (*MCPRuntime)(nil)

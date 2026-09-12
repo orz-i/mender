@@ -1,8 +1,8 @@
 # Mender Backend
 
-最新实现：[Fixed Toolset MCP Distribution Foundation](../docs/engineering/2026-09-11-fixed-toolset-mcp.md)。在原有四个 MCP 平台元工具之外，API 可显式启用固定 Toolset endpoint，把已审核的 immutable ToolVersion + fixed Connection binding 直接映射为 MCP `tools/list` / `tools/call` 业务工具；协议仍固定官方 MCP Go SDK v1.7.0 与 `2026-07-28` stateless Streamable HTTP。
+最新实现正在推进 [Upstream MCP Client Adapter Foundation](../docs/engineering/2026-09-11-upstream-mcp-client-foundation.md)。除平台 MCP 元工具与 Fixed Toolset direct tools 外，Supply 现在具备受控远程 MCP Tools discovery/call adapter、append-only discovery snapshot、精确 snapshot route、独立 connector DB role 与 Connection/SecretProvider 凭据边界；协议仍固定官方 MCP Go SDK v1.7.0 与 `2026-07-28` stateless Streamable HTTP。
 
-已有受保护 Run/Artifact 查询、取消与公共 StartRun、原子预算预留、Worker lease/fencing、Supplier submission、HTTP executor、Provider result/status/cancel 收敛及 quota/usage settlement。MCP 已包含平台元工具与固定 Toolset direct tools；上游 MCP Client、OAuth、Resources/Prompts、MRTR 和 Agent 仍未开放。Artifact v1 只支持 <=1 MiB inline JSON；Commerce 仍不是 payment wallet 或真实收费系统。
+已有受保护 Run/Artifact 查询、取消与公共 StartRun、原子预算预留、Worker lease/fencing、Supplier submission、HTTP/MCP executor、Provider result/status/cancel 收敛及 quota/usage settlement。上游 MCP Client 当前仍是 reviewed runtime foundation：默认 Worker 不从环境自动构造公网 connector，OAuth、Resources/Prompts、MRTR 和 Agent 仍未开放。Artifact v1 只支持 <=1 MiB inline JSON；Commerce 仍不是 payment wallet 或真实收费系统。
 
 独立 Go 模块 `github.com/orz-i/mender/backend`。从仓库根可用 `pnpm dev:api`／`pnpm dev:worker`，或在本目录直接使用 Go。
 
@@ -21,7 +21,7 @@ internal/processes/settlement/   终态 Execution fact → Commerce quota 的受
 internal/processes/mcpbridge/    MCP 纯用例、跨域 ACL 与官方 SDK inbound adapter
 internal/platform/httpserver/    当前 Gin 探针适配
 internal/sharedkernel/           最小共享纯类型预留
-migrations/                     0001–0018：另含 Artifact、Tool Contract 与 Fixed Toolset 发布兼容
+migrations/                     0001–0020：另含 Artifact、Fixed Toolset、Upstream MCP snapshot/route/result 合同
 tests/architecture/              Go AST 边界检查与负向 fixture
 tests/execution/                 应用用例与仅测试编译的内存仓储
 tests/mcp/                       MCP 2026-07-28、元工具与 Fixed Toolset direct tools 协议测试

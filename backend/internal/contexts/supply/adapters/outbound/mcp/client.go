@@ -1,6 +1,7 @@
 package mcpclient
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
@@ -198,14 +199,6 @@ func secretHeader(secret application.Secret) (string, bool) {
 	return string(value), true
 }
 
-type boundedBody struct {
-	reader io.Reader
-	closer io.Closer
-}
-
-func (b *boundedBody) Read(p []byte) (int, error) { return b.reader.Read(p) }
-func (b *boundedBody) Close() error               { return b.closer.Close() }
-
 type authTransport struct {
 	base       http.RoundTripper
 	endpoint   string
@@ -242,11 +235,22 @@ func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if err != nil || resp == nil {
 		return resp, err
 	}
-	if resp.ContentLength > int64(t.deployment.MaxResponseBytes) {
+	limit := int64(t.deployment.MaxResponseBytes)
+	if resp.ContentLength > limit {
 		_ = resp.Body.Close()
 		return nil, supply.ErrExecutorUnavailable
 	}
-	resp.Body = &boundedBody{reader: io.LimitReader(resp.Body, int64(t.deployment.MaxResponseBytes)+1), closer: resp.Body}
+	// The MCP SDK owns response decoding, so enforce the byte ceiling before
+	// handing it the body. Limiting the Reader alone is insufficient: a valid
+	// JSON response that is exactly one byte over the configured maximum could
+	// otherwise be accepted without the SDK ever observing an overflow error.
+	body, readErr := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	closeErr := resp.Body.Close()
+	if readErr != nil || closeErr != nil || int64(len(body)) > limit {
+		return nil, supply.ErrExecutorUnavailable
+	}
+	resp.Body = io.NopCloser(bytes.NewReader(body))
+	resp.ContentLength = int64(len(body))
 	return resp, nil
 }
 

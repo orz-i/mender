@@ -1,6 +1,6 @@
 # 数据迁移
 
-当前迁移为 `0001–0016`。`0016_execution_artifacts.sql` 建立 execution-owned immutable `provider_result` Artifact，并把升级前已经存在的 succeeded Provider Observation 回填为稳定 `art_<run_id>` 结果；deferred bundle 要求新 succeeded observation 与 Artifact 的 source/content/time 在同一事务一致。Artifact v1 只保存 bounded `application/json`，不等于对象存储或下载授权。`0014–0015` 建立 fixed success-only Usage Settlement 与 terminal settlement jobs；`0013` 及以前继续承载 Provider control/result/reconciliation/cancellation。应用既有库迁移仍由操作员显式执行，不在 API/Worker 启动时自动执行。
+当前迁移为 `0001–0020`。`0019–0020` 建立 reviewed upstream MCP deployment、append-only Tool discovery snapshot、精确 ToolVersion route 以及 Workspace-RLS call result evidence；这些表不自动发布 Catalog Tool，也不自动开启公网网络。`0017–0018` 建立 Fixed Toolset 发布合同；`0016_execution_artifacts.sql` 建立 execution-owned immutable `provider_result` Artifact。`0014–0015` 建立 fixed success-only Usage Settlement 与 terminal settlement jobs；`0013` 及以前继续承载 Provider control/result/reconciliation/cancellation。应用既有库迁移仍由操作员显式执行，不在 API/Worker 启动时自动执行。
 
 本轮新增 `0004_atomic_admission.sql`：commerce 预算期／额度预留和 execution 受理／blocked Job／Outbox，含 FORCE RLS 与延迟额度总和约束。0001–0003 内容不变。已有开发数据库应用新增迁移后须重新执行 `pnpm db:grant-runtime --role <查询运行角色>`，仅补充受理关联的两列读取权；不能将 admission writer 或迁移所有者混入查询 API。详情及真实故障注入结果见 [内部原子受理](../../docs/engineering/2026-09-09-atomic-admission.md)。
 
@@ -18,6 +18,8 @@ Provider result 使用第三个独立执行角色：`pnpm db:grant-reconciler --
 
 供应商执行材料使用**另一独立角色**：`pnpm db:grant-executor --role mender_executor`。该角色仅可读取 `execution.run_admissions` 的 workspace/run/subject/connection/tool_version/deployment_revision/canonical_arguments、Connections 当前授权与 `credential_version_ref`、`supply.deployments` 以及迁移摘要；它不能读取 identity、commerce、catalog、Worker Job/Attempt/Run/Event/Outbox，也没有任何业务表写权限。`credential_version_ref` 只是 opaque secret-store key，不是 secret 本身。完整边界见 [Supplier Runtime Broker](../../docs/engineering/2026-09-10-supplier-runtime-broker.md)。
 
+Upstream MCP 使用独立 `pnpm db:grant-mcp-connector --role mender_mcp_connector`。该角色在 executor 的受控执行材料读取基础上，只额外获得 MCP discovery snapshot INSERT/SELECT、精确 route SELECT 以及 Workspace-RLS call-result evidence SELECT/INSERT；它不能读取 platform API key、Commerce、Catalog、Distribution，也不能修改 Deployment、Connection、Run、Attempt 或既有 MCP evidence。启动必须通过 `database.MCPConnectorRole` 自检，Worker/executor/reconciler 不能替代该角色。完整边界见 [Upstream MCP Client Adapter Foundation](../../docs/engineering/2026-09-11-upstream-mcp-client-foundation.md)。
+
 已有环境应用 `0008` 后必须重新执行 `pnpm db:grant-worker --role <原 worker role>`，否则 WorkerRole 启动校验会因缺少 submission 状态所需的窄权限而失败关闭。该命令不授予任何 supplier credential、commerce、connections 或 catalog 访问。
 
 应用 `0009` 时应新建独立 executor login role 并运行 `pnpm db:grant-executor --role <executor role>`；不要把 API runtime、admission、cancellation、worker 或迁移 owner 复用为 executor role。现有 Worker/API 角色无需获得 Supply schema USAGE，启动校验会继续拒绝越权配置。
@@ -31,6 +33,8 @@ Provider result 使用第三个独立执行角色：`pnpm db:grant-reconciler --
 应用 `0013` 后，既有 executor role 的 `supply.deployments` 表级只读授权自然覆盖新增 control descriptor 列；Reconciler/Worker/Cancellation/API 仍不得获得 Supply schema USAGE。本迁移只保存固定 endpoint 与 POST 方法，不开启网络调用，也不把 provider handle 写入 URL。完整阶段记录见 [Provider HTTP Control Runtime](../../docs/engineering/2026-09-11-provider-control-runtime.md)。
 
 应用 `0016` 后，既有 runtime 与 reconciler 角色都必须重新运行各自 grant 命令。Runtime 只获得上述 Artifact 安全列读取；Reconciler 只增加 Artifact SELECT/INSERT，以便 succeeded Observation、Artifact、settlement job 与 Run/Job terminal 在同一 Execution 事务收敛。隔离 PostgreSQL 套件同时模拟了 `0015 → 0016` 的真实升级：历史 succeeded result 被回填，失败/取消结果不生成 Artifact，RLS、不可变性和跨 Workspace 查询均保持成立。
+
+应用 `0019–0020` 后，只有真正启用 reviewed upstream MCP runtime 的环境才需要新建独立 connector login role，并执行 `pnpm db:grant-mcp-connector --role <connector role>`。MCP Tool discovery 只追加不可信 snapshot；人工/发布流程把 immutable ToolVersion 显式绑定到 snapshot hash 后，runtime 才允许 `tools/call`。同步已知结果先写入 Supply evidence，再通过既有 Provider Status → Provider Observation → Artifact / Settlement 收敛；调用超时或断线保持 unknown，不盲目再次调用副作用 Tool。
 
 已有环境应用 `0007` 后还应重新执行 `pnpm db:grant-admission --role <原 admission role>`。该命令会主动撤销旧的 `execution.jobs` 整表 INSERT，再只授予 StartRun 所需的 workspace/run/state/blocked_reason/available_at/created_at/updated_at 列，防止旧 admission role 因新列出现而获得 priority、lease、fencing 或 attempt 配置写入能力。
 

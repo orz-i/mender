@@ -21,7 +21,12 @@
 - `mcp_tool_routes` 把一个 Mender ToolVersion 固定到**精确 snapshot hash + upstream tool name + deployment revision**。每次 `tools/call` 前重新发现并核对 hash；drift 会在真正调用前 fail closed。
 - `tools/call` 不自动网络重试。已知 success / tool-level error 会先写入 Workspace-RLS 的 `supply.mcp_call_results`，再向 Execution 返回 accepted；后续通过既有 Provider Status → Provider Observation → Artifact / Settlement 收敛。网络结果不明或 input-required 不会伪造成失败或成功，只返回 unknown 供现有 reconciliation 语义处理。
 
-## 尚未完成
+## 第三切片：reviewed runtime 与集成验证
 
-Adapter 与本地 loopback MCP Server 单元验证已经存在，但 production bootstrap 仍未启用它；真实 PostgreSQL restricted role、Execution Dispatcher + Provider Reconciler E2E 属于第三切片。OAuth、Resources、Prompts、Tasks、MRTR、Agent/A2A 仍未实现。
+- 新增独立 `mender_mcp_connector` 角色及 `grant-mcp-connector` 操作员命令；connector 只能读取 admitted input/current Connection/reviewed Deployment，并读写 Supply-owned MCP snapshot/route/call-result evidence，不能读取平台 API key、Commerce、Catalog、Distribution 或修改 Execution 状态。
+- `BuildSupplierMCPRuntime` 要求 Worker DB 与 connector DB 是同一数据库但不同受限 principal，同时必须显式注入 SecretProvider 与 egress allowlist。默认 Worker entrypoint 不从环境变量自动拼出这个 runtime，因此远程 MCP egress 仍是 fail closed。
+- 本地 loopback MCP integration fixture 覆盖 discovery → snapshot → reviewed route → StartRun → Worker Dispatch → upstream `tools/call` → Supply result evidence → Provider Reconciler → Artifact/settlement 的完整链路，并检查 machine token 不透传、RLS、Connection revoke、disabled Deployment 和只调用一次语义。
+- 已通过 integration-tag 编译、`pnpm check`、`go test -race -count=1 ./...` 与 `git diff --check`。当前自动化环境的 Docker daemon 不可用，因此本轮尚缺 `pnpm test:integration:docker` 的真实 PostgreSQL 执行证据；在该门禁通过前不把第三切片或整个阶段标记为完成。
+
+OAuth、Resources、Prompts、Tasks、MRTR、Agent/A2A 仍未实现；没有声明任何公网 Provider 已经生产接入。
 

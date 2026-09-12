@@ -18,8 +18,10 @@ import (
 	connectioncredentials "github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/connectioncredentials"
 	executioninput "github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/executioninput"
 	httpexecutor "github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/http"
+	mcpclient "github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/mcp"
 	supplypg "github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/postgres"
 	supplyapp "github.com/orz-i/mender/backend/internal/contexts/supply/application"
+	supplydomain "github.com/orz-i/mender/backend/internal/contexts/supply/domain"
 	supply "github.com/orz-i/mender/backend/internal/contexts/supply/public"
 	database "github.com/orz-i/mender/backend/internal/platform/postgres"
 	"github.com/orz-i/mender/backend/migrations"
@@ -31,6 +33,46 @@ type SupplierHTTPRuntimeConfig struct {
 	AllowedHosts        []string
 	AllowHTTP           bool
 	AllowLoopback       bool
+}
+
+type SupplierMCPRuntimeConfig struct {
+	WorkerDatabaseURL    string
+	ConnectorDatabaseURL string
+	AllowedHosts         []string
+	AllowHTTP            bool
+	AllowLoopback        bool
+}
+
+// ReviewedMCPRuntime owns an explicitly configured upstream-MCP connector.
+// The default Worker entrypoint never constructs one from ambient credentials.
+// Discovery and execution share the same restricted Supply/Connection plane;
+// terminal call evidence is exposed only through the existing ProviderStatus
+// contract so Execution remains the owner of Run/Artifact convergence.
+type ReviewedMCPRuntime struct {
+	client   *mcpclient.Client
+	executor execapp.Executor
+	status   supply.ProviderStatusReader
+}
+
+func (r *ReviewedMCPRuntime) Executor() execapp.Executor {
+	if r == nil {
+		return nil
+	}
+	return r.executor
+}
+
+func (r *ReviewedMCPRuntime) StatusReader() supply.ProviderStatusReader {
+	if r == nil {
+		return nil
+	}
+	return r.status
+}
+
+func (r *ReviewedMCPRuntime) Discover(ctx context.Context, ref supplyapp.MCPDiscoveryRef) ([]supplydomain.MCPToolSnapshot, error) {
+	if r == nil || r.client == nil {
+		return nil, errors.New("upstream MCP runtime is unavailable")
+	}
+	return r.client.Discover(ctx, ref)
 }
 
 type ProviderHTTPControlRuntimeConfig struct {
@@ -121,6 +163,62 @@ func BuildSupplierHTTPExecutor(ctx context.Context, c SupplierHTTPRuntimeConfig,
 		return fail(err)
 	}
 	return executor, pool.Close, nil
+}
+
+func BuildSupplierMCPRuntime(ctx context.Context, c SupplierMCPRuntimeConfig, secrets supplyapp.SecretProvider) (*ReviewedMCPRuntime, func(), error) {
+	if secrets == nil || c.WorkerDatabaseURL == "" || c.ConnectorDatabaseURL == "" {
+		return nil, nil, errors.New("upstream MCP runtime is not safely configured")
+	}
+	if err := sameDatabaseDistinctRoles(c.WorkerDatabaseURL, c.ConnectorDatabaseURL); err != nil {
+		return nil, nil, errors.New("upstream MCP runtime requires the same database with a distinct restricted role")
+	}
+	pool, err := database.Open(ctx, c.ConnectorDatabaseURL)
+	if err != nil {
+		return nil, nil, err
+	}
+	fail := func(err error) (*ReviewedMCPRuntime, func(), error) {
+		pool.Close()
+		return nil, nil, err
+	}
+	if err = migrations.Verify(ctx, pool); err != nil {
+		return fail(err)
+	}
+	if err = database.MCPConnectorRole(ctx, pool); err != nil {
+		return fail(err)
+	}
+	inputService, err := execapp.NewRuntimeInputService(execpg.NewRuntimeInputs(pool))
+	if err != nil {
+		return fail(err)
+	}
+	credentialService, err := connapp.NewRuntimeService(connpg.NewRuntimeRepository(pool))
+	if err != nil {
+		return fail(err)
+	}
+	broker, err := supplyapp.NewBroker(
+		executioninput.New(execfacade.NewRuntimeInputs(inputService)),
+		connectioncredentials.New(connfacade.NewRuntimeCredentials(credentialService)),
+		supplypg.NewDeployments(pool),
+		secrets,
+	)
+	if err != nil {
+		return fail(err)
+	}
+	catalog, err := supplyapp.NewMCPToolCatalog(supplypg.NewMCPToolSnapshots(pool))
+	if err != nil {
+		return fail(err)
+	}
+	runtimeRepo := supplypg.NewMCPRuntime(pool)
+	client, err := mcpclient.New(broker, runtimeRepo, catalog, runtimeRepo, mcpclient.EgressPolicy{
+		AllowedHosts: c.AllowedHosts, AllowHTTP: c.AllowHTTP, AllowLoopback: c.AllowLoopback,
+	}, nil, nil, nil)
+	if err != nil {
+		return fail(err)
+	}
+	executor, err := supplyexecutor.New(client)
+	if err != nil {
+		return fail(err)
+	}
+	return &ReviewedMCPRuntime{client: client, executor: executor, status: runtimeRepo}, pool.Close, nil
 }
 
 type providerStatusRunner interface {
