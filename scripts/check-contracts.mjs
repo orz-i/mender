@@ -142,12 +142,15 @@ console.log('PASS: machine + delegated Console inline Artifact metadata/content 
 
 const usageAPI = parse(readFileSync(join(root, 'usage-observability.openapi.yaml'), 'utf8'));
 assert.equal(usageAPI.openapi, '3.1.0');
-assert.equal(usageAPI.info.version, '0.1.0');
-assert.equal(Object.keys(usageAPI.paths).length, 1);
+assert.equal(usageAPI.info.version, '0.2.0');
+assert.equal(Object.keys(usageAPI.paths).length, 2);
 assert.deepEqual(usageAPI.security, [{ BrowserSession: [] }]);
 const usagePath = usageAPI.paths['/api/console/v1/workspaces/{workspace_id}/usage'];
 assert.ok(usagePath?.get?.operationId);
 assert.equal(usagePath.get.parameters, undefined, 'Usage endpoint intentionally accepts no query parameters');
+const runCostPath = usageAPI.paths['/api/console/v1/workspaces/{workspace_id}/runs/{run_id}/cost'];
+assert.ok(runCostPath?.get?.operationId);
+assert.deepEqual(runCostPath.get.security, [{ RunDelegation: [] }]);
 validate({ $ref: '#/components/schemas/UsageResponse', components: usageAPI.components }, {
   data: {
     budget_periods: [{
@@ -162,11 +165,18 @@ validate({ $ref: '#/components/schemas/UsageResponse', components: usageAPI.comp
     }],
   },
 }, 'Human quota observability response');
+validate({ $ref: '#/components/schemas/RunQuotaCostResponse', components: usageAPI.components }, {
+  data: {
+    run_id: 'run_a', budget_id: 'budget_a', period_id: 'period_a', currency: 'USD', quota_state: 'settled',
+    reserved_micro: '200000', charged_micro: '125000', released_micro: '75000', outcome: 'succeeded',
+    created_at: '2026-09-12T00:00:00Z', finalized_at: '2026-09-12T00:01:00Z', accounting_scope: 'quota_only',
+  },
+}, 'delegated Run quota cost response');
 const usageSerialized = JSON.stringify(usageAPI);
 for (const forbidden of ['reservation_id', 'price_version_id', 'settlement_job_id', 'provider_request_id', 'credential_version_ref']) {
   assert.ok(!usageSerialized.includes(forbidden), `Usage contract exposes forbidden internal field ${forbidden}`);
 }
-console.log('PASS: Human Console quota observability contract uses exact micro strings, current membership and no payment/admin semantics.');
+console.log('PASS: Human Console quota observability + delegated Run cost contract use exact micro strings and no payment/admin semantics.');
 
 const mcpTools = json('mcp-meta-tools.json');
 assert.equal(mcpTools.contract_version, '0.1.0');

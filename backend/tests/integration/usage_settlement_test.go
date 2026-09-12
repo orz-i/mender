@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/orz-i/mender/backend/internal/bootstrap"
+	commercepg "github.com/orz-i/mender/backend/internal/contexts/commerce/adapters/outbound/postgres"
 	runpg "github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/postgres"
 	runapp "github.com/orz-i/mender/backend/internal/contexts/execution/application"
 	"github.com/orz-i/mender/backend/internal/contexts/execution/application/ports"
@@ -28,10 +29,12 @@ func exerciseUsageSettlement(t *testing.T, ctx context.Context, owner, runtime *
 	reconciler, _ := openTemporaryRole(t, ctx, owner, runtimeDSN, "mender_settle_reconciler_", migrations.GrantReconciler)
 	cancellation, _ := openTemporaryRole(t, ctx, owner, runtimeDSN, "mender_settle_cancel_", migrations.GrantCancellation)
 	settlementPool, settlementDSN := openTemporaryRoleWithDSN(t, ctx, owner, runtimeDSN, "mender_settlement_", migrations.GrantSettlement)
+	observerPool, _ := openTemporaryRole(t, ctx, owner, runtimeDSN, "mender_settle_observer_", migrations.GrantCommerceObserver)
 	must(t, database.WorkerRole(ctx, worker))
 	must(t, database.ReconcilerRole(ctx, reconciler))
 	must(t, database.CancellationRole(ctx, cancellation))
 	must(t, database.SettlementRole(ctx, settlementPool))
+	must(t, database.CommerceObserverRole(ctx, observerPool))
 	if database.SettlementRole(ctx, runtime) == nil || database.SettlementRole(ctx, owner) == nil {
 		t.Fatal("runtime/owner role accepted as usage settlement principal")
 	}
@@ -151,6 +154,12 @@ VALUES('ws_settle',$1,'sa_settle','key_settle',$1||'_idem',repeat('e',64),$2,'to
 	}
 	assertSettlement("run_settle_success", 70, "succeeded")
 	assertBudget(120, 400)
+	observability := commercepg.NewObservability(observerPool)
+	successCost, err := observability.RunCost(ctx, "ws_settle", "run_settle_success")
+	must(t, err)
+	if successCost.QuotaState != "settled" || successCost.ChargedMicro == nil || *successCost.ChargedMicro != 70 || successCost.ReleasedMicro() != 30 || successCost.Outcome != "succeeded" {
+		t.Fatal("settled success Run quota projection mismatch", successCost)
+	}
 
 	for _, tc := range []struct {
 		runID                      string
@@ -167,6 +176,11 @@ VALUES('ws_settle',$1,'sa_settle','key_settle',$1||'_idem',repeat('e',64),$2,'to
 		}
 		assertSettlement(tc.runID, tc.charge, tc.outcome)
 		assertBudget(tc.consumed, tc.reserved)
+	}
+	failedCost, err := observability.RunCost(ctx, "ws_settle", "run_settle_failed")
+	must(t, err)
+	if failedCost.ChargedMicro == nil || *failedCost.ChargedMicro != 0 || failedCost.ReleasedMicro() != 100 || failedCost.Outcome != "failed" {
+		t.Fatal("zero-charge failed Run quota projection mismatch", failedCost)
 	}
 
 	// Force the receipt insert to fail after the budget/reservation updates. The

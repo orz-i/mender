@@ -592,6 +592,18 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 				return failed(buildErr)
 			}
 			registers = append(registers, delegationHandler.Register)
+			if c.ConsoleUsageEnabled {
+				costAccess := commerceidentityaccess.NewDelegated(delegationFacade)
+				costService, costErr := commerceapp.NewRunCostService(commercepg.NewObservability(commerceObserverPool), costAccess)
+				if costErr != nil {
+					return failed(costErr)
+				}
+				costHandler, costErr := commercehttp.NewRunCost(costService, costAccess)
+				if costErr != nil {
+					return failed(costErr)
+				}
+				registers = append(registers, func(router *gin.Engine) { costHandler.RegisterAt(router, "/api/console/v1") })
+			}
 
 			delegatedAccess := runidentityaccess.NewDelegated(delegationFacade)
 			delegatedRuns, buildErr := runapp.NewService(repository, delegatedAccess, systemClock{})

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -16,6 +17,68 @@ const sessionCookie = "mender_session"
 type UsageHandler struct {
 	service    *application.UsageService
 	authorizer application.UsageAuthorizer
+}
+
+type RunCostHandler struct {
+	service    *application.RunCostService
+	authorizer application.RunCostAuthorizer
+}
+
+func NewRunCost(service *application.RunCostService, authorizer application.RunCostAuthorizer) (*RunCostHandler, error) {
+	if service == nil || authorizer == nil {
+		return nil, application.ErrObservabilityUnavailable
+	}
+	return &RunCostHandler{service: service, authorizer: authorizer}, nil
+}
+
+func (h *RunCostHandler) RegisterAt(router *gin.Engine, prefix string) {
+	router.GET(prefix+"/workspaces/:workspace_id/runs/:run_id/cost", h.get)
+}
+
+func bearer(c *gin.Context) (string, bool) {
+	values := c.Request.Header.Values("Authorization")
+	if len(values) != 1 || len(values[0]) > 256 {
+		return "", false
+	}
+	parts := strings.Fields(values[0])
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || len(parts[1]) > 240 {
+		return "", false
+	}
+	return parts[1], true
+}
+
+func (h *RunCostHandler) get(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	c.Header("X-Content-Type-Options", "nosniff")
+	if c.Request.URL.RawQuery != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "INVALID_ARGUMENT", "message": "Run cost query is invalid."}})
+		return
+	}
+	workspace, runID := c.Param("workspace_id"), c.Param("run_id")
+	if !validID(workspace) || !validID(runID) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "INVALID_ARGUMENT", "message": "Run cost target is invalid."}})
+		return
+	}
+	token, ok := bearer(c)
+	if !ok {
+		usageFailure(c, application.ErrObservabilityUnauthenticated)
+		return
+	}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+	actor, err := h.authorizer.AuthenticateRunCost(ctx, token)
+	if err != nil {
+		usageFailure(c, err)
+		return
+	}
+	result, err := h.service.Get(ctx, actor, workspace, runID)
+	if err != nil {
+		usageFailure(c, err)
+		return
+	}
+	data := usageView(result)
+	data["accounting_scope"] = "quota_only"
+	c.JSON(http.StatusOK, gin.H{"data": data})
 }
 
 func NewUsage(service *application.UsageService, authorizer application.UsageAuthorizer) (*UsageHandler, error) {
@@ -47,6 +110,8 @@ func usageFailure(c *gin.Context, err error) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": gin.H{"code": "UNAUTHENTICATED", "message": "Login is required."}})
 	case errors.Is(err, application.ErrObservabilityForbidden):
 		c.JSON(http.StatusForbidden, gin.H{"error": gin.H{"code": "FORBIDDEN", "message": "Usage visibility is not permitted."}})
+	case errors.Is(err, application.ErrObservabilityNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"code": "NOT_FOUND", "message": "Quota record was not found."}})
 	case errors.Is(err, context.DeadlineExceeded):
 		c.JSON(http.StatusGatewayTimeout, gin.H{"error": gin.H{"code": "TIMEOUT", "message": "Request deadline exceeded."}})
 	default:

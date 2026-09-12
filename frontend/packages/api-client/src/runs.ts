@@ -18,6 +18,56 @@ export interface RunRecord {
   updatedAt: string;
 }
 
+function parseRunCost(value: unknown): RunCostRecord {
+  const raw = object(value, '服务返回了无法识别的 Run quota cost');
+  exactKeys(raw, [
+    'run_id', 'budget_id', 'period_id', 'currency', 'quota_state', 'reserved_micro', 'charged_micro',
+    'released_micro', 'outcome', 'created_at', 'finalized_at', 'accounting_scope',
+  ], '服务返回了无法识别的 Run quota cost');
+  const runId = string(raw.run_id);
+  const budgetId = string(raw.budget_id);
+  const periodId = string(raw.period_id);
+  const currency = string(raw.currency);
+  const quotaState = string(raw.quota_state) as RunQuotaState;
+  const reservedMicro = micro(raw.reserved_micro);
+  const releasedMicro = micro(raw.released_micro);
+  const chargedMicro = raw.charged_micro === null ? null : micro(raw.charged_micro);
+  const outcome = raw.outcome === null ? null : string(raw.outcome) as RunQuotaOutcome;
+  const finalizedAt = raw.finalized_at === null ? null : string(raw.finalized_at);
+  if (!idPattern.test(runId) || !idPattern.test(budgetId) || !idPattern.test(periodId) || !/^[A-Z]{3}$/.test(currency) ||
+      !['held', 'released', 'settled'].includes(quotaState) || raw.accounting_scope !== 'quota_only') {
+    throw new Error('服务返回了无法识别的 Run quota cost');
+  }
+  const reserved = BigInt(reservedMicro);
+  const released = BigInt(releasedMicro);
+  if (released > reserved) throw new Error('服务返回了不一致的 Run quota cost');
+  if (quotaState === 'held') {
+    if (chargedMicro !== null || outcome !== null || finalizedAt !== null || released !== 0n) throw new Error('服务返回了不一致的 Run quota cost');
+  } else if (quotaState === 'released') {
+    if (chargedMicro !== null || outcome !== null || finalizedAt === null || released !== reserved) throw new Error('服务返回了不一致的 Run quota cost');
+  } else {
+    if (chargedMicro === null || finalizedAt === null || !['succeeded', 'failed', 'canceled'].includes(outcome ?? '')) throw new Error('服务返回了不一致的 Run quota cost');
+    const charged = BigInt(chargedMicro);
+    if (charged > reserved || released !== reserved - charged) throw new Error('服务返回了不一致的 Run quota cost');
+  }
+  return {
+    runId, budgetId, periodId, currency, quotaState, reservedMicro, chargedMicro, releasedMicro,
+    outcome, createdAt: string(raw.created_at), finalizedAt, accountingScope: 'quota_only',
+  };
+}
+
+function micro(value: unknown, message = '服务返回了无效的 micro amount') {
+  const raw = string(value, message);
+  if (!/^(0|[1-9][0-9]{0,18})$/.test(raw)) throw new Error(message);
+  return raw;
+}
+
+function exactKeys(raw: Record<string, unknown>, allowed: string[], message: string) {
+  const actual = Object.keys(raw).sort();
+  const expected = [...allowed].sort();
+  if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) throw new Error(message);
+}
+
 export interface RunEventRecord {
   version: string;
   eventType: 'run.state_changed';
@@ -37,6 +87,24 @@ export interface ArtifactRecord {
 
 export interface ArtifactDetailRecord extends ArtifactRecord {
   content: unknown;
+}
+
+export type RunQuotaState = 'held' | 'released' | 'settled';
+export type RunQuotaOutcome = 'succeeded' | 'failed' | 'canceled';
+
+export interface RunCostRecord {
+  runId: string;
+  budgetId: string;
+  periodId: string;
+  currency: string;
+  quotaState: RunQuotaState;
+  reservedMicro: string;
+  chargedMicro: string | null;
+  releasedMicro: string;
+  outcome: RunQuotaOutcome | null;
+  createdAt: string;
+  finalizedAt: string | null;
+  accountingScope: 'quota_only';
 }
 
 export interface Page<T> {
@@ -152,7 +220,19 @@ function parseRun(value: unknown): RunRecord {
 }
 
 export function createConsoleRunsClient(baseUrl = '', fetcher: typeof fetch = fetch) {
-  return createRunsClient(baseUrl, fetcher, '/api/console/v1');
+  const client = createRunsClient(baseUrl, fetcher, '/api/console/v1');
+  const base = baseUrl.replace(/\/$/, '');
+  const runBase = (workspaceId: string) => `${base}/api/console/v1/workspaces/${encodeURIComponent(workspaceId)}/runs`;
+  return {
+    ...client,
+    async getRunCost(request: RunRequest): Promise<RunCostRecord> {
+      requireId(request.runId, 'Run ID');
+      const raw = object(await jsonRequest(fetcher, `${runBase(request.workspaceId)}/${encodeURIComponent(request.runId)}/cost`, request, { signal: requestSignal(request.signal) }));
+      const item = parseRunCost(raw.data);
+      if (item.runId !== request.runId) throw new Error('服务返回了错误的 Run quota cost');
+      return item;
+    },
+  };
 }
 
 function parseEvent(value: unknown): RunEventRecord {

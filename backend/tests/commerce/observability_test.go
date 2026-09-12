@@ -19,6 +19,93 @@ type usageAuthorizer struct {
 	err   error
 }
 
+func TestRunCostUsesExplicitRunDelegationAndPersistedQuotaFacts(t *testing.T) {
+	fixture := usageFixture()
+	repo := &usageRepository{runCost: fixture.Entries[1]}
+	auth := &runCostAuthorizer{actor: application.RunCostActor{WorkspaceID: "ws_a", SubjectID: "user_a", CredentialID: "rd_alpha"}}
+	service, err := application.NewRunCostService(repo, auth)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := commercehttp.NewRunCost(service, auth)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	handler.RegisterAt(router, "/api/console/v1")
+	request := func(token, path string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodGet, path, nil)
+		if token != "" {
+			r.Header.Set("Authorization", "Bearer "+token)
+		}
+		// A browser cookie is intentionally irrelevant to this endpoint.
+		r.AddCookie(&http.Cookie{Name: "mender_session", Value: "browser-session-must-not-authorize-run-cost"})
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, r)
+		return w
+	}
+	base := "/api/console/v1/workspaces/ws_a/runs/run_done/cost"
+	if w := request("", base); w.Code != http.StatusUnauthorized || repo.calls != 0 {
+		t.Fatal(w.Code, w.Body.String(), repo.calls)
+	}
+	if w := request("delegated_alpha", "/api/console/v1/workspaces/ws_b/runs/run_done/cost"); w.Code != http.StatusForbidden || repo.calls != 0 {
+		t.Fatal(w.Code, w.Body.String(), repo.calls)
+	}
+	w := request("delegated_alpha", base)
+	if w.Code != http.StatusOK || repo.calls != 1 {
+		t.Fatal(w.Code, w.Body.String(), repo.calls)
+	}
+	body := w.Body.String()
+	for _, want := range []string{`"run_id":"run_done"`, `"quota_state":"settled"`, `"reserved_micro":"200"`, `"charged_micro":"125"`, `"released_micro":"75"`, `"accounting_scope":"quota_only"`} {
+		if !strings.Contains(body, want) {
+			t.Fatal("missing Run quota fact", want, body)
+		}
+	}
+	for _, forbidden := range []string{"reservation_id", "price_version_id", "settlement_job", "provider_request_id", "browser-session-must-not-authorize"} {
+		if strings.Contains(body, forbidden) {
+			t.Fatal("Run cost response leaked internal value", forbidden, body)
+		}
+	}
+	if w = request("delegated_alpha", "/api/console/v1/workspaces/ws_a/runs/run_missing/cost"); w.Code != http.StatusForbidden || repo.calls != 1 {
+		// The authorizer rejects a different Run target before Commerce storage.
+		t.Fatal(w.Code, w.Body.String(), repo.calls)
+	}
+}
+
+func (r *usageRepository) RunCost(_ context.Context, workspace, runID string) (application.UsageEntryView, error) {
+	r.calls++
+	if workspace != "ws_a" || runID != r.runCost.RunID {
+		return application.UsageEntryView{}, application.ErrObservabilityNotFound
+	}
+	return r.runCost, nil
+}
+
+type runCostAuthorizer struct {
+	actor application.RunCostActor
+	err   error
+}
+
+func (a *runCostAuthorizer) AuthenticateRunCost(_ context.Context, token string) (application.RunCostActor, error) {
+	if token != "delegated_alpha" {
+		return application.RunCostActor{}, application.ErrObservabilityUnauthenticated
+	}
+	if a.err != nil {
+		return application.RunCostActor{}, a.err
+	}
+	return a.actor, nil
+}
+
+func (a *runCostAuthorizer) AuthorizeRunCost(_ context.Context, actor application.RunCostActor, workspace, runID, action string) error {
+	if a.err != nil {
+		return a.err
+	}
+	if actor != a.actor || workspace != "ws_a" || runID != "run_done" || action != "run:read" {
+		return application.ErrObservabilityForbidden
+	}
+	return nil
+}
+
 func (a *usageAuthorizer) Authenticate(context.Context, string) (application.HumanUsageActor, error) {
 	if a.err != nil {
 		return application.HumanUsageActor{}, a.err
@@ -37,6 +124,7 @@ func (a *usageAuthorizer) Authorize(_ context.Context, actor application.HumanUs
 
 type usageRepository struct {
 	snapshot application.UsageSnapshot
+	runCost  application.UsageEntryView
 	calls    int
 }
 

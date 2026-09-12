@@ -11,6 +11,7 @@ var (
 	ErrObservabilityUnavailable     = errors.New("commerce observability unavailable")
 	ErrObservabilityUnauthenticated = errors.New("commerce observability unauthenticated")
 	ErrObservabilityForbidden       = errors.New("commerce observability forbidden")
+	ErrObservabilityNotFound        = errors.New("commerce observability record not found")
 )
 
 const maxObservabilityItems = 100
@@ -61,6 +62,31 @@ type UsageSnapshot struct {
 
 type UsageRepository interface {
 	Snapshot(context.Context, string, int) (UsageSnapshot, error)
+}
+
+type RunCostActor struct {
+	WorkspaceID, SubjectID, CredentialID string
+}
+
+type RunCostAuthorizer interface {
+	AuthenticateRunCost(context.Context, string) (RunCostActor, error)
+	AuthorizeRunCost(context.Context, RunCostActor, string, string, string) error
+}
+
+type RunCostRepository interface {
+	RunCost(context.Context, string, string) (UsageEntryView, error)
+}
+
+type RunCostService struct {
+	repository RunCostRepository
+	authorizer RunCostAuthorizer
+}
+
+func NewRunCostService(repository RunCostRepository, authorizer RunCostAuthorizer) (*RunCostService, error) {
+	if repository == nil || authorizer == nil {
+		return nil, ErrObservabilityUnavailable
+	}
+	return &RunCostService{repository: repository, authorizer: authorizer}, nil
 }
 
 type UsageService struct {
@@ -152,6 +178,29 @@ func (s *UsageService) Snapshot(ctx context.Context, actor HumanUsageActor, work
 		if !validateUsage(entry, workspace) {
 			return UsageSnapshot{}, ErrObservabilityUnavailable
 		}
+	}
+	return result, nil
+}
+
+func (s *RunCostService) Get(ctx context.Context, actor RunCostActor, workspace, runID string) (UsageEntryView, error) {
+	if err := ctx.Err(); err != nil {
+		return UsageEntryView{}, err
+	}
+	if !validID(workspace) || !validID(runID) || !validID(actor.WorkspaceID) || !validID(actor.SubjectID) || !validID(actor.CredentialID) || actor.WorkspaceID != workspace {
+		return UsageEntryView{}, ErrObservabilityForbidden
+	}
+	if err := s.authorizer.AuthorizeRunCost(ctx, actor, workspace, runID, "run:read"); err != nil {
+		return UsageEntryView{}, err
+	}
+	result, err := s.repository.RunCost(ctx, workspace, runID)
+	if err != nil {
+		return UsageEntryView{}, err
+	}
+	if err = ctx.Err(); err != nil {
+		return UsageEntryView{}, err
+	}
+	if result.RunID != runID || !validateUsage(result, workspace) {
+		return UsageEntryView{}, ErrObservabilityUnavailable
 	}
 	return result, nil
 }

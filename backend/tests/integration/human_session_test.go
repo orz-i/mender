@@ -277,6 +277,19 @@ func exerciseHumanBrowserSessions(t *testing.T, ctx context.Context, owner *pgxp
 	delegatedAccess := runidentityaccess.NewDelegated(identityfacade.NewRunDelegations(delegationService))
 	delegatedCaller, err := delegatedAccess.Authenticate(ctx, delegation.Token)
 	must(t, err)
+	runCostAccess := commerceidentityaccess.NewDelegated(identityfacade.NewRunDelegations(delegationService))
+	runCostService, err := commerceapp.NewRunCostService(commercepg.NewObservability(observerPool), runCostAccess)
+	must(t, err)
+	runCostActor, err := runCostAccess.AuthenticateRunCost(ctx, delegation.Token)
+	must(t, err)
+	runCost, err := runCostService.Get(ctx, runCostActor, "ws_human_alpha", string(receipt.RunID))
+	must(t, err)
+	if runCost.QuotaState != "held" || runCost.ReservedMicro != 75 || runCost.ChargedMicro != nil || runCost.ReleasedMicro() != 0 {
+		t.Fatal("delegated Run cost did not expose the durable held reservation", runCost)
+	}
+	if _, err = runCostService.Get(ctx, runCostActor, "ws_other", string(receipt.RunID)); !errors.Is(err, commerceapp.ErrObservabilityForbidden) {
+		t.Fatal("Run cost delegation crossed Workspace boundary", err)
+	}
 	probeRun := rundomain.RunID("run_delegated_probe")
 	if err = delegatedAccess.Authorize(ctx, delegatedCaller, runports.ReadRun, probeRun); err != nil {
 		t.Fatal("delegated read denied", err)

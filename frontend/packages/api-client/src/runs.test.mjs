@@ -7,6 +7,38 @@ const run = (state = 'queued') => ({
   created_at: '2026-09-12T00:00:00Z', updated_at: '2026-09-12T00:00:01Z',
 });
 
+test('reads exact Run quota cost with delegated Bearer and rejects accounting drift', async () => {
+  assert.equal('getRunCost' in createRunsClient(), false, 'Machine Run client must not advertise the Console-only cost route');
+  const client = createConsoleRunsClient('', async (url, init) => {
+    assert.equal(url, '/api/console/v1/workspaces/ws_a/runs/run_a/cost');
+    assert.equal(new Headers(init.headers).get('Authorization'), 'Bearer delegated_alpha');
+    assert.equal(init.credentials, 'omit');
+    return Response.json({ data: {
+      run_id: 'run_a', budget_id: 'budget_a', period_id: 'period_a', currency: 'USD', quota_state: 'settled',
+      reserved_micro: '200000', charged_micro: '125000', released_micro: '75000', outcome: 'succeeded',
+      created_at: '2026-09-12T00:00:00Z', finalized_at: '2026-09-12T00:01:00Z', accounting_scope: 'quota_only',
+    } });
+  });
+  const cost = await client.getRunCost({ workspaceId: 'ws_a', token: 'delegated_alpha', runId: 'run_a' });
+  assert.equal(cost.chargedMicro, '125000');
+  assert.equal(cost.releasedMicro, '75000');
+  assert.equal(typeof cost.reservedMicro, 'string');
+
+  const drifted = createConsoleRunsClient('', async () => Response.json({ data: {
+    run_id: 'run_a', budget_id: 'budget_a', period_id: 'period_a', currency: 'USD', quota_state: 'settled',
+    reserved_micro: '200', charged_micro: '125', released_micro: '76', outcome: 'succeeded',
+    created_at: '2026-09-12T00:00:00Z', finalized_at: '2026-09-12T00:01:00Z', accounting_scope: 'quota_only',
+  } }));
+  await assert.rejects(drifted.getRunCost({ workspaceId: 'ws_a', token: 'delegated_alpha', runId: 'run_a' }), /不一致/);
+
+  const leaked = createConsoleRunsClient('', async () => Response.json({ data: {
+    run_id: 'run_a', budget_id: 'budget_a', period_id: 'period_a', currency: 'USD', quota_state: 'held',
+    reserved_micro: '75', charged_micro: null, released_micro: '0', outcome: null,
+    created_at: '2026-09-12T00:00:00Z', finalized_at: null, accounting_scope: 'quota_only', reservation_id: 'secret_internal',
+  } }));
+  await assert.rejects(leaked.getRunCost({ workspaceId: 'ws_a', token: 'delegated_alpha', runId: 'run_a' }), /无法识别/);
+});
+
 test('lists protected runs without placing the machine token in the URL', async () => {
   const client = createRunsClient('', async (url, init) => {
     assert.equal(url, '/api/v1/workspaces/ws_a/runs?limit=20&state=queued');
