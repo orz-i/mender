@@ -19,9 +19,9 @@
     "ses_1d89d6a3ac23496c8a673befa16dfee3": {
       "path": "docs/session/ses_1d89d6a3ac23496c8a673befa16dfee3.md",
       "title": "Mender Alpha 第二批",
-      "status": "active",
+      "status": "completed",
       "created_at": "unix:1789200720",
-      "updated_at": "unix:1789202572",
+      "updated_at": "unix:1789202720",
       "parent_session_id": "ses_b73cf5f6073d42c5861409ba81162d3b"
     },
     "ses_1f6e4bf2d4d84a08ab178696f116d189": {
