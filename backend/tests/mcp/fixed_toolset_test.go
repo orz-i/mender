@@ -143,7 +143,7 @@ func TestFixedToolsetListsPublishedBusinessSchemaAndStartsServerOwnedRun(t *test
 	}
 }
 
-func TestFixedToolsetRejectsRoutingOverridesAndSchemaInvalidArguments(t *testing.T) {
+func TestFixedToolsetRejectsRoutingOverridesAndDelegatesBusinessSchemaToAdmission(t *testing.T) {
 	starter := &captureStarter{}
 	registry := &directRegistry{items: []application.DirectTool{reviewedDirectTool()}}
 	session, close := connectFixedTools(t, starter, registry, "machine-secret", "ws_a", "set_sales_v1")
@@ -156,8 +156,11 @@ func TestFixedToolsetRejectsRoutingOverridesAndSchemaInvalidArguments(t *testing
 	}
 	badBusiness := map[string]any{"query": 42, "large_integer": 7, "_mender": map[string]any{"idempotency_key": "direct-operation-0003", "currency": "USD", "max_charge_micro": "100000"}}
 	result, err = session.CallTool(context.Background(), &mcp.CallToolParams{Name: "company_search", Arguments: badBusiness})
-	if err != nil || !result.IsError || starter.calls != 0 || result.Content[0].(*mcp.TextContent).Text != "INVALID_ARGUMENT" {
-		t.Fatal("invalid business arguments bypassed published JSON Schema", result, err, starter.calls)
+	if err != nil || result.IsError || starter.calls != 1 {
+		t.Fatal("fixed MCP entrypoint did not delegate business arguments to shared Admission validation", result, err, starter.calls)
+	}
+	if !strings.Contains(string(starter.input.Arguments), `"query":42`) {
+		t.Fatal("fixed MCP entrypoint changed business arguments before Admission", string(starter.input.Arguments))
 	}
 }
 

@@ -105,6 +105,20 @@ func exerciseFixedToolsetMCP(t *testing.T, ctx context.Context, owner, runtime *
 	if !strings.Contains(string(inputSchema), `"_mender"`) || !strings.Contains(string(inputSchema), `"query"`) {
 		t.Fatal("published Tool schema missing business/control fields", string(inputSchema))
 	}
+	invalidBusiness := map[string]any{
+		"query": 42, "large_integer": 7,
+		"_mender": map[string]any{"idempotency_key": "fixed_direct_schema_invalid", "currency": "USD", "max_charge_micro": "100"},
+	}
+	invalid, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "company_search", Arguments: invalidBusiness})
+	must(t, err)
+	if !invalid.IsError || invalid.Content[0].(*mcp.TextContent).Text != "INVALID_ARGUMENT" {
+		t.Fatal("Fixed Toolset MCP bypassed shared Admission schema validation", invalid)
+	}
+	var invalidAdmissions int
+	must(t, owner.QueryRow(ctx, `SELECT count(*) FROM execution.run_admissions WHERE workspace_id='ws_a' AND idempotency_key='fixed_direct_schema_invalid'`).Scan(&invalidAdmissions))
+	if invalidAdmissions != 0 {
+		t.Fatal("schema-invalid Fixed Toolset call created durable admission state", invalidAdmissions)
+	}
 
 	args := map[string]any{
 		"query": "fixed-result-marker", "large_integer": json.Number("9007199254740993"),

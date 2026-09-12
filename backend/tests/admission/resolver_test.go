@@ -22,6 +22,45 @@ type toolsetsStub struct {
 	calls   int
 }
 
+func TestProductionResolverValidatesPublishedArgumentsBeforeConnectionAndPricing(t *testing.T) {
+	q := request()
+	toolsets := &toolsetsStub{binding: distribution.Binding{ToolsetVersionID: q.ToolsetVersionID, ToolVersionID: "tool_v1", BudgetID: "budget_a"}}
+	catalogPort := &catalogStub{tool: catalog.ToolVersion{
+		ID: "tool_v1", ToolID: q.ToolID, Version: q.ToolVersion, ProviderID: "provider_a", PriceVersionID: "price_v1", DeploymentRevision: "deploy_v1",
+		InputSchema: `{"type":"object","additionalProperties":false,"required":["query"],"properties":{"query":{"type":"string","minLength":1}}}`,
+	}}
+	connectionsPort := &connectionsStub{access: connections.Access{ConnectionID: q.ConnectionID, ProviderID: "provider_a", Revision: 1, ValidUntil: moment.Add(time.Hour)}}
+	pricing := &pricingStub{terms: commerce.Terms{PriceVersionID: "price_v1", BudgetID: "budget_a", PeriodID: "period_a", Currency: "USD", ReserveMicro: 50, ValidUntil: moment.Add(time.Hour)}}
+	resolver, err := capabilities.NewResolver(toolsets, catalogPort, connectionsPort, pricing, clock{moment})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = resolver.Resolve(context.Background(), who, q, `{"query":42}`); !errors.Is(err, application.ErrInvalid) || connectionsPort.calls != 0 || pricing.calls != 0 {
+		t.Fatal("schema-invalid business arguments reached connection/pricing", err, connectionsPort.calls, pricing.calls)
+	}
+	if _, err = resolver.Resolve(context.Background(), who, q, `{"query":"acme"}`); err != nil || connectionsPort.calls != 1 || pricing.calls != 1 {
+		t.Fatal("schema-valid business arguments did not resolve", err, connectionsPort.calls, pricing.calls)
+	}
+}
+
+func TestProductionResolverFailsClosedForInvalidPublishedSchema(t *testing.T) {
+	q := request()
+	toolsets := &toolsetsStub{binding: distribution.Binding{ToolsetVersionID: q.ToolsetVersionID, ToolVersionID: "tool_v1", BudgetID: "budget_a"}}
+	catalogPort := &catalogStub{tool: catalog.ToolVersion{
+		ID: "tool_v1", ToolID: q.ToolID, Version: q.ToolVersion, ProviderID: "provider_a", PriceVersionID: "price_v1", DeploymentRevision: "deploy_v1",
+		InputSchema: `{"$ref":"https://example.test/remote.json","type":"object"}`,
+	}}
+	connectionsPort := &connectionsStub{}
+	pricing := &pricingStub{}
+	resolver, err := capabilities.NewResolver(toolsets, catalogPort, connectionsPort, pricing, clock{moment})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = resolver.Resolve(context.Background(), who, q, `{"query":"acme"}`); !errors.Is(err, application.ErrUnavailable) || connectionsPort.calls != 0 || pricing.calls != 0 {
+		t.Fatal("invalid stored schema did not fail closed before later capabilities", err, connectionsPort.calls, pricing.calls)
+	}
+}
+
 func (s *toolsetsStub) ResolveBinding(context.Context, string, string, string, string) (distribution.Binding, error) {
 	s.calls++
 	return s.binding, s.err
@@ -66,14 +105,14 @@ func (s *pricingStub) ResolveAdmissionTerms(context.Context, string, string, str
 
 func TestProductionResolverUsesOwnedPublishedFactsAndTightestExpiry(t *testing.T) {
 	toolsets := &toolsetsStub{binding: distribution.Binding{ToolsetVersionID: "set_v1", ToolVersionID: "tool_v1", BudgetID: "budget_a"}}
-	catalogPort := &catalogStub{tool: catalog.ToolVersion{ID: "tool_v1", ToolID: "tool_a", Version: "1.0.0", ProviderID: "provider_a", PriceVersionID: "price_v1", DeploymentRevision: "deploy_v1"}}
+	catalogPort := &catalogStub{tool: catalog.ToolVersion{ID: "tool_v1", ToolID: "tool_a", Version: "1.0.0", ProviderID: "provider_a", PriceVersionID: "price_v1", DeploymentRevision: "deploy_v1", InputSchema: `{"type":"object","additionalProperties":false,"required":["n"],"properties":{"n":{"type":"integer"}}}`}}
 	connectionsPort := &connectionsStub{access: connections.Access{ConnectionID: "conn_a", ProviderID: "provider_a", Revision: 3, ValidUntil: moment.Add(30 * time.Minute)}}
 	pricing := &pricingStub{terms: commerce.Terms{PriceVersionID: "price_v1", BudgetID: "budget_a", PeriodID: "period_a", Currency: "USD", ReserveMicro: 50, ValidUntil: moment.Add(time.Hour)}}
 	resolver, err := capabilities.NewResolver(toolsets, catalogPort, connectionsPort, pricing, clock{moment})
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := resolver.Resolve(context.Background(), who, request(), `{"n":1}`)
+	p, err := resolver.Resolve(context.Background(), who, request(), `{"n":9007199254740993}`)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -179,26 +179,6 @@ func directArguments(raw any) (directControl, []byte, error) {
 	return control, arguments, nil
 }
 
-func validateBusinessArguments(schemaJSON string, arguments []byte) error {
-	var schema jsonschema.Schema
-	if err := json.Unmarshal([]byte(schemaJSON), &schema); err != nil {
-		return application.ErrUnavailable
-	}
-	resolved, err := schema.Resolve(nil)
-	if err != nil {
-		return application.ErrUnavailable
-	}
-	decoder := json.NewDecoder(bytes.NewReader(arguments))
-	var instance any
-	if err = decoder.Decode(&instance); err != nil {
-		return application.ErrInvalid
-	}
-	if err = resolved.Validate(instance); err != nil {
-		return application.ErrInvalid
-	}
-	return nil
-}
-
 func pointer(value bool) *bool { return &value }
 
 func directToolDefinition(tool application.DirectTool, inputSchema json.RawMessage) *mcp.Tool {
@@ -239,9 +219,6 @@ func (h *FixedHandler) server(ctx context.Context, caller application.Caller, to
 			}
 			control, arguments, err := directArguments(req.Params.Arguments)
 			if err != nil {
-				return toolError(err), nil
-			}
-			if err = validateBusinessArguments(tool.InputSchema, arguments); err != nil {
 				return toolError(err), nil
 			}
 			receipt, err := h.service.StartTool(callCtx, requestCaller, toolsetID, tool.Name, control.IdempotencyKey, control.Currency, control.MaxChargeMicro, arguments)

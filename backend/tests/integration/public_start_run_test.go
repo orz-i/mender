@@ -48,7 +48,7 @@ func exercisePublicStartRun(t *testing.T, ctx context.Context, owner, runtime *p
 	must(t, database.AdmissionRole(ctx, writer))
 
 	at := time.Now().UTC().Truncate(time.Microsecond)
-	_, err = owner.Exec(ctx, `INSERT INTO catalog.tool_versions(id,tool_id,version,provider_id,price_version_id,deployment_revision,state,published_at) VALUES('tool_public_v1','tool_public','1.0.0','provider_public','price_public_v1','deploy_public_v1','published',$1)`, at.Add(-time.Hour))
+	_, err = owner.Exec(ctx, `INSERT INTO catalog.tool_versions(id,tool_id,version,provider_id,price_version_id,deployment_revision,input_schema,state,published_at) VALUES('tool_public_v1','tool_public','1.0.0','provider_public','price_public_v1','deploy_public_v1','{"type":"object","additionalProperties":false,"required":["query","n"],"properties":{"query":{"type":"string","minLength":1},"n":{"type":"integer"}}}'::jsonb,'published',$1)`, at.Add(-time.Hour))
 	must(t, err)
 	_, err = owner.Exec(ctx, `INSERT INTO distribution.toolset_bindings(workspace_id,toolset_version_id,tool_id,tool_version_label,tool_version_id,budget_id,state,published_at) VALUES('ws_a','set_public_v1','tool_public','1.0.0','tool_public_v1','budget_public','published',$1)`, at.Add(-time.Hour))
 	must(t, err)
@@ -73,6 +73,20 @@ func exercisePublicStartRun(t *testing.T, ctx context.Context, owner, runtime *p
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)
 		return w
+	}
+	invalidBusiness := strings.Replace(body, `"query":"public-start-secret-marker"`, `"query":42`, 1)
+	if w := request(createKey, "public_start_schema_invalid", invalidBusiness); w.Code != http.StatusBadRequest {
+		t.Fatal("REST StartRun accepted arguments outside the published ToolVersion schema", w.Code, w.Body.String())
+	}
+	var invalidAdmissions int
+	must(t, owner.QueryRow(ctx, `SELECT count(*) FROM execution.run_admissions WHERE workspace_id='ws_a' AND idempotency_key='public_start_schema_invalid'`).Scan(&invalidAdmissions))
+	if invalidAdmissions != 0 {
+		t.Fatal("schema-invalid REST StartRun created durable admission state", invalidAdmissions)
+	}
+	var heldBefore int64
+	must(t, owner.QueryRow(ctx, `SELECT reserved_micro FROM commerce.budget_periods WHERE workspace_id='ws_a' AND budget_id='budget_public' AND period_id='period_public'`).Scan(&heldBefore))
+	if heldBefore != 0 {
+		t.Fatal("schema-invalid REST StartRun reserved quota", heldBefore)
 	}
 	first := request(createKey, "public_start_0001", body)
 	if first.Code != http.StatusAccepted {
