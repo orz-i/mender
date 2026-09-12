@@ -68,7 +68,6 @@ func newIntegrationUpstreamMCP(t *testing.T, platformKey string) *integrationUps
 }
 
 func exerciseUpstreamMCPRuntime(t *testing.T, ctx context.Context, owner, runtime *pgxpool.Pool, runtimeDSN, createKey string) {
-	t.Helper()
 	workerDSN := restrictedRoleDSN(t, ctx, owner, runtimeDSN, "mender_mcp_worker_", migrations.GrantWorker, database.WorkerRole)
 	connectorDSN := restrictedRoleDSN(t, ctx, owner, runtimeDSN, "mender_mcp_connector_", migrations.GrantMCPConnector, database.MCPConnectorRole)
 	reconcilerDSN := restrictedRoleDSN(t, ctx, owner, runtimeDSN, "mender_mcp_reconcile_", migrations.GrantReconciler, database.ReconcilerRole)
@@ -82,9 +81,9 @@ func exerciseUpstreamMCPRuntime(t *testing.T, ctx context.Context, owner, runtim
 	_, err = owner.Exec(ctx, `INSERT INTO supply.deployments(revision,provider_id,transport_kind,endpoint_url,http_method,auth_mode,auth_header_name,idempotency_header,mcp_protocol_version,mcp_stateless,request_timeout_ms,max_request_bytes,max_response_bytes,state,created_at)
 	 VALUES('deploy_upstream_mcp','provider_upstream_mcp','mcp_streamable_http',$1,'POST','bearer',NULL,NULL,'2026-07-28',true,3000,65536,1048576,'active',$2)`, upstream.server.URL, at)
 	must(t, err)
-	_, err = owner.Exec(ctx, `INSERT INTO connections.connections(workspace_id,id,provider_id,credential_version_ref,state,revision,created_at,expires_at) VALUES('ws_a','conn_upstream_mcp','provider_upstream_mcp','secret_upstream_mcp','active',1,$1,$2)`, at.Add(-time.Hour), at.Add(time.Hour))
+	_, err = owner.Exec(ctx, `INSERT INTO connections.connections(workspace_id,id,provider_id,credential_version_ref,state,revision,created_at,expires_at) VALUES('ws_upstream_mcp','conn_upstream_mcp','provider_upstream_mcp','secret_upstream_mcp','active',1,$1,$2)`, at.Add(-time.Hour), at.Add(time.Hour))
 	must(t, err)
-	_, err = owner.Exec(ctx, `INSERT INTO connections.connection_grants(workspace_id,connection_id,subject_id,active,created_at,expires_at) VALUES('ws_a','conn_upstream_mcp','sa_a',true,$1,$2)`, at.Add(-time.Hour), at.Add(45*time.Minute))
+	_, err = owner.Exec(ctx, `INSERT INTO connections.connection_grants(workspace_id,connection_id,subject_id,active,created_at,expires_at) VALUES('ws_upstream_mcp','conn_upstream_mcp','sa_upstream_mcp',true,$1,$2)`, at.Add(-time.Hour), at.Add(45*time.Minute))
 	must(t, err)
 
 	secrets := &integrationSecretProvider{}
@@ -95,7 +94,7 @@ func exerciseUpstreamMCPRuntime(t *testing.T, ctx context.Context, owner, runtim
 	must(t, err)
 	defer closeMCP()
 
-	candidates, err := mcpRuntime.Discover(ctx, supplyapp.MCPDiscoveryRef{WorkspaceID: "ws_a", SubjectID: "sa_a", ConnectionID: "conn_upstream_mcp", DeploymentRevision: "deploy_upstream_mcp"})
+	candidates, err := mcpRuntime.Discover(ctx, supplyapp.MCPDiscoveryRef{WorkspaceID: "ws_upstream_mcp", SubjectID: "sa_upstream_mcp", ConnectionID: "conn_upstream_mcp", DeploymentRevision: "deploy_upstream_mcp"})
 	must(t, err)
 	if len(candidates) != 1 || candidates[0].ToolName != "company.search" || candidates[0].ContentSHA256 == "" {
 		t.Fatal("upstream discovery was not persisted as one candidate", candidates)
@@ -114,18 +113,18 @@ func exerciseUpstreamMCPRuntime(t *testing.T, ctx context.Context, owner, runtim
 	must(t, err)
 	_, err = owner.Exec(ctx, `INSERT INTO supply.mcp_tool_routes(tool_version_id,deployment_revision,upstream_tool_name,snapshot_sha256,state,created_at) VALUES('tool_upstream_mcp_v1','deploy_upstream_mcp','company.search',$1,'active',$2)`, candidates[0].ContentSHA256, at)
 	must(t, err)
-	_, err = owner.Exec(ctx, `INSERT INTO distribution.toolset_bindings(workspace_id,toolset_version_id,tool_id,tool_version_label,tool_version_id,budget_id,connection_id,state,published_at) VALUES('ws_a','set_upstream_mcp_v1','tool_upstream_mcp','1.0.0','tool_upstream_mcp_v1','budget_upstream_mcp','conn_upstream_mcp','published',$1)`, at.Add(-time.Minute))
+	_, err = owner.Exec(ctx, `INSERT INTO distribution.toolset_bindings(workspace_id,toolset_version_id,tool_id,tool_version_label,tool_version_id,budget_id,connection_id,state,published_at) VALUES('ws_upstream_mcp','set_upstream_mcp_v1','tool_upstream_mcp','1.0.0','tool_upstream_mcp_v1','budget_upstream_mcp','conn_upstream_mcp','published',$1)`, at.Add(-time.Minute))
 	must(t, err)
 	_, err = owner.Exec(ctx, `INSERT INTO commerce.price_versions(id,tool_version_id,currency,reserve_micro,charge_micro,billing_policy,starts_at,ends_at,active) VALUES('price_upstream_mcp_v1','tool_upstream_mcp_v1','USD',70,70,'fixed_success_only',$1,$2,true)`, at.Add(-time.Hour), at.Add(time.Hour))
 	must(t, err)
-	_, err = owner.Exec(ctx, `INSERT INTO commerce.budget_periods(workspace_id,budget_id,period_id,currency,starts_at,ends_at,limit_micro) VALUES('ws_a','budget_upstream_mcp','period_upstream_mcp','USD',$1,$2,1000)`, at.Add(-time.Hour), at.Add(time.Hour))
+	_, err = owner.Exec(ctx, `INSERT INTO commerce.budget_periods(workspace_id,budget_id,period_id,currency,starts_at,ends_at,limit_micro) VALUES('ws_upstream_mcp','budget_upstream_mcp','period_upstream_mcp','USD',$1,$2,1000)`, at.Add(-time.Hour), at.Add(time.Hour))
 	must(t, err)
 
 	api, closeAPI, err := bootstrap.BuildAPI(ctx, bootstrap.APIConfig{RunAPIEnabled: true, StartRunAPIEnabled: true, DatabaseURL: runtimeDSN, AdmissionDatabaseURL: admissionDSN})
 	must(t, err)
 	defer closeAPI()
 	body := `{"tool_ref":{"tool_id":"tool_upstream_mcp","version":"1.0.0"},"toolset_id":"set_upstream_mcp_v1","connection_id":"conn_upstream_mcp","arguments":{"query":"Acme"},"max_charge":{"currency":"USD","amount_micro":"100"}}`
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/ws_a/runs", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/ws_upstream_mcp/runs", strings.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+createKey)
 	req.Header.Set("Idempotency-Key", "upstream_mcp_e2e_0001")
 	req.Header.Set("Content-Type", "application/json")
@@ -145,24 +144,24 @@ func exerciseUpstreamMCPRuntime(t *testing.T, ctx context.Context, owner, runtim
 	}
 	runID := accepted.Data.RunID
 
-	control, closeWorker, err := bootstrap.BuildWorkerControl(ctx, bootstrap.WorkerConfig{ControlEnabled: true, DatabaseURL: workerDSN, WorkerID: "worker_upstream_mcp", Workspaces: []execdomain.WorkspaceID{"ws_a"}})
+	control, closeWorker, err := bootstrap.BuildWorkerControl(ctx, bootstrap.WorkerConfig{ControlEnabled: true, DatabaseURL: workerDSN, WorkerID: "worker_upstream_mcp", Workspaces: []execdomain.WorkspaceID{"ws_upstream_mcp"}})
 	must(t, err)
 	defer closeWorker()
-	activated, err := control.Activate(ctx, "ws_a", []string{"deploy_upstream_mcp"}, 1)
+	activated, err := control.Activate(ctx, "ws_upstream_mcp", []string{"deploy_upstream_mcp"}, 1)
 	must(t, err)
 	if activated != 1 {
 		t.Fatal("MCP job was not activated", activated)
 	}
-	lease, err := control.LeaseOne(ctx, "ws_a", "worker_upstream_mcp", 30*time.Second)
+	lease, err := control.LeaseOne(ctx, "ws_upstream_mcp", "worker_upstream_mcp", 30*time.Second)
 	must(t, err)
 	dispatcher, err := execapp.NewDispatcher(control, mcpRuntime.Executor())
 	must(t, err)
 	dispatched, err := dispatcher.Dispatch(ctx, lease)
 	if err != nil {
 		var evidenceCount int
-		must(t, owner.QueryRow(ctx, `SELECT count(*) FROM supply.mcp_call_results WHERE workspace_id='ws_a' AND run_id=$1`, runID).Scan(&evidenceCount))
+		must(t, owner.QueryRow(ctx, `SELECT count(*) FROM supply.mcp_call_results WHERE workspace_id='ws_upstream_mcp' AND run_id=$1`, runID).Scan(&evidenceCount))
 		var attemptState, providerRequestID string
-		must(t, owner.QueryRow(ctx, `SELECT state,provider_request_id FROM execution.run_attempts WHERE workspace_id='ws_a' AND run_id=$1 AND attempt_no=1`, runID).Scan(&attemptState, &providerRequestID))
+		must(t, owner.QueryRow(ctx, `SELECT state,provider_request_id FROM execution.run_attempts WHERE workspace_id='ws_upstream_mcp' AND run_id=$1 AND attempt_no=1`, runID).Scan(&attemptState, &providerRequestID))
 		upstream.mu.Lock()
 		callCount := upstream.calls
 		authHeaders := append([]string(nil), upstream.auth...)
@@ -194,18 +193,18 @@ func exerciseUpstreamMCPRuntime(t *testing.T, ctx context.Context, owner, runtim
 	must(t, err)
 	reconciler, err := execapp.NewProviderReconciler(execpg.NewProviderReconciliation(reconcilerPool), status, results)
 	must(t, err)
-	record, err := reconciler.ReconcileOne(ctx, "ws_a")
+	record, err := reconciler.ReconcileOne(ctx, "ws_upstream_mcp")
 	must(t, err)
 	if record.Run.State != execdomain.Succeeded || record.Job.State != execdomain.JobFinished || record.Observation.State != execdomain.ProviderSucceeded {
 		t.Fatal("upstream MCP result did not converge", record)
 	}
 	var artifact, source string
-	must(t, owner.QueryRow(ctx, `SELECT content_json::text,source_observation_id FROM execution.artifacts WHERE workspace_id='ws_a' AND run_id=$1`, runID).Scan(&artifact, &source))
+	must(t, owner.QueryRow(ctx, `SELECT content_json::text,source_observation_id FROM execution.artifacts WHERE workspace_id='ws_upstream_mcp' AND run_id=$1`, runID).Scan(&artifact, &source))
 	if !strings.Contains(artifact, `"mcp-e2e"`) || strings.Contains(artifact, "integration-secret-value") || !strings.HasPrefix(source, "mcp.") {
 		t.Fatal("Artifact does not contain the normalized MCP result", artifact, source)
 	}
 	var settlementJobs int
-	must(t, owner.QueryRow(ctx, `SELECT count(*) FROM execution.settlement_jobs WHERE workspace_id='ws_a' AND run_id=$1`, runID).Scan(&settlementJobs))
+	must(t, owner.QueryRow(ctx, `SELECT count(*) FROM execution.settlement_jobs WHERE workspace_id='ws_upstream_mcp' AND run_id=$1`, runID).Scan(&settlementJobs))
 	if settlementJobs != 1 {
 		t.Fatal("terminal MCP result missed settlement", settlementJobs)
 	}
@@ -227,20 +226,20 @@ func exerciseUpstreamMCPRuntime(t *testing.T, ctx context.Context, owner, runtim
 	}
 
 	beforeSecrets := secrets.calls
-	_, err = owner.Exec(ctx, `UPDATE connections.connections SET state='revoked' WHERE workspace_id='ws_a' AND id='conn_upstream_mcp'`)
+	_, err = owner.Exec(ctx, `UPDATE connections.connections SET state='revoked' WHERE workspace_id='ws_upstream_mcp' AND id='conn_upstream_mcp'`)
 	must(t, err)
-	if _, e := mcpRuntime.Discover(ctx, supplyapp.MCPDiscoveryRef{WorkspaceID: "ws_a", SubjectID: "sa_a", ConnectionID: "conn_upstream_mcp", DeploymentRevision: "deploy_upstream_mcp"}); e == nil {
+	if _, e := mcpRuntime.Discover(ctx, supplyapp.MCPDiscoveryRef{WorkspaceID: "ws_upstream_mcp", SubjectID: "sa_upstream_mcp", ConnectionID: "conn_upstream_mcp", DeploymentRevision: "deploy_upstream_mcp"}); e == nil {
 		t.Fatal("revoked Connection still discovered upstream MCP")
 	}
 	if secrets.calls != beforeSecrets {
 		t.Fatal("revoked Connection reached SecretProvider")
 	}
-	_, err = owner.Exec(ctx, `UPDATE connections.connections SET state='active' WHERE workspace_id='ws_a' AND id='conn_upstream_mcp'`)
+	_, err = owner.Exec(ctx, `UPDATE connections.connections SET state='active' WHERE workspace_id='ws_upstream_mcp' AND id='conn_upstream_mcp'`)
 	must(t, err)
 	_, err = owner.Exec(ctx, `UPDATE supply.deployments SET state='disabled' WHERE revision='deploy_upstream_mcp'`)
 	must(t, err)
 	beforeSecrets = secrets.calls
-	if _, e := mcpRuntime.Discover(ctx, supplyapp.MCPDiscoveryRef{WorkspaceID: "ws_a", SubjectID: "sa_a", ConnectionID: "conn_upstream_mcp", DeploymentRevision: "deploy_upstream_mcp"}); e == nil {
+	if _, e := mcpRuntime.Discover(ctx, supplyapp.MCPDiscoveryRef{WorkspaceID: "ws_upstream_mcp", SubjectID: "sa_upstream_mcp", ConnectionID: "conn_upstream_mcp", DeploymentRevision: "deploy_upstream_mcp"}); e == nil {
 		t.Fatal("disabled Deployment still discovered upstream MCP")
 	}
 	if secrets.calls != beforeSecrets {

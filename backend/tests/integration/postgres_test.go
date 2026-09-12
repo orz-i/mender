@@ -106,6 +106,7 @@ func TestPostgresRuntimeContract(t *testing.T) {
 	keyA, idA := issue("ws_a", "sa_a", []string{"run:read", "run:cancel", "run:create"})
 	keyReadOnlyA, _ := issue("ws_a", "sa_read", []string{"run:read"})
 	keyB, _ := issue("ws_b", "sa_b", []string{"run:read"})
+	keyUpstreamMCP, _ := issue("ws_upstream_mcp", "sa_upstream_mcp", []string{"run:read", "run:cancel", "run:create"})
 	seed := func(workspace, id string) {
 		_, e := owner.Exec(ctx, "INSERT INTO execution.runs(workspace_id,id,state,version,created_at,updated_at) VALUES($1,$2,'queued',1,$3,$3)", workspace, id, at)
 		must(t, e)
@@ -251,7 +252,7 @@ func TestPostgresRuntimeContract(t *testing.T) {
 		exerciseFixedToolsetMCP(t, ctx, owner, runtime, runtimeURL.String(), keyA, keyReadOnlyA, keyB)
 	})
 	t.Run("upstream MCP client discovery call and result convergence", func(t *testing.T) {
-		exerciseUpstreamMCPRuntime(t, ctx, owner, runtime, runtimeURL.String(), keyA)
+		exerciseUpstreamMCPRuntime(t, ctx, owner, runtime, runtimeURL.String(), keyUpstreamMCP)
 	})
 	t.Run("protected HTTP uses durable storage and rechecks key revocation", func(t *testing.T) {
 		h, closeAPI, e := bootstrap.BuildAPI(ctx, bootstrap.APIConfig{RunAPIEnabled: true, DatabaseURL: runtimeURL.String()})

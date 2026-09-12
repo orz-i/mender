@@ -137,8 +137,14 @@ func reservedHeader(value string) bool {
 
 func (e *Executor) newClient(deployment domain.Deployment, pinnedAddress string) (*http.Client, func()) {
 	transport := &http.Transport{
-		Proxy:                 nil,
-		DisableKeepAlives:     true,
+		Proxy: nil,
+		// This Transport is private to one reviewed provider operation and its
+		// dialer is pinned to the already-validated address. Do not force
+		// Connection: close: on Windows loopback servers that can surface a normal
+		// peer close as WSAECONNRESET after a complete response and turn a known
+		// provider acknowledgement into an artificial "unknown" outcome. Idle
+		// connections are still closed explicitly before this operation returns.
+		DisableKeepAlives:     false,
 		ForceAttemptHTTP2:     false,
 		TLSClientConfig:       &tls.Config{MinVersion: tls.VersionTLS12},
 		ResponseHeaderTimeout: deployment.RequestTimeout,

@@ -86,6 +86,9 @@ func TestHTTPProviderCancelUsesDurableKeyAndAcknowledgement(t *testing.T) {
 	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
+		if r.Close {
+			t.Error("reviewed provider control must not force Connection: close on its private pinned transport")
+		}
 		if r.URL.Path != "/cancel" || r.Header.Get("Idempotency-Key") != "mender.cancel.run_http.1" {
 			t.Fatalf("cancel request did not preserve reviewed endpoint/key: %s %q", r.URL.Path, r.Header.Get("Idempotency-Key"))
 		}

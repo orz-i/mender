@@ -18,6 +18,41 @@ type reconciliationTargetsFake struct {
 	err    error
 }
 
+func TestProviderReconcilerBoundsProviderTimeByDurableSubmissionEvidence(t *testing.T) {
+	evidenceAt := time.Date(2026, 9, 10, 22, 0, 2, 0, time.UTC)
+	providerAt := evidenceAt.Add(-2 * time.Second)
+	target := reconciliationTarget()
+	target.EvidenceAt = evidenceAt
+
+	for _, tc := range []struct {
+		name       string
+		providerAt time.Time
+		want       time.Time
+	}{
+		{"provider clock before durable submission", providerAt, evidenceAt},
+		{"provider clock after durable submission", evidenceAt.Add(time.Second), evidenceAt.Add(time.Second)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			status := &providerStatusSourceFake{status: app.ProviderStatus{
+				ObservationID: "obs.time.bound", State: domain.ProviderSucceeded,
+				ResultJSON: `{"ok":true}`, ObservedAt: tc.providerAt,
+			}}
+			sink := &providerResultSinkFake{}
+			reconciler, err := app.NewProviderReconciler(&reconciliationTargetsFake{target: target, found: true}, status, sink)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = reconciler.ReconcileOne(context.Background(), target.WorkspaceID)
+			if err != nil || sink.calls != 1 || !sink.last.ObservedAt.Equal(tc.want) {
+				t.Fatal(err, sink.calls, sink.last.ObservedAt, tc.want)
+			}
+			if status.last.EvidenceAt != evidenceAt {
+				t.Fatal("status source did not receive durable evidence bound", status.last)
+			}
+		})
+	}
+}
+
 func (f *reconciliationTargetsFake) NextProviderTarget(context.Context, domain.WorkspaceID) (app.ProviderTarget, bool, error) {
 	return f.target, f.found, f.err
 }

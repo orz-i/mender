@@ -255,7 +255,14 @@ func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func (c *Client) httpClient(deployment domain.Deployment, e endpoint, secret application.Secret) (*http.Client, func()) {
-	transport := &http.Transport{Proxy: nil, DisableKeepAlives: true, ForceAttemptHTTP2: false, TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}, ResponseHeaderTimeout: deployment.RequestTimeout, DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+	// A Streamable HTTP MCP session performs initialize, notifications and
+	// tools/* as multiple requests. Keep those requests on the same private,
+	// DNS-pinned transport instead of forcing Connection: close on every POST;
+	// the latter is observably flaky on Windows loopback and is unnecessary for
+	// SSRF isolation because every new dial still ignores the request host and
+	// targets e.pinned. HTTP/2 and proxies remain disabled, and closeHTTP tears
+	// down idle connections when the session ends.
+	transport := &http.Transport{Proxy: nil, DisableKeepAlives: false, ForceAttemptHTTP2: false, TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}, ResponseHeaderTimeout: deployment.RequestTimeout, DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
 		return c.dialer.DialContext(ctx, network, e.pinned)
 	}}
 	auth := &authTransport{base: transport, endpoint: e.url.String(), deployment: deployment, secret: secret}

@@ -22,6 +22,12 @@ type ProviderTarget struct {
 	ProviderID        string
 	ProviderRequestID string
 	ExternalTaskID    string
+	// EvidenceAt is the durable local lower bound for provider observations.
+	// A synchronous supplier may finish before the Dispatcher commits the
+	// submitted Attempt; reconciliation must never write an observation that
+	// predates that local submission evidence. It is optional for validation
+	// probes and non-persistent test targets, but PostgreSQL targets populate it.
+	EvidenceAt time.Time
 }
 
 func (t ProviderTarget) Valid() bool {
@@ -34,6 +40,9 @@ func (t ProviderTarget) Valid() bool {
 				return false
 			}
 		}
+	}
+	if !t.EvidenceAt.IsZero() && (t.EvidenceAt.Year() < 1 || t.EvidenceAt.Year() > 9999) {
+		return false
 	}
 	return true
 }
@@ -95,10 +104,18 @@ func (r *ProviderReconciler) ReconcileOne(ctx context.Context, workspace domain.
 		}
 		return ProviderResultRecord{}, ErrProviderStatusUnavailable
 	}
+	observedAt := status.ObservedAt
+	if !target.EvidenceAt.IsZero() && observedAt.Before(target.EvidenceAt) {
+		// Use durable execution evidence rather than time.Now so replay of the
+		// same provider fact remains deterministic. The provider payload and
+		// observation identity are untouched; only the local convergence time is
+		// bounded by the point at which the submission became durable.
+		observedAt = target.EvidenceAt
+	}
 	observation := domain.ProviderObservation{
 		WorkspaceID: target.WorkspaceID, RunID: target.RunID, ObservationID: status.ObservationID,
 		AttemptNo: target.AttemptNo, ProviderID: target.ProviderID, ProviderRequestID: target.ProviderRequestID, ExternalTaskID: target.ExternalTaskID,
-		State: status.State, ResultJSON: status.ResultJSON, ErrorCode: status.ErrorCode, ObservedAt: status.ObservedAt,
+		State: status.State, ResultJSON: status.ResultJSON, ErrorCode: status.ErrorCode, ObservedAt: observedAt,
 	}
 	if observation.Validate() != nil {
 		return ProviderResultRecord{}, ErrInvalidProviderStatus

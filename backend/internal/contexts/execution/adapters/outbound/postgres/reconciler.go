@@ -35,7 +35,8 @@ func (r *ProviderReconciliation) NextProviderTarget(ctx context.Context, workspa
 	var workspaceID, runID string
 	var attemptNo int32
 	var externalTask *string
-	err = tx.QueryRow(ctx, `SELECT a.workspace_id,a.run_id,a.attempt_no,a.provider_id,a.provider_request_id,a.external_task_id
+	err = tx.QueryRow(ctx, `SELECT a.workspace_id,a.run_id,a.attempt_no,a.provider_id,a.provider_request_id,a.external_task_id,
+ CASE WHEN a.state='submitted' THEN a.submitted_at ELSE a.unknown_at END AS evidence_at
  FROM execution.jobs j
  JOIN execution.runs r ON (r.workspace_id,r.id)=(j.workspace_id,j.run_id)
  JOIN execution.run_attempts a ON (a.workspace_id,a.run_id,a.lease_generation)=(j.workspace_id,j.run_id,j.lease_generation)
@@ -46,7 +47,7 @@ func (r *ProviderReconciliation) NextProviderTarget(ctx context.Context, workspa
    AND a.provider_id IS NOT NULL AND a.provider_request_id IS NOT NULL
    AND NOT EXISTS(SELECT 1 FROM execution.provider_observations p WHERE p.workspace_id=j.workspace_id AND p.run_id=j.run_id AND p.state IN ('succeeded','failed','canceled'))
  ORDER BY COALESCE((SELECT max(p.observed_at) FROM execution.provider_observations p WHERE p.workspace_id=j.workspace_id AND p.run_id=j.run_id),j.updated_at),j.run_id
- LIMIT 1`, string(workspace)).Scan(&workspaceID, &runID, &attemptNo, &target.ProviderID, &target.ProviderRequestID, &externalTask)
+ LIMIT 1`, string(workspace)).Scan(&workspaceID, &runID, &attemptNo, &target.ProviderID, &target.ProviderRequestID, &externalTask, &target.EvidenceAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		if err = tx.Commit(ctx); err != nil {
 			return application.ProviderTarget{}, false, application.ErrProviderResultUnavailable

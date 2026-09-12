@@ -99,6 +99,9 @@ func newUpstreamFixture(t *testing.T) *upstreamFixture {
 		f.mu.Lock()
 		f.seenAuth = append(f.seenAuth, r.Header.Get("Authorization"))
 		f.mu.Unlock()
+		if r.Close {
+			t.Error("upstream MCP session must not force Connection: close on its private pinned transport")
+		}
 		if r.Header.Get("Authorization") != "Bearer upstream-secret" {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
