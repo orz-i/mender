@@ -27,7 +27,9 @@ func GrantConnectionManager(ctx context.Context, pool *pgxpool.Pool, role string
 		"GRANT USAGE ON SCHEMA connections,mender_meta TO " + id,
 		"GRANT SELECT ON mender_meta.schema_migrations TO " + id,
 		"GRANT SELECT (workspace_id,id,provider_id,state,revision,created_at,expires_at) ON connections.connections TO " + id,
+		"GRANT INSERT (workspace_id,id,provider_id,credential_version_ref,state,revision,created_at,expires_at) ON connections.connections TO " + id,
 		"GRANT UPDATE (state,revision) ON connections.connections TO " + id,
+		"GRANT INSERT (workspace_id,connection_id,subject_id,active,created_at,expires_at) ON connections.connection_grants TO " + id,
 	} {
 		if _, err = tx.Exec(ctx, sql); err != nil {
 			return errors.New("connection-manager grant failed")

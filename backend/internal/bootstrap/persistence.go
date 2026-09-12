@@ -13,7 +13,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	connectionhttp "github.com/orz-i/mender/backend/internal/contexts/connections/adapters/inbound/httpapi"
 	connectionidentityaccess "github.com/orz-i/mender/backend/internal/contexts/connections/adapters/outbound/identityaccess"
+	connectionoauth "github.com/orz-i/mender/backend/internal/contexts/connections/adapters/outbound/oauth"
 	connectionpg "github.com/orz-i/mender/backend/internal/contexts/connections/adapters/outbound/postgres"
+	connectionrandom "github.com/orz-i/mender/backend/internal/contexts/connections/adapters/outbound/random"
+	connectionsupplycredentials "github.com/orz-i/mender/backend/internal/contexts/connections/adapters/outbound/supplycredentials"
 	connectionapp "github.com/orz-i/mender/backend/internal/contexts/connections/application"
 	runfacade "github.com/orz-i/mender/backend/internal/contexts/execution/adapters/inbound/facade"
 	runhttp "github.com/orz-i/mender/backend/internal/contexts/execution/adapters/inbound/httpapi"
@@ -29,6 +32,7 @@ import (
 	identitypg "github.com/orz-i/mender/backend/internal/contexts/identity/adapters/outbound/postgres"
 	"github.com/orz-i/mender/backend/internal/contexts/identity/adapters/outbound/sessioncodec"
 	identityapp "github.com/orz-i/mender/backend/internal/contexts/identity/application"
+	"github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/filesecret"
 	"github.com/orz-i/mender/backend/internal/platform/httpserver"
 	database "github.com/orz-i/mender/backend/internal/platform/postgres"
 	cancelfacade "github.com/orz-i/mender/backend/internal/processes/admission/adapters/inbound/cancellation"
@@ -46,30 +50,52 @@ import (
 )
 
 type APIConfig struct {
-	RunAPIEnabled                bool
-	RunReadAPIEnabled            bool
-	DatabaseURL                  string
-	CursorSigningKey             []byte
-	CoordinatedCancelEnabled     bool
-	ProviderCancelEnabled        bool
-	CancellationDatabaseURL      string
-	StartRunAPIEnabled           bool
-	AdmissionDatabaseURL         string
-	MCPGatewayEnabled            bool
-	MCPFixedToolsetEnabled       bool
-	ConsoleOIDCEnabled           bool
-	BrowserSessionDatabaseURL    string
-	OIDCIssuer                   string
-	OIDCClientID                 string
-	OIDCClientSecretFile         string
-	OIDCRedirectURL              string
-	FlowSigningKeyFile           string
-	ConsoleCookieSecure          bool
-	ConsoleSessionTTL            time.Duration
-	ConsoleRunDelegationEnabled  bool
-	ConsoleRunDelegationTTL      time.Duration
-	ConsoleConnectionsEnabled    bool
-	ConnectionManagerDatabaseURL string
+	RunAPIEnabled                   bool
+	RunReadAPIEnabled               bool
+	DatabaseURL                     string
+	CursorSigningKey                []byte
+	CoordinatedCancelEnabled        bool
+	ProviderCancelEnabled           bool
+	CancellationDatabaseURL         string
+	StartRunAPIEnabled              bool
+	AdmissionDatabaseURL            string
+	MCPGatewayEnabled               bool
+	MCPFixedToolsetEnabled          bool
+	ConsoleOIDCEnabled              bool
+	BrowserSessionDatabaseURL       string
+	OIDCIssuer                      string
+	OIDCClientID                    string
+	OIDCClientSecretFile            string
+	OIDCRedirectURL                 string
+	FlowSigningKeyFile              string
+	ConsoleCookieSecure             bool
+	ConsoleSessionTTL               time.Duration
+	ConsoleRunDelegationEnabled     bool
+	ConsoleRunDelegationTTL         time.Duration
+	ConsoleConnectionsEnabled       bool
+	ConnectionManagerDatabaseURL    string
+	ConsoleConnectionOAuthEnabled   bool
+	ConnectionOAuthProviderID       string
+	ConnectionOAuthAuthorizationURL string
+	ConnectionOAuthTokenURL         string
+	ConnectionOAuthClientID         string
+	ConnectionOAuthClientSecretFile string
+	ConnectionOAuthRedirectURL      string
+	ConnectionOAuthScopes           []string
+	ConnectionOAuthSecretRoot       string
+	ConnectionOAuthFlowTTL          time.Duration
+}
+
+func loadMountedTextSecret(path, label string) (string, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", errors.New(label + " unavailable")
+	}
+	value := strings.TrimSpace(string(raw))
+	if value == "" || len(value) > 4096 {
+		return "", errors.New(label + " unavailable")
+	}
+	return value, nil
 }
 
 func loadConsoleSecrets(clientSecretFile, signingKeyFile string) (string, []byte, error) {
@@ -94,7 +120,7 @@ func loadConsoleSecrets(clientSecretFile, signingKeyFile string) (string, []byte
 }
 
 func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
-	c := APIConfig{ConsoleCookieSecure: true, ConsoleSessionTTL: 8 * time.Hour, ConsoleRunDelegationTTL: 10 * time.Minute}
+	c := APIConfig{ConsoleCookieSecure: true, ConsoleSessionTTL: 8 * time.Hour, ConsoleRunDelegationTTL: 10 * time.Minute, ConnectionOAuthFlowTTL: 10 * time.Minute}
 	switch getenv("MENDER_CONSOLE_OIDC_ENABLED") {
 	case "", "false":
 	case "true":
@@ -141,6 +167,39 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 		}
 	default:
 		return c, errors.New("MENDER_CONSOLE_CONNECTIONS_ENABLED must be true or false")
+	}
+	switch getenv("MENDER_CONSOLE_CONNECTION_OAUTH_ENABLED") {
+	case "", "false":
+	case "true":
+		if !c.ConsoleConnectionsEnabled || !c.ConsoleOIDCEnabled {
+			return APIConfig{}, errors.New("Connection OAuth requires Console Connections and Console OIDC")
+		}
+		c.ConsoleConnectionOAuthEnabled = true
+		c.ConnectionOAuthProviderID = strings.TrimSpace(getenv("MENDER_CONNECTION_OAUTH_PROVIDER_ID"))
+		c.ConnectionOAuthAuthorizationURL = strings.TrimSpace(getenv("MENDER_CONNECTION_OAUTH_AUTHORIZATION_URL"))
+		c.ConnectionOAuthTokenURL = strings.TrimSpace(getenv("MENDER_CONNECTION_OAUTH_TOKEN_URL"))
+		c.ConnectionOAuthClientID = strings.TrimSpace(getenv("MENDER_CONNECTION_OAUTH_CLIENT_ID"))
+		c.ConnectionOAuthClientSecretFile = strings.TrimSpace(getenv("MENDER_CONNECTION_OAUTH_CLIENT_SECRET_FILE"))
+		c.ConnectionOAuthRedirectURL = strings.TrimSpace(getenv("MENDER_CONNECTION_OAUTH_REDIRECT_URL"))
+		c.ConnectionOAuthSecretRoot = strings.TrimSpace(getenv("MENDER_CONNECTION_OAUTH_SECRET_ROOT"))
+		for _, raw := range strings.Split(getenv("MENDER_CONNECTION_OAUTH_SCOPES"), ",") {
+			scope := strings.TrimSpace(raw)
+			if scope != "" {
+				c.ConnectionOAuthScopes = append(c.ConnectionOAuthScopes, scope)
+			}
+		}
+		if c.ConnectionOAuthProviderID == "" || c.ConnectionOAuthAuthorizationURL == "" || c.ConnectionOAuthTokenURL == "" || c.ConnectionOAuthClientID == "" || c.ConnectionOAuthClientSecretFile == "" || c.ConnectionOAuthRedirectURL == "" || c.ConnectionOAuthSecretRoot == "" || len(c.ConnectionOAuthScopes) == 0 {
+			return APIConfig{}, errors.New("Connection OAuth requires one reviewed provider, endpoints, client secret file, redirect, scopes and secret root")
+		}
+		if raw := getenv("MENDER_CONNECTION_OAUTH_FLOW_TTL"); raw != "" {
+			ttl, err := time.ParseDuration(raw)
+			if err != nil || ttl < time.Minute || ttl > 15*time.Minute {
+				return APIConfig{}, errors.New("Connection OAuth flow TTL must be between 1m and 15m")
+			}
+			c.ConnectionOAuthFlowTTL = ttl
+		}
+	default:
+		return c, errors.New("MENDER_CONSOLE_CONNECTION_OAUTH_ENABLED must be true or false")
 	}
 	switch getenv("MENDER_RUN_START_API_ENABLED") {
 	case "", "false":
@@ -256,10 +315,19 @@ func (systemClock) Now() time.Time { return time.Now().UTC().Truncate(time.Micro
 // BuildAPI never migrates, seeds data or falls back to a test repository.
 func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	if !c.RunAPIEnabled {
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleConnectionsEnabled {
+		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleConnectionsEnabled || c.ConsoleConnectionOAuthEnabled {
 			return nil, nil, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return httpserver.NewRouter(), func() {}, nil
+	}
+	if c.ConsoleConnectionsEnabled && !c.ConsoleOIDCEnabled {
+		return nil, nil, errors.New("Console Connections require Console OIDC")
+	}
+	if c.ConsoleRunDelegationEnabled && (!c.ConsoleOIDCEnabled || !c.RunReadAPIEnabled) {
+		return nil, nil, errors.New("Console Run delegation requires Console OIDC and Run read API")
+	}
+	if c.ConsoleConnectionOAuthEnabled && (!c.ConsoleOIDCEnabled || !c.ConsoleConnectionsEnabled) {
+		return nil, nil, errors.New("Connection OAuth requires Console OIDC and Console Connections")
 	}
 	if c.MCPGatewayEnabled && (!c.RunReadAPIEnabled || !c.StartRunAPIEnabled || !c.CoordinatedCancelEnabled) {
 		return nil, nil, errors.New("MCP gateway requires Run read, StartRun and coordinated cancellation capabilities")
@@ -469,6 +537,37 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 				return failed(handlerErr)
 			}
 			registers = append(registers, connectionHandler.Register)
+			if c.ConsoleConnectionOAuthEnabled {
+				oauthClientSecret, secretErr := loadMountedTextSecret(c.ConnectionOAuthClientSecretFile, "Connection OAuth client secret")
+				if secretErr != nil {
+					return failed(secretErr)
+				}
+				oauthProvider, providerErr := connectionoauth.New(connectionoauth.Config{
+					ProviderID: c.ConnectionOAuthProviderID, AuthorizationURL: c.ConnectionOAuthAuthorizationURL,
+					TokenURL: c.ConnectionOAuthTokenURL, ClientID: c.ConnectionOAuthClientID, ClientSecret: oauthClientSecret,
+					RedirectURL: c.ConnectionOAuthRedirectURL, Scopes: c.ConnectionOAuthScopes,
+				}, nil)
+				if providerErr != nil {
+					return failed(providerErr)
+				}
+				vault, vaultErr := filesecret.New(c.ConnectionOAuthSecretRoot)
+				if vaultErr != nil {
+					return failed(vaultErr)
+				}
+				oauthService, oauthErr := connectionapp.NewOAuth(humanAccess, connectionpg.New(connectionManagerPool), oauthProvider, connectionsupplycredentials.New(vault), connectionrandom.Generator{}, systemClock{}, c.ConnectionOAuthFlowTTL)
+				if oauthErr != nil {
+					return failed(oauthErr)
+				}
+				oauthFlow, oauthErr := connectionhttp.NewOAuthFlowCookieCodec(key)
+				if oauthErr != nil {
+					return failed(oauthErr)
+				}
+				oauthHandler, oauthErr := connectionhttp.NewOAuth(oauthService, humanAccess, oauthFlow, c.ConsoleCookieSecure)
+				if oauthErr != nil {
+					return failed(oauthErr)
+				}
+				registers = append(registers, oauthHandler.Register)
+			}
 		}
 	}
 	var queries *runapp.Queries

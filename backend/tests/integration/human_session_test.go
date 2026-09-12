@@ -5,12 +5,14 @@ package integration_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	connectionidentityaccess "github.com/orz-i/mender/backend/internal/contexts/connections/adapters/outbound/identityaccess"
 	connectionpg "github.com/orz-i/mender/backend/internal/contexts/connections/adapters/outbound/postgres"
+	connectionsupplycredentials "github.com/orz-i/mender/backend/internal/contexts/connections/adapters/outbound/supplycredentials"
 	connectionapp "github.com/orz-i/mender/backend/internal/contexts/connections/application"
 	runidentityaccess "github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/identityaccess"
 	runports "github.com/orz-i/mender/backend/internal/contexts/execution/application/ports"
@@ -20,6 +22,8 @@ import (
 	"github.com/orz-i/mender/backend/internal/contexts/identity/adapters/outbound/sessioncodec"
 	identityapp "github.com/orz-i/mender/backend/internal/contexts/identity/application"
 	identitydomain "github.com/orz-i/mender/backend/internal/contexts/identity/domain"
+	"github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/filesecret"
+	supplyapp "github.com/orz-i/mender/backend/internal/contexts/supply/application"
 	database "github.com/orz-i/mender/backend/internal/platform/postgres"
 	"github.com/orz-i/mender/backend/migrations"
 )
@@ -27,6 +31,42 @@ import (
 type humanSessionClock struct{ at time.Time }
 
 func (c *humanSessionClock) Now() time.Time { return c.at }
+
+type integrationOAuthRandom struct{ calls int }
+
+func (r *integrationOAuthRandom) Token(bytes int) (string, error) {
+	r.calls++
+	switch bytes {
+	case 32:
+		if r.calls == 1 {
+			return strings.Repeat("s", 43), nil
+		}
+		return strings.Repeat("v", 43), nil
+	case 16:
+		if r.calls == 3 {
+			return strings.Repeat("c", 22), nil
+		}
+		return strings.Repeat("r", 22), nil
+	default:
+		return "", connectionapp.ErrUnavailable
+	}
+}
+
+type integrationOAuthProvider struct{ at time.Time }
+
+func (*integrationOAuthProvider) ProviderID() string { return "provider_human_oauth" }
+func (*integrationOAuthProvider) AuthorizationURL(state, verifier string) (string, error) {
+	if state == "" || verifier == "" {
+		return "", connectionapp.ErrUnavailable
+	}
+	return "https://provider.example/oauth/authorize?state=" + state, nil
+}
+func (p *integrationOAuthProvider) Exchange(_ context.Context, code, verifier string) (connectionapp.OAuthAccessToken, error) {
+	if code != "good-code" || verifier == "" {
+		return connectionapp.OAuthAccessToken{}, connectionapp.ErrUnavailable
+	}
+	return connectionapp.OAuthAccessToken{Value: []byte("alpha-provider-credential"), ExpiresAt: p.at.Add(time.Hour)}, nil
+}
 
 func exerciseHumanBrowserSessions(t *testing.T, ctx context.Context, owner *pgxpool.Pool, runtimeDSN string) {
 	t.Helper()
@@ -72,10 +112,42 @@ func exerciseHumanBrowserSessions(t *testing.T, ctx context.Context, owner *pgxp
 	must(t, err)
 	actor, err := humanAccess.Authenticate(ctx, issued.SessionToken)
 	must(t, err)
+	vault, err := filesecret.New(t.TempDir())
+	must(t, err)
+	oauthService, err := connectionapp.NewOAuth(humanAccess, connectionpg.New(connectionPool), &integrationOAuthProvider{at: clock.at}, connectionsupplycredentials.New(vault), &integrationOAuthRandom{}, clock, 10*time.Minute)
+	must(t, err)
+	oauthChallenge, err := oauthService.Begin(ctx, actor, "ws_human_alpha")
+	must(t, err)
+	oauthCompleted, err := oauthService.Complete(ctx, actor, oauthChallenge, oauthChallenge.State, "good-code")
+	must(t, err)
+	if oauthCompleted.Connection.ProviderID != "provider_human_oauth" || oauthCompleted.Connection.State != "active" || oauthCompleted.Connection.Revision != 1 {
+		t.Fatal("OAuth Connection did not converge", oauthCompleted.Connection)
+	}
+	var oauthCredentialRef, oauthGrantSubject string
+	var oauthRevision int64
+	must(t, owner.QueryRow(ctx, `SELECT credential_version_ref,revision FROM connections.connections WHERE workspace_id='ws_human_alpha' AND id=$1`, oauthCompleted.Connection.ConnectionID).Scan(&oauthCredentialRef, &oauthRevision))
+	must(t, owner.QueryRow(ctx, `SELECT subject_id FROM connections.connection_grants WHERE workspace_id='ws_human_alpha' AND connection_id=$1`, oauthCompleted.Connection.ConnectionID).Scan(&oauthGrantSubject))
+	if oauthGrantSubject != "user_human_alpha" || oauthCredentialRef == "" || oauthRevision != 1 {
+		t.Fatal("OAuth Connection persisted incomplete identity facts", oauthGrantSubject, oauthCredentialRef, oauthRevision)
+	}
+	resolvedCredential, err := vault.ResolveSecret(ctx, supplyapp.SecretRequest{ProviderID: "provider_human_oauth", ConnectionID: oauthCompleted.Connection.ConnectionID, CredentialVersionRef: oauthCredentialRef, ConnectionRevision: oauthRevision})
+	must(t, err)
+	if string(resolvedCredential.Bytes()) != "alpha-provider-credential" {
+		t.Fatal("OAuth provider credential was not stored behind the reviewed vault")
+	}
 	connections, err := connectionService.List(ctx, actor, "ws_human_alpha")
 	must(t, err)
-	if len(connections) != 1 || connections[0].ConnectionID != "conn_human_alpha" || connections[0].ProviderID != "provider_human_alpha" || connections[0].State != "active" {
+	if len(connections) != 2 {
 		t.Fatal("safe Connection metadata not listed", connections)
+	}
+	foundOAuth := false
+	for _, item := range connections {
+		if item.ConnectionID == oauthCompleted.Connection.ConnectionID && item.ProviderID == "provider_human_oauth" && item.State == "active" {
+			foundOAuth = true
+		}
+	}
+	if !foundOAuth {
+		t.Fatal("OAuth Connection missing from safe metadata list", connections)
 	}
 	revoked, err := connectionService.Revoke(ctx, actor, "ws_human_alpha", "conn_human_alpha", clock.at.Add(time.Second))
 	must(t, err)

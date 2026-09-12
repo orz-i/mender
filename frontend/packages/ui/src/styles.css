@@ -78,6 +78,7 @@ h2 { font-size: 18px; font-weight: 600; margin: 0 0 10px; }
 .workspace-card-actions { flex-shrink: 0; }
 .credential-panel { border: 1px solid var(--border); background: #fff; border-radius: 14px; padding: 26px; margin-bottom: 28px; display: grid; grid-template-columns: minmax(220px, .8fr) minmax(420px, 1.2fr); gap: 28px; }
 .credential-panel p, .muted-copy { color: #65766d; font-size: 13px; line-height: 1.75; margin: 0; }
+.success-panel { margin: 0 0 20px; border: 1px solid var(--border); border-radius: 10px; background: #f7faf8; color: #31574c; padding: 12px 14px; font-size: 13px; line-height: 1.6; }
 .credential-form { display: grid; grid-template-columns: 1fr 1.4fr auto; align-items: end; gap: 12px; }
 .run-delegation-form { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
 .run-delegation-form .error-panel { grid-column: 1 / -1; }

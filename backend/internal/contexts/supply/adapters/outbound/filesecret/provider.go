@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	supplyapp "github.com/orz-i/mender/backend/internal/contexts/supply/application"
+	supplypublic "github.com/orz-i/mender/backend/internal/contexts/supply/public"
 )
 
 const maxSecretBytes = 16 << 10
@@ -39,6 +40,15 @@ func New(root string) (*Provider, error) {
 		return nil, errors.New("secret root must be a directory")
 	}
 	return &Provider{root: resolved}, nil
+}
+
+func addressRequest(address supplypublic.CredentialAddress) supplyapp.SecretRequest {
+	return supplyapp.SecretRequest{
+		ProviderID:           address.ProviderID,
+		ConnectionID:         address.ConnectionID,
+		CredentialVersionRef: address.CredentialVersionRef,
+		ConnectionRevision:   address.ConnectionRevision,
+	}
 }
 
 func validID(value string) bool {
@@ -110,4 +120,60 @@ func (p *Provider) ResolveSecret(ctx context.Context, request supplyapp.SecretRe
 	return secret, nil
 }
 
+func (p *Provider) StoreCredential(ctx context.Context, address supplypublic.CredentialAddress, raw []byte) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if p == nil || p.root == "" || len(raw) < 1 || len(raw) > maxSecretBytes {
+		return supplypublic.ErrCredentialVaultUnavailable
+	}
+	name, err := FileName(addressRequest(address))
+	if err != nil {
+		return supplypublic.ErrCredentialVaultUnavailable
+	}
+	path := filepath.Join(p.root, name)
+	if !contained(p.root, path) {
+		return supplypublic.ErrCredentialVaultUnavailable
+	}
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		return supplypublic.ErrCredentialVaultUnavailable
+	}
+	complete := false
+	defer func() {
+		_ = file.Close()
+		if !complete {
+			_ = os.Remove(path)
+		}
+	}()
+	if _, err = file.Write(raw); err != nil || file.Sync() != nil || file.Close() != nil {
+		return supplypublic.ErrCredentialVaultUnavailable
+	}
+	complete = true
+	return nil
+}
+
+func (p *Provider) DeleteCredential(ctx context.Context, address supplypublic.CredentialAddress) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if p == nil || p.root == "" {
+		return supplypublic.ErrCredentialVaultUnavailable
+	}
+	name, err := FileName(addressRequest(address))
+	if err != nil {
+		return supplypublic.ErrCredentialVaultUnavailable
+	}
+	path := filepath.Join(p.root, name)
+	if !contained(p.root, path) {
+		return supplypublic.ErrCredentialVaultUnavailable
+	}
+	err = os.Remove(path)
+	if err == nil || errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return supplypublic.ErrCredentialVaultUnavailable
+}
+
 var _ supplyapp.SecretProvider = (*Provider)(nil)
+var _ supplypublic.CredentialVault = (*Provider)(nil)

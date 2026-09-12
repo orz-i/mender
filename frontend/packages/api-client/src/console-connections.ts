@@ -11,6 +11,11 @@ export interface ConsoleConnectionRecord {
   expiresAt: string;
 }
 
+export interface ConsoleConnectionOAuthStart {
+  providerId: string;
+  authorizationUrl: string;
+}
+
 function object(value: unknown): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('服务返回了无法识别的 Connection 响应');
   return value as Record<string, unknown>;
@@ -60,6 +65,19 @@ export function createConsoleConnectionsClient(baseUrl = '', fetcher: typeof fet
   const base = baseUrl.replace(/\/$/, '');
   const path = (workspaceId: string) => `${base}/api/console/v1/workspaces/${encodeURIComponent(workspaceId)}/connections`;
   return {
+    async startOAuth(workspaceId: string, csrfToken: string, signal?: AbortSignal): Promise<ConsoleConnectionOAuthStart> {
+      if (!workspaceId || !csrfToken || csrfToken.length > 256) throw new Error('Connection OAuth start request is invalid');
+      const response = await request(fetcher, `${path(workspaceId)}/oauth/start`, {
+        method: 'POST', signal, headers: { 'X-Mender-CSRF': csrfToken },
+      });
+      const raw = object(await response.json());
+      const data = object(raw.data);
+      const providerId = string(data.provider_id);
+      const authorizationUrl = string(data.authorization_url);
+      const parsed = new URL(authorizationUrl);
+      if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.hash) throw new Error('服务返回了不安全的 OAuth authorization URL');
+      return { providerId, authorizationUrl };
+    },
     async list(workspaceId: string, signal?: AbortSignal): Promise<ConsoleConnectionRecord[]> {
       if (!workspaceId) throw new Error('Workspace ID is required');
       const response = await request(fetcher, path(workspaceId), { signal });

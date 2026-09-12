@@ -6,6 +6,7 @@ export class ConnectionLoginRequiredError extends Error {
 
 export interface ConnectionGateway {
   workspaces(signal?: AbortSignal): Promise<WorkspaceOption[]>;
+  startOAuth(workspaceId: string, signal?: AbortSignal): Promise<{ providerId: string; authorizationUrl: string }>;
   list(workspaceId: string, signal?: AbortSignal): Promise<ConnectionSummary[]>;
   revoke(workspaceId: string, connectionId: string, signal?: AbortSignal): Promise<ConnectionSummary>;
 }

@@ -27,6 +27,12 @@ export function createConnectionGateway(): ConnectionGateway {
       try { return (await connections.list(workspaceId, signal)).map((item) => ({ id: item.connectionId, providerId: item.providerId, state: item.state, revision: item.revision, createdAt: item.createdAt, expiresAt: item.expiresAt })); }
       catch (error) { return mapError(error); }
     },
+    async startOAuth(workspaceId, signal) {
+      const csrf = readCSRFCookie();
+      if (!csrf) throw new Error('CSRF token unavailable');
+      try { return await connections.startOAuth(workspaceId, csrf, signal); }
+      catch (error) { return mapError(error); }
+    },
     async revoke(workspaceId, connectionId, signal) {
       const csrf = readCSRFCookie();
       if (!csrf) throw new Error('CSRF token unavailable');

@@ -12,8 +12,8 @@ Mender Console now exposes the first human Connection management slice on top of
 - `@mender/api-client` rejects a successful payload if it unexpectedly contains `credential_version_ref`, `secret` or `token` fields.
 - Console `/connections` lists safe metadata and exposes revoke only to Owner/Admin as a UX affordance; the server performs the authoritative membership check again.
 
-## Not delivered
+## Follow-up
 
-This slice intentionally does not create or upload BYOK secrets, start OAuth authorization, rotate credentials, edit Connection grants or expose supplier account contents. Creation requires a separately reviewed secret-ingestion/OAuth flow so the browser never becomes a durable secret store. Existing operator/database fixtures remain the way to seed Connection credentials during Alpha.
+This original slice intentionally did not create credentials. A later [Reviewed OAuth Connection Alpha](2026-09-12-connection-oauth-alpha.md) now supports one explicitly reviewed server-owned OAuth provider with PKCE and server-side credential storage. BYOK ingestion, refresh/rotation, dynamic providers, Connection Grant editing and provider account introspection remain out of scope.
 
 Machine Run APIs remain unchanged for Agent/service identities. Console now has a separate explicit short-lived Human→Run delegation for read/cancel; Connection access still does not imply `run:create` or billing authority, and the OIDC Cookie itself is never accepted as a Run credential.

@@ -3,7 +3,7 @@ export type { HealthResponse } from './health.ts';
 export { createConsoleIdentityClient } from './console-identity.ts';
 export type { ConsoleSessionRecord, ConsoleWorkspaceRecord } from './console-identity.ts';
 export { createConsoleConnectionsClient } from './console-connections.ts';
-export type { ConsoleConnectionRecord, ConsoleConnectionState } from './console-connections.ts';
+export type { ConsoleConnectionOAuthStart, ConsoleConnectionRecord, ConsoleConnectionState } from './console-connections.ts';
 export { createConsoleRunDelegationClient } from './console-run-delegation.ts';
 export type { ConsoleRunDelegation, RunDelegationScope } from './console-run-delegation.ts';
 export { createConsoleRunsClient, createRunsClient, MenderApiError } from './runs.ts';

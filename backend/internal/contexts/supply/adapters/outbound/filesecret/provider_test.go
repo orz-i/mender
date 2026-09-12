@@ -5,14 +5,54 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	supplyapp "github.com/orz-i/mender/backend/internal/contexts/supply/application"
+	supplypublic "github.com/orz-i/mender/backend/internal/contexts/supply/public"
 )
 
 func request() supplyapp.SecretRequest {
 	return supplyapp.SecretRequest{ProviderID: "provider_a", ConnectionID: "conn_a", CredentialVersionRef: "credv_a", ConnectionRevision: 3}
+}
+
+func TestCredentialVaultWritesOnceAndDeletesExactAddress(t *testing.T) {
+	root := t.TempDir()
+	provider, err := New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	address := supplypublic.CredentialAddress{ProviderID: "provider_a", ConnectionID: "conn_oauth", CredentialVersionRef: "oauth_v1", ConnectionRevision: 1}
+	if err = provider.StoreCredential(context.Background(), address, []byte("oauth-access-material")); err != nil {
+		t.Fatal(err)
+	}
+	if err = provider.StoreCredential(context.Background(), address, []byte("must-not-overwrite")); !errors.Is(err, supplypublic.ErrCredentialVaultUnavailable) {
+		t.Fatal("credential vault overwrote an existing immutable address", err)
+	}
+	secret, err := provider.ResolveSecret(context.Background(), supplyapp.SecretRequest{ProviderID: address.ProviderID, ConnectionID: address.ConnectionID, CredentialVersionRef: address.CredentialVersionRef, ConnectionRevision: address.ConnectionRevision})
+	if err != nil || string(secret.Bytes()) != "oauth-access-material" {
+		t.Fatal("stored credential did not resolve through runtime SecretProvider", err)
+	}
+	name, _ := FileName(supplyapp.SecretRequest{ProviderID: address.ProviderID, ConnectionID: address.ConnectionID, CredentialVersionRef: address.CredentialVersionRef, ConnectionRevision: address.ConnectionRevision})
+	info, err := os.Stat(filepath.Join(root, name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Windows does not expose POSIX owner/group/other permission bits through
+	// os.FileMode, so this assertion is meaningful only on POSIX-like systems.
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
+		t.Fatal("stored credential permissions are too broad", info.Mode().Perm())
+	}
+	if err = provider.DeleteCredential(context.Background(), address); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = provider.ResolveSecret(context.Background(), supplyapp.SecretRequest{ProviderID: address.ProviderID, ConnectionID: address.ConnectionID, CredentialVersionRef: address.CredentialVersionRef, ConnectionRevision: address.ConnectionRevision}); !errors.Is(err, supplyapp.ErrSecretUnavailable) {
+		t.Fatal("deleted credential remained readable", err)
+	}
+	if err = provider.DeleteCredential(context.Background(), address); err != nil {
+		t.Fatal("credential delete is not idempotent", err)
+	}
 }
 
 func TestProviderResolvesOnlyExactBoundSecret(t *testing.T) {

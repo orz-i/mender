@@ -107,5 +107,32 @@ func (r *Repository) Revoke(ctx context.Context, workspace, connectionID string,
 	return item, nil
 }
 
+func (r *Repository) CreateOAuthConnection(ctx context.Context, input application.NewOAuthConnection) (domain.Summary, error) {
+	if r == nil || r.pool == nil || input.WorkspaceID == "" || input.ConnectionID == "" || input.ProviderID == "" || input.CredentialVersionRef == "" || input.SubjectID == "" || input.Revision != 1 || input.CreatedAt.IsZero() || !input.ExpiresAt.After(input.CreatedAt) {
+		return domain.Summary{}, application.ErrUnavailable
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return domain.Summary{}, application.ErrUnavailable
+	}
+	defer rollback(tx)
+	if _, err = tx.Exec(ctx, "SELECT set_config('mender.workspace_id',$1,true)", input.WorkspaceID); err != nil {
+		return domain.Summary{}, application.ErrUnavailable
+	}
+	var item domain.Summary
+	err = tx.QueryRow(ctx, `INSERT INTO connections.connections(workspace_id,id,provider_id,credential_version_ref,state,revision,created_at,expires_at) VALUES($1,$2,$3,$4,'active',$5,$6,$7) RETURNING workspace_id,id,provider_id,state,revision,created_at,expires_at`, input.WorkspaceID, input.ConnectionID, input.ProviderID, input.CredentialVersionRef, input.Revision, input.CreatedAt, input.ExpiresAt).Scan(&item.WorkspaceID, &item.ConnectionID, &item.ProviderID, &item.State, &item.Revision, &item.CreatedAt, &item.ExpiresAt)
+	if err != nil || item.Validate() != nil {
+		return domain.Summary{}, application.ErrUnavailable
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO connections.connection_grants(workspace_id,connection_id,subject_id,active,created_at,expires_at) VALUES($1,$2,$3,true,$4,$5)`, input.WorkspaceID, input.ConnectionID, input.SubjectID, input.CreatedAt, input.ExpiresAt); err != nil {
+		return domain.Summary{}, application.ErrUnavailable
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return domain.Summary{}, application.ErrUnavailable
+	}
+	return item, nil
+}
+
 var _ application.Repository = (*Repository)(nil)
 var _ application.HumanRepository = (*Repository)(nil)
+var _ application.OAuthRepository = (*Repository)(nil)

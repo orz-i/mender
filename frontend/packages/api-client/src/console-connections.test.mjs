@@ -14,6 +14,26 @@ test('lists only same-origin Connection metadata without Authorization', async (
   assert.deepEqual(await client.list('ws_alpha'), [{ connectionId: 'conn_alpha', providerId: 'provider_alpha', state: 'active', revision: 2, createdAt: record.created_at, expiresAt: record.expires_at }]);
 });
 
+test('starts reviewed OAuth with only browser session + CSRF and returns a safe HTTPS redirect', async () => {
+  const client = createConsoleConnectionsClient('', async (url, init) => {
+    assert.equal(url, '/api/console/v1/workspaces/ws_alpha/connections/oauth/start');
+    assert.equal(init.method, 'POST');
+    assert.equal(init.credentials, 'same-origin');
+    assert.equal(init.headers['X-Mender-CSRF'], 'csrf-alpha');
+    assert.equal(init.headers.Authorization, undefined);
+    assert.equal(init.body, undefined);
+    return Response.json({ data: { provider_id: 'provider_alpha', authorization_url: 'https://provider.example/oauth/authorize?state=opaque' } });
+  });
+  assert.deepEqual(await client.startOAuth('ws_alpha', 'csrf-alpha'), {
+    providerId: 'provider_alpha', authorizationUrl: 'https://provider.example/oauth/authorize?state=opaque',
+  });
+});
+
+test('OAuth start fails closed on unsafe authorization URL', async () => {
+  const client = createConsoleConnectionsClient('', async () => Response.json({ data: { provider_id: 'provider_alpha', authorization_url: 'http://127.0.0.1/oauth' } }));
+  await assert.rejects(client.startOAuth('ws_alpha', 'csrf-alpha'), /不安全/);
+});
+
 test('revoke requires CSRF and never serializes a credential secret', async () => {
   const client = createConsoleConnectionsClient('', async (url, init) => {
     assert.equal(url, '/api/console/v1/workspaces/ws_alpha/connections/conn_alpha');

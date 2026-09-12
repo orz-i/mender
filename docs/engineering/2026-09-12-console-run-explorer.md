@@ -48,6 +48,6 @@ Console 页面调用受委托保护的 API：
 
 - 事件界面当前展示前 100 条并在存在 next cursor 时明确提示；后续再做完整事件分页。
 - Artifact 只展示 metadata，不开放 content view/download。
-- Connection 已有安全元数据列表/撤销 Alpha；创建/OAuth/BYOK ingestion 和 Toolset/Catalog 自助仍待后续。
+- Connection 已有安全元数据列表/撤销以及单一 reviewed OAuth 创建 Alpha；BYOK ingestion、refresh/rotation 和 Toolset/Catalog 自助仍待后续。
 - Human delegation 当前只有 read/cancel，没有 `run:create`、billing authority 或 Toolset mutation。
 - 无完整浏览器 E2E 自动化；本阶段以 typecheck/build、架构检查、API client unit tests、全仓门禁与真实 PostgreSQL 后端集成为验收依据。

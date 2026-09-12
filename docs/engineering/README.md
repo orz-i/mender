@@ -16,6 +16,7 @@
 | [2026-09-12 Workspace Console Alpha](2026-09-12-workspace-console-alpha.md) | Operator 预配人类身份、Workspace 自助读取/选择与 same-origin Console session client |
 | [2026-09-12 Connection self-service Alpha](2026-09-12-connection-self-service-alpha.md) | 独立最小 DB 角色、安全元数据列表、Workspace 授权与 CSRF 保护撤销 |
 | [2026-09-12 Human → Run delegation Alpha](2026-09-12-human-run-delegation-alpha.md) | 短时显式 Run delegation、CSRF mint/revoke、当前 Membership 重校验与 Machine Key 隔离 |
+| [2026-09-12 Reviewed OAuth Connection Alpha](2026-09-12-connection-oauth-alpha.md) | reviewed Provider OAuth + PKCE、服务端 Secret Vault、Connection/Grant 创建与 Console 发起授权 |
 
 工具链以根 [toolchain.versions.json](../../toolchain.versions.json) 为准，依赖由 pnpm 与 Go 锁文件固定。治理规则中的版本约束待 G0 评审。
 
