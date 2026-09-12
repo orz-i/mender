@@ -66,6 +66,8 @@ type APIConfig struct {
 	FlowSigningKeyFile           string
 	ConsoleCookieSecure          bool
 	ConsoleSessionTTL            time.Duration
+	ConsoleRunDelegationEnabled  bool
+	ConsoleRunDelegationTTL      time.Duration
 	ConsoleConnectionsEnabled    bool
 	ConnectionManagerDatabaseURL string
 }
@@ -92,7 +94,7 @@ func loadConsoleSecrets(clientSecretFile, signingKeyFile string) (string, []byte
 }
 
 func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
-	c := APIConfig{ConsoleCookieSecure: true, ConsoleSessionTTL: 8 * time.Hour}
+	c := APIConfig{ConsoleCookieSecure: true, ConsoleSessionTTL: 8 * time.Hour, ConsoleRunDelegationTTL: 10 * time.Minute}
 	switch getenv("MENDER_CONSOLE_OIDC_ENABLED") {
 	case "", "false":
 	case "true":
@@ -181,6 +183,23 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	default:
 		return c, errors.New("MENDER_RUN_READ_API_ENABLED must be true or false")
 	}
+	switch getenv("MENDER_CONSOLE_RUN_DELEGATION_ENABLED") {
+	case "", "false":
+	case "true":
+		c.ConsoleRunDelegationEnabled = true
+		if raw := getenv("MENDER_CONSOLE_RUN_DELEGATION_TTL"); raw != "" {
+			ttl, err := time.ParseDuration(raw)
+			if err != nil || ttl < time.Minute || ttl > 30*time.Minute {
+				return APIConfig{}, errors.New("Console Run delegation TTL must be between 1m and 30m")
+			}
+			c.ConsoleRunDelegationTTL = ttl
+		}
+	default:
+		return c, errors.New("MENDER_CONSOLE_RUN_DELEGATION_ENABLED must be true or false")
+	}
+	if c.ConsoleRunDelegationEnabled && (!c.ConsoleOIDCEnabled || !c.RunReadAPIEnabled) {
+		return APIConfig{}, errors.New("Console Run delegation requires Console OIDC and Run read API")
+	}
 	switch getenv("MENDER_MCP_GATEWAY_ENABLED") {
 	case "", "false":
 	case "true":
@@ -203,7 +222,7 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	}
 	switch getenv("MENDER_RUN_API_ENABLED") {
 	case "", "false":
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleConnectionsEnabled {
+		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleConnectionsEnabled {
 			return APIConfig{}, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return c, nil
@@ -237,7 +256,7 @@ func (systemClock) Now() time.Time { return time.Now().UTC().Truncate(time.Micro
 // BuildAPI never migrates, seeds data or falls back to a test repository.
 func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	if !c.RunAPIEnabled {
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleConnectionsEnabled {
+		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleConnectionsEnabled {
 			return nil, nil, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return httpserver.NewRouter(), func() {}, nil
@@ -356,12 +375,12 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 		if buildErr != nil {
 			return failed(buildErr)
 		}
-		codec := sessioncodec.Codec{}
-		sessions, buildErr := identityapp.NewHumanSessionService(identitypg.NewHumanSessions(browserSessionPool), codec, systemClock{}, c.ConsoleSessionTTL)
+		sessionTokenCodec := sessioncodec.Codec{}
+		sessions, buildErr := identityapp.NewHumanSessionService(identitypg.NewHumanSessions(browserSessionPool), sessionTokenCodec, systemClock{}, c.ConsoleSessionTTL)
 		if buildErr != nil {
 			return failed(buildErr)
 		}
-		login, buildErr := identityapp.NewLoginService(oidcClient, sessions, codec, systemClock{})
+		login, buildErr := identityapp.NewLoginService(oidcClient, sessions, sessionTokenCodec, systemClock{})
 		if buildErr != nil {
 			return failed(buildErr)
 		}
@@ -374,6 +393,57 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 			return failed(buildErr)
 		}
 		registers = append(registers, consoleHandler.Register)
+		if c.ConsoleRunDelegationEnabled {
+			delegations, buildErr := identityapp.NewRunDelegationService(identitypg.NewRunDelegations(browserSessionPool, browserSessionPool), sessions, sessionTokenCodec, systemClock{}, c.ConsoleRunDelegationTTL)
+			if buildErr != nil {
+				return failed(buildErr)
+			}
+			delegationFacade := facade.NewRunDelegations(delegations)
+			delegationHandler, buildErr := identityhttp.NewRunDelegationHandler(sessions, delegations)
+			if buildErr != nil {
+				return failed(buildErr)
+			}
+			registers = append(registers, delegationHandler.Register)
+
+			delegatedAccess := runidentityaccess.NewDelegated(delegationFacade)
+			delegatedRuns, buildErr := runapp.NewService(repository, delegatedAccess, systemClock{})
+			if buildErr != nil {
+				return failed(buildErr)
+			}
+			if c.CoordinatedCancelEnabled {
+				delegatedCancellation, cancelErr := BuildCancellation(start, cancelPool, identitycancel.NewDelegated(delegationFacade))
+				if cancelErr != nil {
+					return failed(cancelErr)
+				}
+				delegatedCoordinator := coordinatedcancel.New(cancelfacade.New(delegatedCancellation))
+				if c.ProviderCancelEnabled {
+					providerRequests, providerErr := runapp.NewProviderCancelRequests(runpg.NewProviderCancelRequests(cancelPool), systemClock{})
+					if providerErr != nil {
+						return failed(providerErr)
+					}
+					delegatedRuns, buildErr = runapp.NewServiceWithCancellationAndProvider(repository, delegatedAccess, systemClock{}, delegatedCoordinator, providerRequests)
+				} else {
+					delegatedRuns, buildErr = runapp.NewServiceWithCancellation(repository, delegatedAccess, systemClock{}, delegatedCoordinator)
+				}
+				if buildErr != nil {
+					return failed(buildErr)
+				}
+			}
+			delegatedRunHandler, buildErr := runhttp.New(delegatedRuns, delegatedAccess)
+			if buildErr != nil {
+				return failed(buildErr)
+			}
+			registers = append(registers, func(router *gin.Engine) { delegatedRunHandler.RegisterAt(router, "/api/console/v1") })
+			delegatedQueries, queryErr := runapp.NewQueries(repository, delegatedAccess, codec, systemClock{})
+			if queryErr != nil {
+				return failed(queryErr)
+			}
+			delegatedQueryHandler, queryErr := runhttp.NewQueries(delegatedQueries, delegatedAccess)
+			if queryErr != nil {
+				return failed(queryErr)
+			}
+			registers = append(registers, func(router *gin.Engine) { delegatedQueryHandler.RegisterAt(router, "/api/console/v1") })
+		}
 		if c.ConsoleConnectionsEnabled {
 			connectionManagerPool, buildErr = database.Open(start, c.ConnectionManagerDatabaseURL)
 			if buildErr != nil {

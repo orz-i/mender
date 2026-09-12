@@ -72,7 +72,11 @@ func NewQueries(queries *application.Queries, auth ports.Authenticator) (*QueryH
 }
 
 func (h *QueryHandler) Register(router *gin.Engine) {
-	base := "/api/v1/workspaces/:workspace_id/runs"
+	h.RegisterAt(router, "/api/v1")
+}
+
+func (h *QueryHandler) RegisterAt(router *gin.Engine, prefix string) {
+	base := prefix + "/workspaces/:workspace_id/runs"
 	router.GET(base, h.handle(false))
 	router.GET(base+"/:run_id/events", h.handle(true))
 	router.GET(base+"/:run_id/artifacts", h.handleArtifacts(false))

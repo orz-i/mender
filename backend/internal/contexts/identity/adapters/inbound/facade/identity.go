@@ -66,3 +66,28 @@ func (f *HumanIdentity) AuthorizeHuman(ctx context.Context, principal identity.H
 }
 
 var _ identity.HumanIdentity = (*HumanIdentity)(nil)
+
+type RunDelegations struct {
+	service *application.RunDelegationService
+}
+
+func NewRunDelegations(service *application.RunDelegationService) *RunDelegations {
+	return &RunDelegations{service: service}
+}
+
+func (f *RunDelegations) AuthenticateRunDelegation(ctx context.Context, raw string) (identity.RunDelegationPrincipal, error) {
+	if f == nil || f.service == nil {
+		return identity.RunDelegationPrincipal{}, identity.ErrUnavailable
+	}
+	principal, err := f.service.Authenticate(ctx, raw)
+	return identity.RunDelegationPrincipal{DelegationID: principal.DelegationID, WorkspaceID: principal.WorkspaceID, UserID: principal.UserID}, mapError(err)
+}
+
+func (f *RunDelegations) AuthorizeRunDelegation(ctx context.Context, principal identity.RunDelegationPrincipal, workspace, action string) error {
+	if f == nil || f.service == nil {
+		return identity.ErrUnavailable
+	}
+	return mapError(f.service.Authorize(ctx, application.RunDelegationPrincipal{DelegationID: principal.DelegationID, WorkspaceID: principal.WorkspaceID, UserID: principal.UserID}, workspace, action))
+}
+
+var _ identity.RunDelegations = (*RunDelegations)(nil)

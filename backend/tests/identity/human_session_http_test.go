@@ -2,6 +2,8 @@ package identity_test
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -19,6 +21,78 @@ import (
 type humanRepo struct {
 	mu       sync.Mutex
 	sessions map[string]identitydomain.HumanSession
+}
+
+func TestHumanRunDelegationIsExplicitScopedAndRevocable(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	clock := humanClock{at: time.Now().UTC().Truncate(time.Microsecond)}
+	humans := &humanRepo{sessions: map[string]identitydomain.HumanSession{}}
+	codec := sessioncodec.Codec{}
+	sessions, err := identityapp.NewHumanSessionService(humans, codec, clock, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issuedSession, err := sessions.IssueVerified(context.Background(), identityapp.VerifiedOIDCIdentity{Issuer: "https://idp.example", Subject: "subject-alpha"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := &delegationRepo{byID: map[string]identitydomain.RunDelegation{}, byDigest: map[string]string{}}
+	delegations, err := identityapp.NewRunDelegationService(repository, sessions, codec, clock, 5*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := identityhttp.NewRunDelegationHandler(sessions, delegations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := gin.New()
+	handler.Register(router)
+
+	request := httptest.NewRequest(http.MethodPost, "/api/console/v1/workspaces/ws_alpha/run-delegations", strings.NewReader(`{"scopes":["run:read","run:cancel"]}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-Mender-CSRF", issuedSession.CSRFToken)
+	request.AddCookie(&http.Cookie{Name: "mender_session", Value: issuedSession.SessionToken})
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusCreated {
+		t.Fatal("delegation issue failed", recorder.Code, recorder.Body.String())
+	}
+	var response struct {
+		Data struct {
+			DelegationID string   `json:"delegation_id"`
+			WorkspaceID  string   `json:"workspace_id"`
+			Token        string   `json:"token"`
+			Scopes       []string `json:"scopes"`
+		} `json:"data"`
+	}
+	if err = json.Unmarshal(recorder.Body.Bytes(), &response); err != nil || response.Data.DelegationID == "" || response.Data.Token == "" || response.Data.WorkspaceID != "ws_alpha" {
+		t.Fatal("invalid delegation response", err, recorder.Body.String())
+	}
+	principal, err := delegations.Authenticate(context.Background(), response.Data.Token)
+	if err != nil {
+		t.Fatal("delegation token did not authenticate", err)
+	}
+	if err = delegations.Authorize(context.Background(), principal, "ws_alpha", "run:read"); err != nil {
+		t.Fatal("delegation lost read scope", err)
+	}
+	if err = delegations.Authorize(context.Background(), principal, "ws_alpha", "run:cancel"); err != nil {
+		t.Fatal("delegation lost cancel scope", err)
+	}
+	if err = delegations.Authorize(context.Background(), principal, "ws_alpha", "run:create"); err == nil {
+		t.Fatal("delegation unexpectedly gained run:create")
+	}
+
+	revoke := httptest.NewRequest(http.MethodDelete, "/api/console/v1/workspaces/ws_alpha/run-delegations/"+response.Data.DelegationID, nil)
+	revoke.Header.Set("X-Mender-CSRF", issuedSession.CSRFToken)
+	revoke.AddCookie(&http.Cookie{Name: "mender_session", Value: issuedSession.SessionToken})
+	revokeRecorder := httptest.NewRecorder()
+	router.ServeHTTP(revokeRecorder, revoke)
+	if revokeRecorder.Code != http.StatusNoContent {
+		t.Fatal("delegation revoke failed", revokeRecorder.Code, revokeRecorder.Body.String())
+	}
+	if _, err = delegations.Authenticate(context.Background(), response.Data.Token); !errors.Is(err, identityapp.ErrUnauthenticated) {
+		t.Fatal("revoked delegation remained active", err)
+	}
 }
 
 func (r *humanRepo) ResolveOIDCIdentity(context.Context, string, string) (identityapp.HumanIdentity, error) {
@@ -60,6 +134,55 @@ func (*humanRepo) FindWorkspaceMembership(context.Context, string, string) (iden
 type humanClock struct{ at time.Time }
 
 func (c humanClock) Now() time.Time { return c.at }
+
+type delegationRepo struct {
+	mu       sync.Mutex
+	byID     map[string]identitydomain.RunDelegation
+	byDigest map[string]string
+}
+
+func (r *delegationRepo) CreateRunDelegation(_ context.Context, d identitydomain.RunDelegation) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.byID[d.ID] = d
+	r.byDigest[d.Digest] = d.ID
+	return nil
+}
+
+func (r *delegationRepo) FindRunDelegationByDigest(_ context.Context, digest string) (identitydomain.RunDelegation, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	id, ok := r.byDigest[digest]
+	if !ok {
+		return identitydomain.RunDelegation{}, identityapp.ErrNotFound
+	}
+	d := r.byID[id]
+	d.MembershipRole = identitydomain.RoleAdmin
+	return d, nil
+}
+
+func (r *delegationRepo) FindRunDelegationByID(_ context.Context, id string) (identitydomain.RunDelegation, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	d, ok := r.byID[id]
+	if !ok {
+		return identitydomain.RunDelegation{}, identityapp.ErrNotFound
+	}
+	d.MembershipRole = identitydomain.RoleAdmin
+	return d, nil
+}
+
+func (r *delegationRepo) RevokeRunDelegation(_ context.Context, id, workspace, user string, at time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	d, ok := r.byID[id]
+	if !ok || d.WorkspaceID != workspace || d.UserID != user || !d.RevokedAt.IsZero() {
+		return identityapp.ErrNotFound
+	}
+	d.RevokedAt = at
+	r.byID[id] = d
+	return nil
+}
 
 type fakeOIDC struct{}
 

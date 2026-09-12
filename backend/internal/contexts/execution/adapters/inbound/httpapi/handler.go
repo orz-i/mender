@@ -77,7 +77,11 @@ func New(service *application.Service, authenticator ports.Authenticator) (*Hand
 }
 
 func (h *Handler) Register(router *gin.Engine) {
-	base := "/api/v1/workspaces/:workspace_id/runs/:run_id"
+	h.RegisterAt(router, "/api/v1")
+}
+
+func (h *Handler) RegisterAt(router *gin.Engine, prefix string) {
+	base := prefix + "/workspaces/:workspace_id/runs/:run_id"
 	router.GET(base, h.handle(false))
 	router.POST(base+"/cancel", h.handle(true))
 }
@@ -101,7 +105,7 @@ func failure(c *gin.Context, id string, status int, code, message string) {
 func failError(c *gin.Context, id string, err error) {
 	switch {
 	case errors.Is(err, ports.ErrUnauthenticated):
-		failure(c, id, 401, "UNAUTHENTICATED", "A valid machine credential is required.")
+		failure(c, id, 401, "UNAUTHENTICATED", "A valid Run credential is required.")
 	case errors.Is(err, ports.ErrForbidden):
 		failure(c, id, 403, "FORBIDDEN", "Operation is not permitted.")
 	case errors.Is(err, ports.ErrNotFound):

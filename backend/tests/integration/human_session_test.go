@@ -12,6 +12,9 @@ import (
 	connectionidentityaccess "github.com/orz-i/mender/backend/internal/contexts/connections/adapters/outbound/identityaccess"
 	connectionpg "github.com/orz-i/mender/backend/internal/contexts/connections/adapters/outbound/postgres"
 	connectionapp "github.com/orz-i/mender/backend/internal/contexts/connections/application"
+	runidentityaccess "github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/identityaccess"
+	runports "github.com/orz-i/mender/backend/internal/contexts/execution/application/ports"
+	rundomain "github.com/orz-i/mender/backend/internal/contexts/execution/domain"
 	identityfacade "github.com/orz-i/mender/backend/internal/contexts/identity/adapters/inbound/facade"
 	identitypg "github.com/orz-i/mender/backend/internal/contexts/identity/adapters/outbound/postgres"
 	"github.com/orz-i/mender/backend/internal/contexts/identity/adapters/outbound/sessioncodec"
@@ -84,12 +87,44 @@ func exerciseHumanBrowserSessions(t *testing.T, ctx context.Context, owner *pgxp
 	if revokedAgain.Revision != 2 {
 		t.Fatal("idempotent Connection revoke changed revision", revokedAgain.Revision)
 	}
+	delegationService, err := identityapp.NewRunDelegationService(identitypg.NewRunDelegations(sessionsPool, sessionsPool), service, sessioncodec.Codec{}, clock, 5*time.Minute)
+	must(t, err)
+	delegation, err := delegationService.Issue(ctx, principal, "ws_human_alpha", []string{"run:read", "run:cancel"})
+	must(t, err)
+	if delegation.Token == "" || delegation.DelegationID == "" || delegation.WorkspaceID != "ws_human_alpha" {
+		t.Fatal("invalid Run delegation", delegation.DelegationID, delegation.WorkspaceID)
+	}
+	delegatedAccess := runidentityaccess.NewDelegated(identityfacade.NewRunDelegations(delegationService))
+	delegatedCaller, err := delegatedAccess.Authenticate(ctx, delegation.Token)
+	must(t, err)
+	probeRun := rundomain.RunID("run_delegated_probe")
+	if err = delegatedAccess.Authorize(ctx, delegatedCaller, runports.ReadRun, probeRun); err != nil {
+		t.Fatal("delegated read denied", err)
+	}
+	if err = delegatedAccess.Authorize(ctx, delegatedCaller, runports.CancelRun, probeRun); err != nil {
+		t.Fatal("delegated cancel denied", err)
+	}
+	var storedDigest string
+	must(t, owner.QueryRow(ctx, `SELECT digest FROM identity.run_delegations WHERE id=$1`, delegation.DelegationID).Scan(&storedDigest))
+	if storedDigest == delegation.Token || len(storedDigest) != 64 {
+		t.Fatal("raw delegation token was persisted")
+	}
 	_, err = owner.Exec(ctx, `INSERT INTO connections.connections(workspace_id,id,provider_id,credential_version_ref,state,revision,created_at,expires_at) VALUES('ws_human_alpha','conn_human_viewer','provider_human_alpha','secret_viewer','active',1,$1,$2)`, base, base.Add(2*time.Hour))
 	must(t, err)
 	_, err = owner.Exec(ctx, `UPDATE identity.workspace_memberships SET role='viewer' WHERE workspace_id='ws_human_alpha' AND user_id='user_human_alpha'`)
 	must(t, err)
+	if err = delegatedAccess.Authorize(ctx, delegatedCaller, runports.CancelRun, probeRun); !errors.Is(err, runports.ErrForbidden) {
+		t.Fatal("viewer retained delegated cancel authority", err)
+	}
+	if err = delegatedAccess.Authorize(ctx, delegatedCaller, runports.ReadRun, probeRun); err != nil {
+		t.Fatal("viewer lost delegated read authority", err)
+	}
 	if _, err = connectionService.Revoke(ctx, actor, "ws_human_alpha", "conn_human_viewer", clock.at.Add(3*time.Second)); !errors.Is(err, connectionapp.ErrForbidden) {
 		t.Fatal("viewer membership revoked Connection", err)
+	}
+	must(t, delegationService.Revoke(ctx, principal, "ws_human_alpha", delegation.DelegationID))
+	if _, err = delegatedAccess.Authenticate(ctx, delegation.Token); !errors.Is(err, runports.ErrUnauthenticated) {
+		t.Fatal("revoked delegation remained active", err)
 	}
 	for _, sql := range []string{
 		`SELECT credential_version_ref FROM connections.connections WHERE workspace_id='ws_human_alpha'`,

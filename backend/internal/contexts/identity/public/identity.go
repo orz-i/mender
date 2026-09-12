@@ -27,3 +27,13 @@ type HumanIdentity interface {
 	AuthenticateBrowserMutation(context.Context, string, string) (HumanPrincipal, error)
 	AuthorizeHuman(context.Context, HumanPrincipal, string, string) error
 }
+
+// RunDelegationPrincipal is the secret-free projection of an explicit,
+// short-lived human delegation. Browser session cookies are not accepted by
+// this contract.
+type RunDelegationPrincipal struct{ DelegationID, WorkspaceID, UserID string }
+
+type RunDelegations interface {
+	AuthenticateRunDelegation(context.Context, string) (RunDelegationPrincipal, error)
+	AuthorizeRunDelegation(context.Context, RunDelegationPrincipal, string, string) error
+}
