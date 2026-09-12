@@ -16,6 +16,14 @@
       "created_at": "unix:1789026310",
       "updated_at": "unix:1789093545"
     },
+    "ses_1d89d6a3ac23496c8a673befa16dfee3": {
+      "path": "docs/session/ses_1d89d6a3ac23496c8a673befa16dfee3.md",
+      "title": "Mender Alpha 第二批",
+      "status": "active",
+      "created_at": "unix:1789200720",
+      "updated_at": "unix:1789200903",
+      "parent_session_id": "ses_b73cf5f6073d42c5861409ba81162d3b"
+    },
     "ses_1f6e4bf2d4d84a08ab178696f116d189": {
       "path": "docs/session/ses_1f6e4bf2d4d84a08ab178696f116d189.md",
       "title": "Commerce Usage Settlement",
@@ -82,6 +90,6 @@
     "host-session:043ee4df576639eee2b229a35ac724174bbb1140023cfc08278b9ea5b952880b": "ses_fb8bf7db7ed14e029a0773cf6e00fdae",
     "host-session:5d530fd57ba79b8268af02d30478bff4dce88969f5bf7445b588a5903cdd379a": "ses_157ff4de793941e59da1cd925b5484b5",
     "host-session:c53bc646420f50ff80a09d952e02f152a0df5b2ff8de8ca08ba0290a7c708939": "ses_8e2a42283ec744f5940c1dc762d2e187",
-    "host-session:f0dc32257f053fdad6fcdd105ee0cbd89e45535e508e8f6b9baa3068c6ba38ce": "ses_b73cf5f6073d42c5861409ba81162d3b"
+    "host-session:f0dc32257f053fdad6fcdd105ee0cbd89e45535e508e8f6b9baa3068c6ba38ce": "ses_1d89d6a3ac23496c8a673befa16dfee3"
   }
 }
