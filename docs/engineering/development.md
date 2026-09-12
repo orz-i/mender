@@ -63,6 +63,8 @@ pnpm dev:api
 
 进一步显式启用 `MENDER_CONSOLE_HUMAN_START_ENABLED=true` 后，Console 可以通过 Browser Session + CSRF mint 一次短时 Human StartRun delegation。该 token 精确绑定 Workspace、Toolset、ToolVersion、Connection、币种、费用上限与一个 Idempotency-Key；OIDC Cookie 本身仍不能访问 StartRun。`POST /api/console/v1/workspaces/{workspace_id}/runs` 使用独立 delegated authenticator，但复用 Machine StartRun 的同一 Admission Resolver/Unit of Work，因此 Schema、Connection、Price、Budget、幂等、预留、Run/Job/Outbox 规则没有前端或人类专用分叉。详见 [Human StartRun delegation Alpha](2026-09-12-human-start-run-delegation-alpha.md)。
 
+Console `/launch` 将 launch discovery 与 Human StartRun delegation 组合成产品工作流：选择 Workspace → Tool/Connection → JSON arguments → caller charge cap → mint exact delegation → delegated Admission。若 HTTP 结果不确定，页面只在当前内存保留 prepared capability，并允许使用同一 token + Idempotency-Key 重试；目标和参数会保持锁定。成功后跳转/链接到 Run Explorer。详见 [Console Human StartRun Alpha](2026-09-12-console-human-start-run-alpha.md)。
+
 ### 可选持久化子集
 
 保持 `MENDER_RUN_API_ENABLED=false` 时，不会创建数据库连接或迁移。启用时配置受限的 `MENDER_DATABASE_URL`；管理操作使用单独进程的 `MENDER_ADMIN_DATABASE_URL`。不得将迁移所有者或 superuser 配给 API。完整准备步骤、发行／撤销命令、回环测试库要求与限制见 [身份与 PostgreSQL 切片](2026-09-09-identity-postgres.md)。

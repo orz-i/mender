@@ -36,7 +36,7 @@ func (h *Handler) Register(router *gin.Engine) {
 }
 
 func (h *Handler) RegisterAt(router *gin.Engine, prefix string) {
-	router.POST(prefix+"/workspaces/:workspace_id/runs", h.startRun)
+	router.POST(prefix+"/workspaces/:workspace_id/runs", func(c *gin.Context) { h.startRun(c, prefix) })
 }
 
 type toolRef struct{ ToolID, Version string }
@@ -220,7 +220,7 @@ func beginRequest(c *gin.Context, authenticator application.Authenticator) (cont
 	return ctx, cancel, caller, requestID, true
 }
 
-func (h *Handler) startRun(c *gin.Context) {
+func (h *Handler) startRun(c *gin.Context, prefix string) {
 	ctx, cancel, caller, requestID, ok := beginRequest(c, h.authenticator)
 	defer cancel()
 	if !ok {
@@ -276,7 +276,7 @@ func (h *Handler) startRun(c *gin.Context) {
 			"run_id":          receipt.RunID,
 			"execution_state": "queued",
 			"billing_state":   "reserved",
-			"status_url":      "/api/v1/workspaces/" + receipt.WorkspaceID + "/runs/" + receipt.RunID,
+			"status_url":      prefix + "/workspaces/" + receipt.WorkspaceID + "/runs/" + receipt.RunID,
 		},
 		"meta": gin.H{"request_id": requestID, "trace_id": requestID},
 	})

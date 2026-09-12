@@ -6,6 +6,8 @@ export { createConsoleConnectionsClient } from './console-connections.ts';
 export type { ConsoleConnectionOAuthStart, ConsoleConnectionRecord, ConsoleConnectionState } from './console-connections.ts';
 export { createConsoleLaunchClient } from './console-launch.ts';
 export type { ConsoleLaunchOption } from './console-launch.ts';
+export { createConsoleStartRunClient } from './console-start-run.ts';
+export type { ConsoleStartConstraint, ConsoleStartDelegation, ConsoleStartResult } from './console-start-run.ts';
 export { createConsoleRunDelegationClient } from './console-run-delegation.ts';
 export type { ConsoleRunDelegation, RunDelegationScope } from './console-run-delegation.ts';
 export { createConsoleRunsClient, createRunsClient, MenderApiError } from './runs.ts';

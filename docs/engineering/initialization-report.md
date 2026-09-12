@@ -39,7 +39,7 @@ Docker／专用测试环境阻塞已解除：用户完成隔离 PostgreSQL 测�
 
 ## 待实现／待产品化
 
-公开注册／邀请和成员编辑、完整 Catalog／Toolset 管理、BYOK secret ingestion、OAuth refresh/rotation 与多 Provider 动态配置、云厂商/KMS SecretProvider、Outbox 对外投递、Webhook、Agent/A2A、对象存储、真实支付／复式账本／退款和完整 governance 业务能力仍按[实施计划](../planning/README.md)推进。人类 OIDC server-side session、Workspace 只读选择、Connection 安全元数据/撤销、单一 reviewed OAuth Connection 创建、服务端 launch discovery、Human→Run read/cancel delegation，以及精确短时 Human StartRun delegation 已落地。StartRun delegation 绑定一次 Idempotency-Key 和费用上限并复用原子 Admission；它仍不授予 billing administration 或 Toolset mutation。默认 Worker 仍不自动开启 Supplier runtime；只有显式 reviewed host 配置才会装配 mounted SecretProvider／Provider Control／Settlement。已有子集通过真实 PostgreSQL 不等于商业平台或 G0–G5 已验收。
+公开注册／邀请和成员编辑、完整 Catalog／Toolset 管理、BYOK secret ingestion、OAuth refresh/rotation 与多 Provider 动态配置、云厂商/KMS SecretProvider、Outbox 对外投递、Webhook、Agent/A2A、对象存储、真实支付／复式账本／退款和完整 governance 业务能力仍按[实施计划](../planning/README.md)推进。人类 OIDC server-side session、Workspace 只读选择、Connection 安全元数据/撤销、单一 reviewed OAuth Connection 创建、服务端 launch discovery、Human→Run read/cancel delegation、精确短时 Human StartRun delegation，以及 Console `/launch` 首个 Human StartRun 产品闭环已落地。StartRun delegation 绑定一次 Idempotency-Key 和费用上限并复用原子 Admission；它仍不授予 billing administration 或 Toolset mutation。默认 Worker 仍不自动开启 Supplier runtime；只有显式 reviewed host 配置才会装配 mounted SecretProvider／Provider Control／Settlement。已有子集通过真实 PostgreSQL 不等于商业平台或 G0–G5 已验收。
 
 | 任务 | 已有基础 | 后续验收重点 |
 | --- | --- | --- |

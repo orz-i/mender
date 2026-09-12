@@ -19,6 +19,7 @@
 | [2026-09-12 Reviewed OAuth Connection Alpha](2026-09-12-connection-oauth-alpha.md) | reviewed Provider OAuth + PKCE、服务端 Secret Vault、Connection/Grant 创建与 Console 发起授权 |
 | [2026-09-12 Human launch discovery Alpha](2026-09-12-human-launch-discovery-alpha.md) | 服务端按 Membership/RLS/发布状态过滤 Toolset + Tool + Connection 启动投影，不授予 run:create |
 | [2026-09-12 Human StartRun delegation Alpha](2026-09-12-human-start-run-delegation-alpha.md) | 精确绑定 Toolset/ToolVersion/Connection/费用上限/Idempotency-Key 的短时 run:create capability，复用原子 Admission |
+| [2026-09-12 Console Human StartRun Alpha](2026-09-12-console-human-start-run-alpha.md) | `/launch` 从服务端能力发现到短时委托、同幂等重试、原子 Run 受理的首个 Human 产品闭环 |
 
 工具链以根 [toolchain.versions.json](../../toolchain.versions.json) 为准，依赖由 pnpm 与 Go 锁文件固定。治理规则中的版本约束待 G0 评审。
 
