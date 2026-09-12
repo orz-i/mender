@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -23,6 +25,8 @@ import (
 	"github.com/orz-i/mender/backend/internal/contexts/execution/application/ports"
 	rundomain "github.com/orz-i/mender/backend/internal/contexts/execution/domain"
 	"github.com/orz-i/mender/backend/internal/contexts/identity/adapters/outbound/keycodec"
+	filesecret "github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/filesecret"
+	supplyapp "github.com/orz-i/mender/backend/internal/contexts/supply/application"
 	database "github.com/orz-i/mender/backend/internal/platform/postgres"
 	"github.com/orz-i/mender/backend/migrations"
 )
@@ -52,7 +56,7 @@ func openTemporaryRoleWithDSN(t *testing.T, ctx context.Context, owner *pgxpool.
 
 func exerciseProviderHTTPControlRuntime(t *testing.T, ctx context.Context, owner, runtime *pgxpool.Pool, runtimeDSN string) {
 	t.Helper()
-	worker, _ := openTemporaryRole(t, ctx, owner, runtimeDSN, "mender_control_worker_", migrations.GrantWorker)
+	worker, workerDSN := openTemporaryRoleWithDSN(t, ctx, owner, runtimeDSN, "mender_control_worker_", migrations.GrantWorker)
 	executorPool, executorDSN := openTemporaryRoleWithDSN(t, ctx, owner, runtimeDSN, "mender_control_executor_", migrations.GrantExecutor)
 	reconcilerPool, reconcilerDSN := openTemporaryRoleWithDSN(t, ctx, owner, runtimeDSN, "mender_control_reconciler_", migrations.GrantReconciler)
 	cancelPool, _ := openTemporaryRole(t, ctx, owner, runtimeDSN, "mender_control_cancel_", migrations.GrantCancellation)
@@ -143,15 +147,21 @@ VALUES('ws_control_runtime',$1,'sa_control_runtime','key_control_runtime',$1||'_
 		return record
 	}
 
-	secrets := &integrationSecretProvider{}
-	controlRuntime, closeControl, err := bootstrap.BuildProviderHTTPControlRuntime(ctx, bootstrap.ProviderHTTPControlRuntimeConfig{
+	secretRoot := t.TempDir()
+	secretName, err := filesecret.FileName(supplyapp.SecretRequest{
+		ProviderID: "provider_control_runtime", ConnectionID: "conn_control_runtime", CredentialVersionRef: "credv_control_runtime", ConnectionRevision: 1,
+	})
+	must(t, err)
+	must(t, os.WriteFile(filepath.Join(secretRoot, secretName), []byte("integration-secret-value"), 0o600))
+	services, closeControl, err := bootstrap.BuildReviewedWorkerServicesFromConfig(ctx, bootstrap.WorkerConfig{
+		ControlEnabled: true, DatabaseURL: workerDSN, WorkerID: "worker_control_runtime", Workspaces: []rundomain.WorkspaceID{"ws_control_runtime"},
+	}, bootstrap.ReviewedWorkerHostConfig{
+		Enabled: true, ProviderControlEnabled: true, SecretRoot: secretRoot,
 		ExecutorDatabaseURL: executorDSN, ReconcilerDatabaseURL: reconcilerDSN,
 		ProviderIDs: []string{"provider_control_runtime"}, AllowedHosts: []string{u.Hostname()}, AllowHTTP: true, AllowLoopback: true,
-	}, secrets)
+	})
 	must(t, err)
 	defer closeControl()
-	services, err := bootstrap.NewReviewedWorkerServices(nil, controlRuntime, nil)
-	must(t, err)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	statusSubmission := seedAccepted("run_control_status", "provider/request-control-status")
@@ -182,9 +192,5 @@ VALUES('ws_control_runtime',$1,'sa_control_runtime','key_control_runtime',$1||'_
 	if runState != "canceled" || jobState != "finished" || cancelState != "fulfilled" {
 		t.Fatal("cancel control did not converge terminal bundle", runState, jobState, cancelState)
 	}
-	if secrets.calls != 2 {
-		t.Fatal("provider control did not resolve one current secret per network operation", secrets.calls)
-	}
-
-	t.Log("real PostgreSQL + local HTTP provider-control runtime verified: separate executor/reconciler roles, broker secret boundary, status/cancel convergence, fixed endpoints and bounded cycle")
+	t.Log("real PostgreSQL + reviewed worker host verified: mounted secret boundary, separate worker/executor/reconciler roles, status/cancel convergence, fixed endpoints and bounded cycle")
 }

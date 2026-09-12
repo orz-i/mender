@@ -5,6 +5,8 @@ package integration_test
 import (
 	"context"
 	"errors"
+	"io"
+	"log/slog"
 	"sync"
 	"testing"
 	"time"
@@ -22,7 +24,7 @@ import (
 
 func exerciseUsageSettlement(t *testing.T, ctx context.Context, owner, runtime *pgxpool.Pool, runtimeDSN string) {
 	t.Helper()
-	worker, _ := openTemporaryRole(t, ctx, owner, runtimeDSN, "mender_settle_worker_", migrations.GrantWorker)
+	worker, workerDSN := openTemporaryRoleWithDSN(t, ctx, owner, runtimeDSN, "mender_settle_worker_", migrations.GrantWorker)
 	reconciler, _ := openTemporaryRole(t, ctx, owner, runtimeDSN, "mender_settle_reconciler_", migrations.GrantReconciler)
 	cancellation, _ := openTemporaryRole(t, ctx, owner, runtimeDSN, "mender_settle_cancel_", migrations.GrantCancellation)
 	settlementPool, settlementDSN := openTemporaryRoleWithDSN(t, ctx, owner, runtimeDSN, "mender_settlement_", migrations.GrantSettlement)
@@ -137,13 +139,24 @@ VALUES('ws_settle',$1,'sa_settle','key_settle',$1||'_idem',repeat('e',64),$2,'to
 			t.Fatal("settlement receipt/job mismatch", runID, receiptCharge, receiptOutcome, jobState)
 		}
 	}
+	hostServices, closeHost, err := bootstrap.BuildReviewedWorkerServicesFromConfig(ctx, bootstrap.WorkerConfig{
+		ControlEnabled: true, DatabaseURL: workerDSN, WorkerID: "worker_settlement_host", Workspaces: []domain.WorkspaceID{"ws_settle"},
+	}, bootstrap.ReviewedWorkerHostConfig{Enabled: true, SettlementEnabled: true, SettlementDatabaseURL: settlementDSN})
+	must(t, err)
+	defer closeHost()
+	hostCycle, err := bootstrap.RunReviewedRuntimeCycle(ctx, slog.New(slog.NewTextHandler(io.Discard, nil)), []domain.WorkspaceID{"ws_settle"}, hostServices)
+	must(t, err)
+	if hostCycle.ProviderControlCycles != 0 || hostCycle.SettlementsHandled != 1 {
+		t.Fatal("reviewed worker host did not settle exactly one durable job", hostCycle)
+	}
+	assertSettlement("run_settle_success", 70, "succeeded")
+	assertBudget(120, 400)
 
 	for _, tc := range []struct {
 		runID                      string
 		charge, consumed, reserved int64
 		outcome                    string
 	}{
-		{"run_settle_success", 70, 120, 400, "succeeded"},
 		{"run_settle_failed", 0, 120, 300, "failed"},
 		{"run_settle_canceled", 0, 120, 200, "canceled"},
 	} {

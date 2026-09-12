@@ -380,3 +380,27 @@ func RunWorkerWithReviewedServices(ctx context.Context, logger *slog.Logger, ser
 	}
 	return runWorker(ctx, logger, os.Getenv, services)
 }
+
+// RunWorkerEntrypoint is the cmd/worker composition boundary. Without the
+// reviewed-runtime master switch it is exactly the fail-closed default worker.
+// When explicitly enabled, it constructs only the reviewed capabilities named
+// in configuration and closes every restricted resource on exit.
+func RunWorkerEntrypoint(ctx context.Context, logger *slog.Logger) error {
+	worker, err := LoadWorkerConfig(os.Getenv)
+	if err != nil {
+		return err
+	}
+	host, err := LoadReviewedWorkerHostConfig(os.Getenv)
+	if err != nil {
+		return err
+	}
+	if !host.Enabled {
+		return runWorker(ctx, logger, os.Getenv, nil)
+	}
+	services, closeServices, err := BuildReviewedWorkerServicesFromConfig(ctx, worker, host)
+	if err != nil {
+		return err
+	}
+	defer closeServices()
+	return runWorker(ctx, logger, os.Getenv, services)
+}
