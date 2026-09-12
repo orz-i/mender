@@ -22,6 +22,7 @@
 | [2026-09-12 Console Human StartRun Alpha](2026-09-12-console-human-start-run-alpha.md) | `/launch` 从服务端能力发现到短时委托、同幂等重试、原子 Run 受理的首个 Human 产品闭环 |
 | [2026-09-12 Console Artifact content Alpha](2026-09-12-console-artifact-content-alpha.md) | Machine Key + Human Run delegation 的 bounded inline JSON Artifact detail，补充 size/UTF-8 完整性检查 |
 | [2026-09-12 Run Event pagination Alpha](2026-09-12-run-event-pagination-alpha.md) | Run Event cursor/through-version 有限快照分页，并正式覆盖 Human Run delegation Console 路径 |
+| [2026-09-12 Console Run Results Alpha](2026-09-12-console-run-results-alpha.md) | Run Explorer 的 Event 分页、按需 Artifact JSON 内容预览与短期 delegation cache 清理 |
 
 工具链以根 [toolchain.versions.json](../../toolchain.versions.json) 为准，依赖由 pnpm 与 Go 锁文件固定。治理规则中的版本约束待 G0 评审。
 

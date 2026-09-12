@@ -142,6 +142,8 @@ h2 { font-size: 18px; font-weight: 600; margin: 0 0 10px; }
 .fact-grid dd { margin: 0; color: #4d6056; font-size: 11px; overflow-wrap: anywhere; }
 .detail-section { border-top: 1px solid var(--border); padding-top: 20px; margin-top: 20px; }
 .detail-section h3 { font-size: 12px; margin: 0 0 14px; }
+.detail-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.detail-section-heading h3, .detail-section-heading .section-kicker { margin: 0; }
 .event-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; }
 .event-list li { display: grid; grid-template-columns: 9px 1fr; gap: 10px; align-items: start; }
 .event-dot { width: 7px; height: 7px; margin-top: 5px; border-radius: 50%; background: #628779; box-shadow: 0 0 0 3px #e9f2ed; }
@@ -152,6 +154,15 @@ h2 { font-size: 18px; font-weight: 600; margin: 0 0 10px; }
 .artifact-list li div { min-width: 0; display: grid; gap: 3px; }
 .artifact-list strong { color: #465a50; font-size: 11px; }
 .artifact-list .mono { overflow-wrap: anywhere; }
+.artifact-select-list li { padding: 0; overflow: hidden; }
+.artifact-select-list li.selected { border-color: #7fa194; background: #f0f6f3; }
+.artifact-button { width: 100%; padding: 10px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer; }
+.artifact-button:hover { background: #f6f8f7; }
+.artifact-button:focus-visible { outline: 2px solid #58786b; outline-offset: -2px; }
+.artifact-preview { margin-top: 14px; padding: 14px; border: 1px solid #dce6e0; border-radius: 9px; background: #f8faf9; min-width: 0; }
+.artifact-preview pre { margin: 12px 0 0; padding: 12px; max-height: 420px; overflow: auto; border-radius: 7px; background: #17231e; color: #e7f1ec; font: 11px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.result-actions { display: flex; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+.empty-state.compact { margin-top: 12px; min-height: auto; padding: 14px; }
 .cancel-reason textarea { min-height: 72px; resize: vertical; margin-bottom: 10px; }
 .cancel-section .mender-button + .error-panel { margin-left: 0; margin-right: 0; }
 .skip-link { position: absolute; z-index: 10; left: 20px; top: -80px; background: #fff; padding: 10px; }

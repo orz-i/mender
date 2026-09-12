@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router';
 import { Button } from '@mender/ui';
 import type { RunAccess, RunGateway } from '../application/run-gateway';
@@ -54,14 +54,21 @@ export function RunExplorerPage({ gateway }: { gateway: RunGateway }) {
   const [state, setState] = useState<'' | RunState>('');
   const [cursor, setCursor] = useState<string | null>(null);
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
+  const [selectedArtifact, setSelectedArtifact] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState('');
 
   const clearAccess = () => {
     void queryClient.cancelQueries({ queryKey: ['run-list'] });
     void queryClient.cancelQueries({ queryKey: ['run-detail'] });
+    void queryClient.cancelQueries({ queryKey: ['run-events'] });
+    void queryClient.cancelQueries({ queryKey: ['run-artifacts'] });
+    void queryClient.cancelQueries({ queryKey: ['run-artifact-content'] });
     queryClient.removeQueries({ queryKey: ['run-list'] });
     queryClient.removeQueries({ queryKey: ['run-detail'] });
-    setAccess(null); setSelectedRun(null); setCursor(null); setCancelReason('');
+    queryClient.removeQueries({ queryKey: ['run-events'] });
+    queryClient.removeQueries({ queryKey: ['run-artifacts'] });
+    queryClient.removeQueries({ queryKey: ['run-artifact-content'] });
+    setAccess(null); setSelectedRun(null); setSelectedArtifact(null); setCursor(null); setCancelReason('');
   };
 
   const connectMutation = useMutation({
@@ -93,14 +100,27 @@ export function RunExplorerPage({ gateway }: { gateway: RunGateway }) {
   const detailQuery = useQuery({
     queryKey: ['run-detail', access?.sessionKey, access?.workspaceId, selectedRun],
     enabled: access !== null && selectedRun !== null,
-    queryFn: async ({ signal }) => {
-      const current = access!;
-      const runId = selectedRun!;
-      const [run, events, artifacts] = await Promise.all([
-        gateway.get(current, runId, signal), gateway.events(current, runId, signal), gateway.artifacts(current, runId, signal),
-      ]);
-      return { run, events, artifacts };
-    },
+    queryFn: ({ signal }) => gateway.get(access!, selectedRun!, signal),
+  });
+
+  const eventsQuery = useInfiniteQuery({
+    queryKey: ['run-events', access?.sessionKey, access?.workspaceId, selectedRun],
+    enabled: access !== null && selectedRun !== null,
+    initialPageParam: { cursor: undefined as string | undefined, expectedThroughVersion: undefined as string | undefined },
+    queryFn: ({ signal, pageParam }) => gateway.events(access!, selectedRun!, { limit: 20, cursor: pageParam.cursor, expectedThroughVersion: pageParam.expectedThroughVersion }, signal),
+    getNextPageParam: (lastPage) => lastPage.nextCursor ? { cursor: lastPage.nextCursor, expectedThroughVersion: lastPage.throughVersion } : undefined,
+  });
+
+  const artifactsQuery = useQuery({
+    queryKey: ['run-artifacts', access?.sessionKey, access?.workspaceId, selectedRun],
+    enabled: access !== null && selectedRun !== null,
+    queryFn: ({ signal }) => gateway.artifacts(access!, selectedRun!, signal),
+  });
+
+  const artifactContentQuery = useQuery({
+    queryKey: ['run-artifact-content', access?.sessionKey, access?.workspaceId, selectedRun, selectedArtifact],
+    enabled: access !== null && selectedRun !== null && selectedArtifact !== null,
+    queryFn: ({ signal }) => gateway.artifact(access!, selectedRun!, selectedArtifact!, signal),
   });
 
   const cancelMutation = useMutation({
@@ -113,12 +133,17 @@ export function RunExplorerPage({ gateway }: { gateway: RunGateway }) {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['run-list', access?.sessionKey] }),
         queryClient.invalidateQueries({ queryKey: ['run-detail', access?.sessionKey] }),
+        queryClient.invalidateQueries({ queryKey: ['run-events', access?.sessionKey] }),
       ]);
     },
   });
 
   const detail = detailQuery.data;
-  const canCancel = Boolean(detail && access?.canCancel && canRequestCancellation(detail.run.state));
+  const eventPages = eventsQuery.data?.pages ?? [];
+  const events = eventPages.flatMap((page) => page.items);
+  const eventThroughVersion = eventPages[0]?.throughVersion;
+  const artifacts = artifactsQuery.data ?? [];
+  const canCancel = Boolean(detail && access?.canCancel && canRequestCancellation(detail.state));
   const activeNote = access ? `短期委托至 ${formatTime(access.expiresAt)}` : '尚未建立短期委托';
 
   return <>
@@ -144,19 +169,23 @@ export function RunExplorerPage({ gateway }: { gateway: RunGateway }) {
         {!access && <div className="empty-state"><strong>建立短期委托后读取 Run</strong><span>没有 Machine Key 输入，也不会把 OIDC Cookie 当作 Run 权限。</span></div>}
         {access && listQuery.isPending && <div className="empty-state"><strong>正在读取 Run…</strong></div>}
         {listQuery.error && <div className="error-panel" role="alert">{errorMessage(listQuery.error)}</div>}
-        {listQuery.data && <RunList items={listQuery.data.items} selected={selectedRun} onSelect={setSelectedRun} />}
+        {listQuery.data && <RunList items={listQuery.data.items} selected={selectedRun} onSelect={(id) => { setSelectedRun(id); setSelectedArtifact(null); }} />}
         {listQuery.data && <div className="pagination-row"><span>每页最多 20 项</span><div>{cursor && <Button type="button" variant="outline" onClick={() => { setCursor(null); setSelectedRun(null); }}>回到第一页</Button>} {listQuery.data.nextCursor && <Button type="button" variant="outline" onClick={() => { setCursor(listQuery.data.nextCursor); setSelectedRun(null); }}>下一页</Button>}</div></div>}
       </div>
 
       <aside className="run-detail-panel" aria-label="Run 详情">
         {!selectedRun && <div className="empty-state"><strong>选择一个 Run</strong><span>详情、事件和 Artifact 元数据会并行读取。</span></div>}
-        {selectedRun && detailQuery.isPending && <div className="empty-state"><strong>正在读取详情…</strong></div>}
-        {detailQuery.error && <div className="error-panel" role="alert">{errorMessage(detailQuery.error)}</div>}
+        {selectedRun && (detailQuery.isPending || eventsQuery.isPending || artifactsQuery.isPending) && <div className="empty-state"><strong>正在读取详情…</strong></div>}
+        {(detailQuery.error || eventsQuery.error || artifactsQuery.error) && <div className="error-panel" role="alert">{errorMessage(detailQuery.error ?? eventsQuery.error ?? artifactsQuery.error)}</div>}
         {detail && <>
-          <div className="detail-title"><div><p className="section-kicker">Run</p><h2 className="mono">{detail.run.id}</h2></div><span className={`state-badge state-${detail.run.state}`}>{stateLabel(detail.run.state)}</span></div>
-          <dl className="fact-grid"><div><dt>版本</dt><dd>v{detail.run.version}</dd></div><div><dt>创建</dt><dd>{formatTime(detail.run.createdAt)}</dd></div><div><dt>更新</dt><dd>{formatTime(detail.run.updatedAt)}</dd></div><div><dt>事件读到</dt><dd>v{detail.events.throughVersion}</dd></div></dl>
-          <section className="detail-section"><h3>事件时间线</h3>{detail.events.items.length === 0 ? <p className="muted-copy">当前没有后续状态事件。</p> : <ol className="event-list">{detail.events.items.map((event) => <li key={event.version}><span className="event-dot" aria-hidden="true" /><div><strong>{stateLabel(event.state)}</strong><span>{formatTime(event.occurredAt)} · v{event.version}</span>{event.reason && <p>{event.reason}</p>}</div></li>)}</ol>}{detail.events.nextCursor && <p className="muted-copy">当前只展示前 100 条事件；更多事件留待后续分页界面。</p>}</section>
-          <section className="detail-section"><h3>Artifacts</h3>{detail.artifacts.length === 0 ? <p className="muted-copy">尚无结果 Artifact。</p> : <ul className="artifact-list">{detail.artifacts.map((artifact) => <li key={artifact.id}><div><strong>{artifact.kind}</strong><span className="mono">{artifact.id}</span></div><span>{artifact.mediaType} · {artifact.sizeBytes.toLocaleString()} B</span></li>)}</ul>}</section>
+          <div className="detail-title"><div><p className="section-kicker">Run</p><h2 className="mono">{detail.id}</h2></div><span className={`state-badge state-${detail.state}`}>{stateLabel(detail.state)}</span></div>
+          <dl className="fact-grid"><div><dt>版本</dt><dd>v{detail.version}</dd></div><div><dt>创建</dt><dd>{formatTime(detail.createdAt)}</dd></div><div><dt>更新</dt><dd>{formatTime(detail.updatedAt)}</dd></div><div><dt>事件快照</dt><dd>{eventThroughVersion ? `v${eventThroughVersion}` : '—'}</dd></div></dl>
+          <section className="detail-section"><div className="detail-section-heading"><h3>事件时间线</h3>{eventThroughVersion && <span className="muted-copy">固定到 v{eventThroughVersion}</span>}</div>{events.length === 0 ? <p className="muted-copy">当前没有后续状态事件。</p> : <ol className="event-list">{events.map((event) => <li key={event.version}><span className="event-dot" aria-hidden="true" /><div><strong>{stateLabel(event.state)}</strong><span>{formatTime(event.occurredAt)} · v{event.version}</span>{event.reason && <p>{event.reason}</p>}</div></li>)}</ol>}{eventsQuery.hasNextPage && <div className="result-actions"><Button type="button" variant="outline" disabled={eventsQuery.isFetchingNextPage} onClick={() => void eventsQuery.fetchNextPage()}>{eventsQuery.isFetchingNextPage ? '正在读取…' : '加载更多事件'}</Button><span className="muted-copy">更多页继续使用首屏 through-version；刷新详情才观察更新事件。</span></div>}</section>
+          <section className="detail-section"><h3>Artifacts</h3>{artifacts.length === 0 ? <p className="muted-copy">尚无结果 Artifact。</p> : <ul className="artifact-list artifact-select-list">{artifacts.map((artifact) => <li key={artifact.id} className={selectedArtifact === artifact.id ? 'selected' : undefined}><button type="button" className="artifact-button" onClick={() => setSelectedArtifact(artifact.id)}><div><strong>{artifact.kind}</strong><span className="mono">{artifact.id}</span></div><span>{artifact.mediaType} · {artifact.sizeBytes.toLocaleString()} B</span></button></li>)}</ul>}
+            {artifactContentQuery.isPending && selectedArtifact && <div className="empty-state compact"><strong>正在读取 Artifact 内容…</strong></div>}
+            {artifactContentQuery.error && <div className="error-panel" role="alert">{errorMessage(artifactContentQuery.error)}</div>}
+            {artifactContentQuery.data && <div className="artifact-preview" aria-live="polite"><div className="detail-section-heading"><div><p className="section-kicker">Result JSON</p><strong className="mono">{artifactContentQuery.data.id}</strong></div><span>{artifactContentQuery.data.sizeBytes.toLocaleString()} B</span></div><pre>{JSON.stringify(artifactContentQuery.data.content, null, 2)}</pre></div>}
+          </section>
           <section className="detail-section cancel-section"><h3>取消</h3>{canCancel ? <><label className="cancel-reason">取消原因（可选）<textarea value={cancelReason} maxLength={500} onChange={(event) => setCancelReason(event.target.value)} placeholder="不会在客户端推断取消是否已经到达上游" /></label><Button type="button" variant="outline" disabled={cancelMutation.isPending} onClick={() => cancelMutation.mutate()}>{cancelMutation.isPending ? '正在请求…' : '请求取消'}</Button></> : <p className="muted-copy">当前状态或当前短期委托不允许新的取消请求。服务端仍会重新校验 Membership 与 delegation scope。</p>}{cancelMutation.error && <div className="error-panel" role="alert">{errorMessage(cancelMutation.error)}</div>}</section>
         </>}
       </aside>

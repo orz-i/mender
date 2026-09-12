@@ -1,6 +1,6 @@
 import { createConsoleIdentityClient, createConsoleRunDelegationClient, createConsoleRunsClient, type ConsoleWorkspaceRecord, type RunDelegationScope } from '@mender/api-client';
 import type { RunGateway } from '../application/run-gateway';
-import type { Run, RunArtifact, RunEvent } from '../domain/run';
+import type { Run, RunArtifact, RunArtifactDetail, RunEvent } from '../domain/run';
 
 function run(value: Awaited<ReturnType<ReturnType<typeof createConsoleRunsClient>['getRun']>>): Run {
   return {
@@ -10,6 +10,13 @@ function run(value: Awaited<ReturnType<ReturnType<typeof createConsoleRunsClient
     version: value.version,
     createdAt: value.createdAt,
     updatedAt: value.updatedAt,
+  };
+}
+
+function artifactDetail(value: Awaited<ReturnType<ReturnType<typeof createConsoleRunsClient>['getRunArtifact']>>): RunArtifactDetail {
+  return {
+    ...artifact(value),
+    content: value.content,
   };
 }
 
@@ -85,13 +92,24 @@ export function createRunGateway(): RunGateway {
     async get(access, runId, signal) {
       return run(await client.getRun({ workspaceId: access.workspaceId, token: access.delegatedToken, runId, signal }));
     },
-    async events(access, runId, signal) {
-      const page = await client.listRunEvents({ workspaceId: access.workspaceId, token: access.delegatedToken, runId, signal });
+    async events(access, runId, options, signal) {
+      const page = await client.listRunEvents({
+        workspaceId: access.workspaceId,
+        token: access.delegatedToken,
+        runId,
+        cursor: options.cursor,
+        limit: options.limit,
+        expectedThroughVersion: options.expectedThroughVersion,
+        signal,
+      });
       return { items: page.items.map(event), nextCursor: page.nextCursor, throughVersion: page.throughVersion };
     },
     async artifacts(access, runId, signal) {
       const page = await client.listRunArtifacts({ workspaceId: access.workspaceId, token: access.delegatedToken, runId, signal });
       return page.items.map(artifact);
+    },
+    async artifact(access, runId, artifactId, signal) {
+      return artifactDetail(await client.getRunArtifact({ workspaceId: access.workspaceId, token: access.delegatedToken, runId, artifactId, signal }));
     },
     async cancel(access, runId, reason, signal) {
       if (!access.canCancel) throw new Error('当前 Workspace 角色没有 Run 取消权限');

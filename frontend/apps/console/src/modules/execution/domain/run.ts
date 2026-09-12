@@ -34,6 +34,10 @@ export interface RunArtifact {
   createdAt: string;
 }
 
+export interface RunArtifactDetail extends RunArtifact {
+  content: unknown;
+}
+
 export function isTerminal(state: RunState) {
   return state === 'succeeded' || state === 'failed' || state === 'canceled' || state === 'timed_out';
 }

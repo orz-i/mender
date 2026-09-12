@@ -1,4 +1,4 @@
-import type { Run, RunArtifact, RunEvent, RunState } from '../domain/run';
+import type { Run, RunArtifact, RunArtifactDetail, RunEvent, RunState } from '../domain/run';
 
 export interface RunAccess {
   workspaceId: string;
@@ -24,7 +24,8 @@ export interface RunGateway {
   disconnect(access: RunAccess, signal?: AbortSignal): Promise<void>;
   list(access: RunAccess, options: { state?: RunState; cursor?: string; limit?: number }, signal?: AbortSignal): Promise<RunPage>;
   get(access: RunAccess, runId: string, signal?: AbortSignal): Promise<Run>;
-  events(access: RunAccess, runId: string, signal?: AbortSignal): Promise<RunEvents>;
+  events(access: RunAccess, runId: string, options: { cursor?: string; limit?: number; expectedThroughVersion?: string }, signal?: AbortSignal): Promise<RunEvents>;
   artifacts(access: RunAccess, runId: string, signal?: AbortSignal): Promise<RunArtifact[]>;
+  artifact(access: RunAccess, runId: string, artifactId: string, signal?: AbortSignal): Promise<RunArtifactDetail>;
   cancel(access: RunAccess, runId: string, reason: string, signal?: AbortSignal): Promise<Run>;
 }

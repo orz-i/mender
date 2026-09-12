@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { MenderApiError, createRunsClient } from './runs.ts';
+import { MenderApiError, createConsoleRunsClient, createRunsClient } from './runs.ts';
 
 const run = (state = 'queued') => ({
   run_id: 'run_a', workspace_id: 'ws_a', execution_state: state, version: '1',
@@ -52,6 +52,25 @@ test('event pagination and artifact detail fail closed on watermark or contract 
   });
   await assert.rejects(drift.listRunEvents({ ...access, expectedThroughVersion: '3' }), /顺序或 watermark/);
   await assert.rejects(drift.getRunArtifact({ ...access, artifactId: 'artifact_a' }), /Artifact/);
+});
+
+test('Console result reads use the delegated prefix and never browser cookies', async () => {
+  const calls = [];
+  const client = createConsoleRunsClient('', async (url, init) => {
+    calls.push({ url, init });
+    if (url.includes('/events?')) return Response.json({ data: [], meta: { request_id: 'req_events', next_cursor: null, through_version: '1' } });
+    return Response.json({ data: { artifact_id: 'artifact_a', kind: 'provider_result', media_type: 'application/json', size_bytes: 2, created_at: '2026-09-12T00:00:04Z', content: {} }, meta: { request_id: 'req_artifact' } });
+  });
+  const access = { workspaceId: 'ws_a', token: 'short_lived_delegation', runId: 'run_a' };
+  await client.listRunEvents(access);
+  await client.getRunArtifact({ ...access, artifactId: 'artifact_a' });
+  assert.equal(calls[0].url, '/api/console/v1/workspaces/ws_a/runs/run_a/events?limit=20');
+  assert.equal(calls[1].url, '/api/console/v1/workspaces/ws_a/runs/run_a/artifacts/artifact_a');
+  for (const call of calls) {
+    assert.equal(call.init.credentials, 'omit');
+    assert.equal(new Headers(call.init.headers).get('Authorization'), 'Bearer short_lived_delegation');
+    assert.ok(!call.url.includes('short_lived_delegation'));
+  }
 });
 
 test('cancels with strict JSON and surfaces API errors without token leakage', async () => {
