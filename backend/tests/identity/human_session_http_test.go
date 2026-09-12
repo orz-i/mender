@@ -131,7 +131,7 @@ func TestHumanBrowserSessionOIDCAndCSRF(t *testing.T) {
 			csrfCookie = cookie
 		}
 	}
-	if sessionCookie == nil || !sessionCookie.HttpOnly || csrfCookie == nil || csrfCookie.HttpOnly {
+	if sessionCookie == nil || !sessionCookie.HttpOnly || csrfCookie == nil || csrfCookie.HttpOnly || csrfCookie.Path != "/" {
 		t.Fatal("browser session cookie contract invalid")
 	}
 

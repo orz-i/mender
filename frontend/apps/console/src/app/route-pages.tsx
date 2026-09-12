@@ -5,6 +5,7 @@ export function Layout() {
   return <Shell label="Console" navigation={<>
     <NavLink className="nav-link" to="/" end>开始</NavLink>
     <NavLink className="nav-link" to="/workspaces">工作空间</NavLink>
+    <NavLink className="nav-link" to="/connections">授权连接</NavLink>
     <NavLink className="nav-link" to="/runs">运行记录</NavLink>
     <NavLink className="nav-link" to="/status">服务状态</NavLink>
   </>}><Outlet /></Shell>;

@@ -9,8 +9,9 @@ import (
 )
 
 var (
-	ErrForbidden   = errors.New("connection access denied")
-	ErrUnavailable = errors.New("connections unavailable")
+	ErrUnauthenticated = errors.New("connection login required")
+	ErrForbidden       = errors.New("connection access denied")
+	ErrUnavailable     = errors.New("connections unavailable")
 )
 
 type Repository interface {

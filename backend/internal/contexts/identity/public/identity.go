@@ -17,3 +17,13 @@ type Identity interface {
 	Authenticate(context.Context, string) (Principal, error)
 	Authorize(context.Context, Principal, string, string) error
 }
+
+// HumanPrincipal is the secret-free projection used by other bounded contexts.
+// Session and CSRF digests remain private to Identity.
+type HumanPrincipal struct{ UserID string }
+
+type HumanIdentity interface {
+	AuthenticateBrowser(context.Context, string) (HumanPrincipal, error)
+	AuthenticateBrowserMutation(context.Context, string, string) (HumanPrincipal, error)
+	AuthorizeHuman(context.Context, HumanPrincipal, string, string) error
+}

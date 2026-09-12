@@ -171,7 +171,7 @@ func (h *SessionHandler) completeLogin(c *gin.Context) {
 		return
 	}
 	h.setCookie(c, &http.Cookie{Name: sessionCookie, Value: issued.SessionToken, Path: "/", HttpOnly: true, Expires: issued.ExpiresAt, MaxAge: maxAge})
-	h.setCookie(c, &http.Cookie{Name: csrfCookie, Value: issued.CSRFToken, Path: "/api/console/v1", HttpOnly: false, Expires: issued.ExpiresAt, MaxAge: maxAge})
+	h.setCookie(c, &http.Cookie{Name: csrfCookie, Value: issued.CSRFToken, Path: "/", HttpOnly: false, Expires: issued.ExpiresAt, MaxAge: maxAge})
 	c.Redirect(http.StatusSeeOther, "/workspaces")
 }
 
@@ -243,6 +243,6 @@ func (h *SessionHandler) logout(c *gin.Context) {
 		return
 	}
 	h.clearCookie(c, sessionCookie, "/", true)
-	h.clearCookie(c, csrfCookie, "/api/console/v1", false)
+	h.clearCookie(c, csrfCookie, "/", false)
 	c.Status(http.StatusNoContent)
 }

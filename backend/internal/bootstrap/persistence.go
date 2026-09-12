@@ -11,6 +11,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
+	connectionhttp "github.com/orz-i/mender/backend/internal/contexts/connections/adapters/inbound/httpapi"
+	connectionidentityaccess "github.com/orz-i/mender/backend/internal/contexts/connections/adapters/outbound/identityaccess"
+	connectionpg "github.com/orz-i/mender/backend/internal/contexts/connections/adapters/outbound/postgres"
+	connectionapp "github.com/orz-i/mender/backend/internal/contexts/connections/application"
 	runfacade "github.com/orz-i/mender/backend/internal/contexts/execution/adapters/inbound/facade"
 	runhttp "github.com/orz-i/mender/backend/internal/contexts/execution/adapters/inbound/httpapi"
 	"github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/coordinatedcancel"
@@ -42,26 +46,28 @@ import (
 )
 
 type APIConfig struct {
-	RunAPIEnabled             bool
-	RunReadAPIEnabled         bool
-	DatabaseURL               string
-	CursorSigningKey          []byte
-	CoordinatedCancelEnabled  bool
-	ProviderCancelEnabled     bool
-	CancellationDatabaseURL   string
-	StartRunAPIEnabled        bool
-	AdmissionDatabaseURL      string
-	MCPGatewayEnabled         bool
-	MCPFixedToolsetEnabled    bool
-	ConsoleOIDCEnabled        bool
-	BrowserSessionDatabaseURL string
-	OIDCIssuer                string
-	OIDCClientID              string
-	OIDCClientSecretFile      string
-	OIDCRedirectURL           string
-	FlowSigningKeyFile        string
-	ConsoleCookieSecure       bool
-	ConsoleSessionTTL         time.Duration
+	RunAPIEnabled                bool
+	RunReadAPIEnabled            bool
+	DatabaseURL                  string
+	CursorSigningKey             []byte
+	CoordinatedCancelEnabled     bool
+	ProviderCancelEnabled        bool
+	CancellationDatabaseURL      string
+	StartRunAPIEnabled           bool
+	AdmissionDatabaseURL         string
+	MCPGatewayEnabled            bool
+	MCPFixedToolsetEnabled       bool
+	ConsoleOIDCEnabled           bool
+	BrowserSessionDatabaseURL    string
+	OIDCIssuer                   string
+	OIDCClientID                 string
+	OIDCClientSecretFile         string
+	OIDCRedirectURL              string
+	FlowSigningKeyFile           string
+	ConsoleCookieSecure          bool
+	ConsoleSessionTTL            time.Duration
+	ConsoleConnectionsEnabled    bool
+	ConnectionManagerDatabaseURL string
 }
 
 func loadConsoleSecrets(clientSecretFile, signingKeyFile string) (string, []byte, error) {
@@ -119,6 +125,20 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 		}
 	default:
 		return c, errors.New("MENDER_CONSOLE_OIDC_ENABLED must be true or false")
+	}
+	switch getenv("MENDER_CONSOLE_CONNECTIONS_ENABLED") {
+	case "", "false":
+	case "true":
+		if !c.ConsoleOIDCEnabled {
+			return APIConfig{}, errors.New("Console Connections require Console OIDC")
+		}
+		c.ConsoleConnectionsEnabled = true
+		c.ConnectionManagerDatabaseURL = getenv("MENDER_CONNECTION_MANAGER_DATABASE_URL")
+		if c.ConnectionManagerDatabaseURL == "" {
+			return APIConfig{}, errors.New("Console Connections require a separate connection-manager database role")
+		}
+	default:
+		return c, errors.New("MENDER_CONSOLE_CONNECTIONS_ENABLED must be true or false")
 	}
 	switch getenv("MENDER_RUN_START_API_ENABLED") {
 	case "", "false":
@@ -183,7 +203,7 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	}
 	switch getenv("MENDER_RUN_API_ENABLED") {
 	case "", "false":
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled {
+		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleConnectionsEnabled {
 			return APIConfig{}, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return c, nil
@@ -217,7 +237,7 @@ func (systemClock) Now() time.Time { return time.Now().UTC().Truncate(time.Micro
 // BuildAPI never migrates, seeds data or falls back to a test repository.
 func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	if !c.RunAPIEnabled {
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled {
+		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleConnectionsEnabled {
 			return nil, nil, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return httpserver.NewRouter(), func() {}, nil
@@ -245,7 +265,11 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	var cancelPool *pgxpool.Pool
 	var admissionPool *pgxpool.Pool
 	var browserSessionPool *pgxpool.Pool
+	var connectionManagerPool *pgxpool.Pool
 	closePools := func() {
+		if connectionManagerPool != nil {
+			connectionManagerPool.Close()
+		}
 		if browserSessionPool != nil {
 			browserSessionPool.Close()
 		}
@@ -350,6 +374,32 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 			return failed(buildErr)
 		}
 		registers = append(registers, consoleHandler.Register)
+		if c.ConsoleConnectionsEnabled {
+			connectionManagerPool, buildErr = database.Open(start, c.ConnectionManagerDatabaseURL)
+			if buildErr != nil {
+				return failed(buildErr)
+			}
+			managerCfg := connectionManagerPool.Config().ConnConfig
+			if readerCfg.Host != managerCfg.Host || readerCfg.Port != managerCfg.Port || readerCfg.Database != managerCfg.Database || managerCfg.User == readerCfg.User || managerCfg.User == sessionCfg.User {
+				return failed(errors.New("Console Connections require the same database with a distinct restricted role"))
+			}
+			if buildErr = migrations.Verify(start, connectionManagerPool); buildErr != nil {
+				return failed(buildErr)
+			}
+			if buildErr = database.ConnectionManagerRole(start, connectionManagerPool); buildErr != nil {
+				return failed(buildErr)
+			}
+			humanAccess := connectionidentityaccess.NewHuman(facade.NewHuman(sessions))
+			connectionService, serviceErr := connectionapp.NewHuman(connectionpg.New(connectionManagerPool), humanAccess)
+			if serviceErr != nil {
+				return failed(serviceErr)
+			}
+			connectionHandler, handlerErr := connectionhttp.New(connectionService, humanAccess)
+			if handlerErr != nil {
+				return failed(handlerErr)
+			}
+			registers = append(registers, connectionHandler.Register)
+		}
 	}
 	var queries *runapp.Queries
 	if c.RunReadAPIEnabled {
@@ -453,6 +503,14 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 				return err
 			}
 			if err := database.BrowserSessionRole(ctx, browserSessionPool); err != nil {
+				return err
+			}
+		}
+		if connectionManagerPool != nil {
+			if err := migrations.Verify(ctx, connectionManagerPool); err != nil {
+				return err
+			}
+			if err := database.ConnectionManagerRole(ctx, connectionManagerPool); err != nil {
 				return err
 			}
 		}

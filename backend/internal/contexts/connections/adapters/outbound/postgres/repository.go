@@ -44,4 +44,68 @@ func (r *Repository) FindAccess(ctx context.Context, workspace, subject, connect
 	return a, nil
 }
 
+func (r *Repository) ListSummaries(ctx context.Context, workspace string) ([]domain.Summary, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, application.ErrUnavailable
+	}
+	defer rollback(tx)
+	if _, err = tx.Exec(ctx, "SELECT set_config('mender.workspace_id',$1,true)", workspace); err != nil {
+		return nil, application.ErrUnavailable
+	}
+	rows, err := tx.Query(ctx, `SELECT workspace_id,id,provider_id,state,revision,created_at,expires_at FROM connections.connections WHERE workspace_id=$1 ORDER BY created_at DESC,id DESC LIMIT 200`, workspace)
+	if err != nil {
+		return nil, application.ErrUnavailable
+	}
+	defer rows.Close()
+	items := make([]domain.Summary, 0)
+	for rows.Next() {
+		var item domain.Summary
+		if err = rows.Scan(&item.WorkspaceID, &item.ConnectionID, &item.ProviderID, &item.State, &item.Revision, &item.CreatedAt, &item.ExpiresAt); err != nil || item.Validate() != nil {
+			return nil, application.ErrUnavailable
+		}
+		items = append(items, item)
+	}
+	if rows.Err() != nil {
+		return nil, application.ErrUnavailable
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return nil, application.ErrUnavailable
+	}
+	return items, nil
+}
+
+func (r *Repository) Revoke(ctx context.Context, workspace, connectionID string, at time.Time) (domain.Summary, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return domain.Summary{}, application.ErrUnavailable
+	}
+	defer rollback(tx)
+	if _, err = tx.Exec(ctx, "SELECT set_config('mender.workspace_id',$1,true)", workspace); err != nil {
+		return domain.Summary{}, application.ErrUnavailable
+	}
+	var item domain.Summary
+	err = tx.QueryRow(ctx, `SELECT workspace_id,id,provider_id,state,revision,created_at,expires_at FROM connections.connections WHERE workspace_id=$1 AND id=$2 FOR UPDATE`, workspace, connectionID).Scan(&item.WorkspaceID, &item.ConnectionID, &item.ProviderID, &item.State, &item.Revision, &item.CreatedAt, &item.ExpiresAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Summary{}, application.ErrForbidden
+	}
+	if err != nil || item.Validate() != nil {
+		return domain.Summary{}, application.ErrUnavailable
+	}
+	if item.State != "revoked" {
+		if at.IsZero() || at.Before(item.CreatedAt) {
+			return domain.Summary{}, application.ErrForbidden
+		}
+		err = tx.QueryRow(ctx, `UPDATE connections.connections SET state='revoked',revision=revision+1 WHERE workspace_id=$1 AND id=$2 RETURNING workspace_id,id,provider_id,state,revision,created_at,expires_at`, workspace, connectionID).Scan(&item.WorkspaceID, &item.ConnectionID, &item.ProviderID, &item.State, &item.Revision, &item.CreatedAt, &item.ExpiresAt)
+		if err != nil {
+			return domain.Summary{}, application.ErrUnavailable
+		}
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return domain.Summary{}, application.ErrUnavailable
+	}
+	return item, nil
+}
+
 var _ application.Repository = (*Repository)(nil)
+var _ application.HumanRepository = (*Repository)(nil)

@@ -141,11 +141,15 @@ func (s *HumanSessionService) ListWorkspaces(ctx context.Context, principal Huma
 }
 
 func (s *HumanSessionService) AuthorizeWorkspace(ctx context.Context, principal HumanPrincipal, workspace, action string) error {
-	if !domain.ValidID(principal.UserID) || !domain.ValidID(workspace) {
+	return s.AuthorizeUserWorkspace(ctx, principal.UserID, workspace, action)
+}
+
+func (s *HumanSessionService) AuthorizeUserWorkspace(ctx context.Context, userID, workspace, action string) error {
+	if !domain.ValidID(userID) || !domain.ValidID(workspace) {
 		return ErrForbidden
 	}
-	membership, err := s.repository.FindWorkspaceMembership(ctx, principal.UserID, workspace)
-	if err != nil || membership.UserID != principal.UserID || membership.WorkspaceID != workspace || !membership.Allows(action) {
+	membership, err := s.repository.FindWorkspaceMembership(ctx, userID, workspace)
+	if err != nil || membership.UserID != userID || membership.WorkspaceID != workspace || !membership.Allows(action) {
 		return ErrForbidden
 	}
 	return nil

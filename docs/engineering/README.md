@@ -14,6 +14,7 @@
 | [2026-09-12 Console Run Explorer](2026-09-12-console-run-explorer.md) | 首个真实 Console Execution 工作流、内存机器凭据边界与受保护 Run API 映射 |
 | [2026-09-12 Human session / OIDC foundation](2026-09-12-human-session-oidc-foundation.md) | OIDC+PKCE、HttpOnly server-side session、CSRF、Workspace membership 与最小数据库角色 |
 | [2026-09-12 Workspace Console Alpha](2026-09-12-workspace-console-alpha.md) | Operator 预配人类身份、Workspace 自助读取/选择与 same-origin Console session client |
+| [2026-09-12 Connection self-service Alpha](2026-09-12-connection-self-service-alpha.md) | 独立最小 DB 角色、安全元数据列表、Workspace 授权与 CSRF 保护撤销 |
 
 工具链以根 [toolchain.versions.json](../../toolchain.versions.json) 为准，依赖由 pnpm 与 Go 锁文件固定。治理规则中的版本约束待 G0 评审。
 
