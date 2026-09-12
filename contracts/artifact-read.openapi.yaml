@@ -1,9 +1,10 @@
 openapi: 3.1.0
 info:
   title: Mender authenticated inline Artifact result subset
-  version: 0.1.0
+  version: 0.2.0
   description: >-
-    Requires the Run read API and a machine credential with run:read in the same Workspace.
+    Requires the Run read API. Machine endpoints require a machine credential with run:read;
+    Console endpoints require an explicit short-lived Human Run delegation with run:read.
     This implemented subset exposes immutable execution-owned provider_result Artifacts only.
     Lists return metadata; a single Artifact returns bounded application/json content inline.
     Provider request/task identifiers, connection data, canonical arguments and provider control state are not part of this contract.
@@ -42,9 +43,41 @@ paths:
         '404': {description: Run or Artifact not found in authorized Workspace}
         '503': {description: Dependency or stored projection unavailable}
         '504': {description: Request deadline exceeded}
+  /api/console/v1/workspaces/{workspace_id}/runs/{run_id}/artifacts:
+    parameters:
+      - {name: workspace_id, in: path, required: true, schema: {type: string, pattern: '^[A-Za-z0-9_-]{1,128}$'}}
+      - {name: run_id, in: path, required: true, schema: {type: string, pattern: '^[A-Za-z0-9_-]{1,128}$'}}
+    get:
+      operationId: listDelegatedRunArtifacts
+      security: [{RunDelegation: []}]
+      responses:
+        '200': {description: 'Metadata array after explicit delegated run:read authorization', content: {application/json: {schema: {$ref: '#/components/schemas/ArtifactListResponse'}}}}
+        '400': {description: Unknown query string or invalid path identifier}
+        '401': {description: Missing, invalid, expired or revoked Run delegation}
+        '403': {description: Workspace, membership or run:read delegation denied}
+        '404': {description: Run not found in authorized Workspace}
+        '503': {description: Dependency or stored projection unavailable}
+        '504': {description: Request deadline exceeded}
+  /api/console/v1/workspaces/{workspace_id}/runs/{run_id}/artifacts/{artifact_id}:
+    parameters:
+      - {name: workspace_id, in: path, required: true, schema: {type: string, pattern: '^[A-Za-z0-9_-]{1,128}$'}}
+      - {name: run_id, in: path, required: true, schema: {type: string, pattern: '^[A-Za-z0-9_-]{1,128}$'}}
+      - {name: artifact_id, in: path, required: true, schema: {type: string, pattern: '^[A-Za-z0-9._:-]{1,160}$'}}
+    get:
+      operationId: getDelegatedRunArtifact
+      security: [{RunDelegation: []}]
+      responses:
+        '200': {description: 'Immutable bounded inline JSON result after explicit delegated run:read authorization', content: {application/json: {schema: {$ref: '#/components/schemas/ArtifactDetailResponse'}}}}
+        '400': {description: Unknown query string or invalid path identifier}
+        '401': {description: Missing, invalid, expired or revoked Run delegation}
+        '403': {description: Workspace, membership or run:read delegation denied}
+        '404': {description: Run or Artifact not found in authorized Workspace}
+        '503': {description: Dependency or stored projection unavailable}
+        '504': {description: Request deadline exceeded}
 components:
   securitySchemes:
     MachineKey: {type: http, scheme: bearer, description: 'Server-issued random machine API Key; never a client-provided subject identity'}
+    RunDelegation: {type: http, scheme: bearer, description: 'Explicit short-lived human Run delegation; browser session cookie is not a Run credential'}
   schemas:
     ArtifactMetadata: &ArtifactMetadata
       type: object

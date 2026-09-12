@@ -74,12 +74,14 @@ func TestArtifactQueriesAuthorizeBeforeStorageAndValidateProjection(t *testing.T
 func TestArtifactQueriesRejectCorruptOrOversizedProjection(t *testing.T) {
 	base := ports.ArtifactMetadata{WorkspaceID: "ws_a", RunID: "run_a", ArtifactID: "art_run_a", Kind: domain.ProviderResultArtifact, MediaType: "application/json", SizeBytes: 2, CreatedAt: at}
 	for name, mutate := range map[string]func(*ports.ArtifactRecord){
-		"tenant":   func(r *ports.ArtifactRecord) { r.WorkspaceID = "ws_b" },
-		"kind":     func(r *ports.ArtifactRecord) { r.Kind = "provider_internal" },
-		"media":    func(r *ports.ArtifactRecord) { r.MediaType = "text/plain" },
-		"size":     func(r *ports.ArtifactRecord) { r.SizeBytes = 1<<20 + 1 },
-		"content":  func(r *ports.ArtifactRecord) { r.ContentJSON = "{" },
-		"artifact": func(r *ports.ArtifactRecord) { r.ArtifactID = "art_other" },
+		"tenant":        func(r *ports.ArtifactRecord) { r.WorkspaceID = "ws_b" },
+		"kind":          func(r *ports.ArtifactRecord) { r.Kind = "provider_internal" },
+		"media":         func(r *ports.ArtifactRecord) { r.MediaType = "text/plain" },
+		"size":          func(r *ports.ArtifactRecord) { r.SizeBytes = 1<<20 + 1 },
+		"size_mismatch": func(r *ports.ArtifactRecord) { r.SizeBytes = 3 },
+		"content":       func(r *ports.ArtifactRecord) { r.ContentJSON = "{" },
+		"utf8":          func(r *ports.ArtifactRecord) { r.ContentJSON = "{\"x\":\"\xff\"}"; r.SizeBytes = int64(len(r.ContentJSON)) },
+		"artifact":      func(r *ports.ArtifactRecord) { r.ArtifactID = "art_other" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			record := ports.ArtifactRecord{ArtifactMetadata: base, ContentJSON: `{}`}

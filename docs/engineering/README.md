@@ -20,6 +20,7 @@
 | [2026-09-12 Human launch discovery Alpha](2026-09-12-human-launch-discovery-alpha.md) | 服务端按 Membership/RLS/发布状态过滤 Toolset + Tool + Connection 启动投影，不授予 run:create |
 | [2026-09-12 Human StartRun delegation Alpha](2026-09-12-human-start-run-delegation-alpha.md) | 精确绑定 Toolset/ToolVersion/Connection/费用上限/Idempotency-Key 的短时 run:create capability，复用原子 Admission |
 | [2026-09-12 Console Human StartRun Alpha](2026-09-12-console-human-start-run-alpha.md) | `/launch` 从服务端能力发现到短时委托、同幂等重试、原子 Run 受理的首个 Human 产品闭环 |
+| [2026-09-12 Console Artifact content Alpha](2026-09-12-console-artifact-content-alpha.md) | Machine Key + Human Run delegation 的 bounded inline JSON Artifact detail，补充 size/UTF-8 完整性检查 |
 
 工具链以根 [toolchain.versions.json](../../toolchain.versions.json) 为准，依赖由 pnpm 与 Go 锁文件固定。治理规则中的版本约束待 G0 评审。
 

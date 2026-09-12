@@ -70,7 +70,7 @@ func (q *Queries) GetArtifact(ctx context.Context, caller ports.Caller, id ports
 	if err = ctx.Err(); err != nil {
 		return ArtifactDetail{}, err
 	}
-	if !validArtifactMetadata(record.ArtifactMetadata, caller.WorkspaceID, id) || record.ArtifactID != artifactID || len(record.ContentJSON) < 1 || len(record.ContentJSON) > 1<<20 || !json.Valid([]byte(record.ContentJSON)) {
+	if !validArtifactMetadata(record.ArtifactMetadata, caller.WorkspaceID, id) || record.ArtifactID != artifactID || len(record.ContentJSON) < 1 || len(record.ContentJSON) > 1<<20 || int64(len(record.ContentJSON)) != record.SizeBytes || !utf8.ValidString(record.ContentJSON) || !json.Valid([]byte(record.ContentJSON)) {
 		return ArtifactDetail{}, ports.ErrUnavailable
 	}
 	return ArtifactDetail{ArtifactView: ArtifactView{ArtifactID: record.ArtifactID, Kind: record.Kind, MediaType: record.MediaType, SizeBytes: record.SizeBytes, CreatedAt: record.CreatedAt}, ContentJSON: record.ContentJSON}, nil

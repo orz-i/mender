@@ -114,14 +114,17 @@ console.log('PASS: authorized Run list / finite event timeline schemas, local re
 
 const artifactAPI = parse(readFileSync(join(root, 'artifact-read.openapi.yaml'), 'utf8'));
 assert.equal(artifactAPI.openapi, '3.1.0');
-assert.equal(artifactAPI.info.version, '0.1.0');
-assert.equal(Object.keys(artifactAPI.paths).length, 2);
+assert.equal(artifactAPI.info.version, '0.2.0');
+assert.equal(Object.keys(artifactAPI.paths).length, 4);
+assert.ok(artifactAPI.components.securitySchemes.MachineKey);
+assert.ok(artifactAPI.components.securitySchemes.RunDelegation);
 for (const [path, item] of Object.entries(artifactAPI.paths)) {
   const expected = [...path.matchAll(/\{([^}]+)\}/g)].map((match) => match[1]).sort();
   assert.deepEqual(item.parameters.filter((p) => p.in === 'path' && p.required).map((p) => p.name).sort(), expected);
   assert.ok(item.get.operationId);
   assert.equal(item.get.parameters, undefined, 'Artifact endpoints intentionally accept no query parameters');
   assert.ok(item.get.responses['200'].content['application/json'].schema.$ref.startsWith('#/components/schemas/'));
+  if (path.startsWith('/api/console/')) assert.deepEqual(item.get.security, [{ RunDelegation: [] }]);
 }
 validate(artifactAPI.components.schemas.ArtifactListResponse, {
   data: [{ artifact_id: 'art_run_a', kind: 'provider_result', media_type: 'application/json', size_bytes: 11, created_at: '2026-09-11T09:30:00Z' }],
@@ -131,7 +134,7 @@ validate(artifactAPI.components.schemas.ArtifactDetailResponse, {
   data: { artifact_id: 'art_run_a', kind: 'provider_result', media_type: 'application/json', size_bytes: 11, created_at: '2026-09-11T09:30:00Z', content: { ok: true } },
   meta: { request_id: 'example' },
 }, 'Artifact detail response');
-console.log('PASS: authenticated inline Artifact metadata/content contract; no provider-control identifiers or object-storage claims.');
+console.log('PASS: machine + delegated Console inline Artifact metadata/content contract; bounded JSON and no provider-control identifiers/object-storage claims.');
 
 const mcpTools = json('mcp-meta-tools.json');
 assert.equal(mcpTools.contract_version, '0.1.0');
