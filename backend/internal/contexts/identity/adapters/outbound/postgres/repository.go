@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"net/url"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -10,6 +11,56 @@ import (
 	"github.com/orz-i/mender/backend/internal/contexts/identity/application"
 	"github.com/orz-i/mender/backend/internal/contexts/identity/domain"
 )
+
+type HumanProvision struct {
+	UserID, DisplayName, Issuer, Subject, WorkspaceID string
+	Role                                              domain.MembershipRole
+	CreatedAt                                         time.Time
+}
+
+func (r *Repository) ProvisionHuman(ctx context.Context, value HumanProvision) error {
+	issuer, err := url.Parse(value.Issuer)
+	if !domain.ValidID(value.UserID) || !domain.ValidID(value.WorkspaceID) || !value.Role.Valid() || value.Subject == "" || len(value.Subject) > 512 || err != nil || issuer.Scheme != "https" || issuer.Host == "" || value.CreatedAt.IsZero() || len(value.DisplayName) > 200 {
+		return application.ErrForbidden
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return application.ErrUnavailable
+	}
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		_ = tx.Rollback(cleanup)
+	}()
+	if _, err = tx.Exec(ctx, `INSERT INTO identity.workspaces(id,created_at) VALUES($1,$2) ON CONFLICT DO NOTHING`, value.WorkspaceID, value.CreatedAt); err != nil {
+		return application.ErrUnavailable
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO identity.users(id,display_name,created_at) VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, value.UserID, value.DisplayName, value.CreatedAt); err != nil {
+		return application.ErrUnavailable
+	}
+	var disabled bool
+	if err = tx.QueryRow(ctx, `SELECT disabled FROM identity.users WHERE id=$1 FOR SHARE`, value.UserID).Scan(&disabled); err != nil || disabled {
+		return application.ErrForbidden
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO identity.oidc_identities(issuer,subject,user_id,created_at) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`, value.Issuer, value.Subject, value.UserID, value.CreatedAt); err != nil {
+		return application.ErrUnavailable
+	}
+	var linkedUser string
+	if err = tx.QueryRow(ctx, `SELECT user_id FROM identity.oidc_identities WHERE issuer=$1 AND subject=$2 FOR SHARE`, value.Issuer, value.Subject).Scan(&linkedUser); err != nil || linkedUser != value.UserID {
+		return application.ErrForbidden
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO identity.workspace_memberships(workspace_id,user_id,role,created_at) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`, value.WorkspaceID, value.UserID, value.Role, value.CreatedAt); err != nil {
+		return application.ErrUnavailable
+	}
+	var role domain.MembershipRole
+	if err = tx.QueryRow(ctx, `SELECT role,disabled FROM identity.workspace_memberships WHERE workspace_id=$1 AND user_id=$2 FOR SHARE`, value.WorkspaceID, value.UserID).Scan(&role, &disabled); err != nil || disabled || role != value.Role {
+		return application.ErrForbidden
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return application.ErrUnavailable
+	}
+	return nil
+}
 
 type Repository struct{ pool *pgxpool.Pool }
 

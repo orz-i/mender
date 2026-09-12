@@ -172,7 +172,7 @@ func (h *SessionHandler) completeLogin(c *gin.Context) {
 	}
 	h.setCookie(c, &http.Cookie{Name: sessionCookie, Value: issued.SessionToken, Path: "/", HttpOnly: true, Expires: issued.ExpiresAt, MaxAge: maxAge})
 	h.setCookie(c, &http.Cookie{Name: csrfCookie, Value: issued.CSRFToken, Path: "/api/console/v1", HttpOnly: false, Expires: issued.ExpiresAt, MaxAge: maxAge})
-	c.Redirect(http.StatusSeeOther, "/runs")
+	c.Redirect(http.StatusSeeOther, "/workspaces")
 }
 
 func (h *SessionHandler) authenticate(c *gin.Context) (application.HumanPrincipal, bool) {
@@ -213,7 +213,15 @@ func (h *SessionHandler) listWorkspaces(c *gin.Context) {
 		c.JSON(503, gin.H{"error": gin.H{"code": "IDENTITY_UNAVAILABLE", "message": "Workspace access is temporarily unavailable."}})
 		return
 	}
-	c.JSON(200, gin.H{"data": items})
+	type workspaceDTO struct {
+		WorkspaceID string `json:"workspace_id"`
+		Role        string `json:"role"`
+	}
+	result := make([]workspaceDTO, 0, len(items))
+	for _, item := range items {
+		result = append(result, workspaceDTO{WorkspaceID: item.WorkspaceID, Role: string(item.Role)})
+	}
+	c.JSON(200, gin.H{"data": result})
 }
 
 func (h *SessionHandler) logout(c *gin.Context) {

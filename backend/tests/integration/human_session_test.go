@@ -29,14 +29,14 @@ func exerciseHumanBrowserSessions(t *testing.T, ctx context.Context, owner *pgxp
 		t.Fatal("owner accepted as browser-session principal")
 	}
 	base := time.Now().UTC().Truncate(time.Microsecond).Add(-time.Minute)
-	_, err := owner.Exec(ctx, `INSERT INTO identity.workspaces(id,created_at) VALUES('ws_human_alpha',$1) ON CONFLICT DO NOTHING`, base)
-	must(t, err)
-	_, err = owner.Exec(ctx, `INSERT INTO identity.users(id,display_name,created_at) VALUES('user_human_alpha','Alpha User',$1)`, base)
-	must(t, err)
-	_, err = owner.Exec(ctx, `INSERT INTO identity.workspace_memberships(workspace_id,user_id,role,created_at) VALUES('ws_human_alpha','user_human_alpha','admin',$1)`, base)
-	must(t, err)
-	_, err = owner.Exec(ctx, `INSERT INTO identity.oidc_identities(issuer,subject,user_id,created_at) VALUES('https://issuer.example','subject-human-alpha','user_human_alpha',$1)`, base)
-	must(t, err)
+	provision := identitypg.HumanProvision{UserID: "user_human_alpha", DisplayName: "Alpha User", Issuer: "https://issuer.example", Subject: "subject-human-alpha", WorkspaceID: "ws_human_alpha", Role: identitydomain.RoleAdmin, CreatedAt: base}
+	must(t, identitypg.New(owner).ProvisionHuman(ctx, provision))
+	must(t, identitypg.New(owner).ProvisionHuman(ctx, provision))
+	conflict := provision
+	conflict.UserID = "user_human_other"
+	if err := identitypg.New(owner).ProvisionHuman(ctx, conflict); !errors.Is(err, identityapp.ErrForbidden) {
+		t.Fatal("existing OIDC subject was rebound to another user", err)
+	}
 
 	clock := &humanSessionClock{at: base.Add(time.Minute)}
 	service, err := identityapp.NewHumanSessionService(identitypg.NewHumanSessions(sessionsPool), sessioncodec.Codec{}, clock, 8*time.Hour)

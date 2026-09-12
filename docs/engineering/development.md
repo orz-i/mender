@@ -57,7 +57,7 @@ pnpm dev:api
 | `POST /mcp/v1/workspaces/{workspace_id}` | 默认未注册；显式启用后只接受 MCP `2026-07-28` stateless Streamable HTTP，Bearer machine Key 在进入官方 SDK 前绑定 Workspace；暴露四个 `mender_*` 平台元工具 |
 | 固定 Toolset direct MCP tools、上游 MCP Client、Agent、callback/webhook | 尚未开放 |
 
-前端 `/` 提供 Alpha 导航，`/status` 发送真实健康请求；`/runs` 是首个真实 Execution 产品切片，可使用当前 Workspace 的 machine Key 在页面内存中读取受保护 Run 列表／详情／事件／Artifact 元数据并请求取消。Key 不写入浏览器持久存储或 URL，最终权限和状态仍由后端裁决。未知前端路由提供 404 和返回首页。服务状态只确认 API 进程连通，不表示 Worker、认证、存储或业务链路健康。详见 [Console Run Explorer](2026-09-12-console-run-explorer.md)。
+前端 `/` 提供 Alpha 导航，`/status` 发送真实健康请求；`/workspaces` 在 Console OIDC 启用后读取 HttpOnly server-side session 与当前 Workspace membership；`/runs` 是 Execution 产品切片。Workspace 选择只把非秘密 Workspace ID 带入 Run Explorer，当前 Run API 仍要求独立 scoped Machine Key，不会把人类 Cookie 当成执行授权。Key 不写入浏览器持久存储或 URL，最终权限和状态仍由后端裁决。未知前端路由提供 404 和返回首页。详见 [Console Run Explorer](2026-09-12-console-run-explorer.md) 与 [Workspace Console Alpha](2026-09-12-workspace-console-alpha.md)。
 
 ### 可选持久化子集
 

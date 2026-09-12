@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router';
 import { Button } from '@mender/ui';
 import type { RunAccess, RunGateway } from '../application/run-gateway';
 import { canRequestCancellation, type Run, type RunState } from '../domain/run';
@@ -46,7 +47,8 @@ function RunList({ items, selected, onSelect }: { items: Run[]; selected: string
 
 export function RunExplorerPage({ gateway }: { gateway: RunGateway }) {
   const queryClient = useQueryClient();
-  const [workspace, setWorkspace] = useState('');
+  const [searchParams] = useSearchParams();
+  const [workspace, setWorkspace] = useState(searchParams.get('workspace') ?? '');
   const [token, setToken] = useState('');
   const [access, setAccess] = useState<ActiveAccess | null>(null);
   const accessRevision = useRef(0);

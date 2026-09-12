@@ -20,10 +20,10 @@ import (
 // Only issue-key intentionally prints a generated secret, once, after durable insertion.
 func RunOperator(ctx context.Context, args []string, getenv func(string) string, out, errOut io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("operator requires migrate, grant-runtime, grant-browser-session, grant-admission, grant-cancellation, grant-worker, grant-executor, grant-mcp-connector, grant-reconciler, grant-settlement, issue-key or revoke-key")
+		return errors.New("operator requires migrate, grant-runtime, grant-browser-session, grant-admission, grant-cancellation, grant-worker, grant-executor, grant-mcp-connector, grant-reconciler, grant-settlement, provision-human, issue-key or revoke-key")
 	}
 	command := args[0]
-	if command != "migrate" && command != "grant-runtime" && command != "grant-browser-session" && command != "grant-admission" && command != "grant-cancellation" && command != "grant-worker" && command != "grant-executor" && command != "grant-mcp-connector" && command != "grant-reconciler" && command != "grant-settlement" && command != "issue-key" && command != "revoke-key" {
+	if command != "migrate" && command != "grant-runtime" && command != "grant-browser-session" && command != "grant-admission" && command != "grant-cancellation" && command != "grant-worker" && command != "grant-executor" && command != "grant-mcp-connector" && command != "grant-reconciler" && command != "grant-settlement" && command != "provision-human" && command != "issue-key" && command != "revoke-key" {
 		return errors.New("unknown operator command")
 	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
@@ -34,6 +34,11 @@ func RunOperator(ctx context.Context, args []string, getenv func(string) string,
 	ttl := flags.Duration("ttl", 24*time.Hour, "credential lifetime (1 minute to 90 days)")
 	role := flags.String("role", "", "existing restricted PostgreSQL login role")
 	id := flags.String("id", "", "key ID to revoke (never the raw secret)")
+	userID := flags.String("user", "", "human user ID")
+	displayName := flags.String("display-name", "", "human display name")
+	issuer := flags.String("issuer", "", "reviewed OIDC issuer URL")
+	oidcSubject := flags.String("oidc-subject", "", "OIDC subject")
+	membershipRole := flags.String("membership-role", "viewer", "owner, admin, developer or viewer")
 	if err := flags.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -77,6 +82,13 @@ func RunOperator(ctx context.Context, args []string, getenv func(string) string,
 		return err
 	}
 	switch command {
+	case "provision-human":
+		value := identitypg.HumanProvision{UserID: *userID, DisplayName: *displayName, Issuer: *issuer, Subject: *oidcSubject, WorkspaceID: *workspace, Role: domain.MembershipRole(*membershipRole), CreatedAt: time.Now().UTC().Truncate(time.Microsecond)}
+		if err = identitypg.New(pool).ProvisionHuman(ctx, value); err != nil {
+			return err
+		}
+		_, err = io.WriteString(out, "Human OIDC identity and Workspace membership provisioned.\n")
+		return err
 	case "grant-browser-session":
 		if err = migrations.GrantBrowserSession(ctx, pool, *role); err != nil {
 			return err
