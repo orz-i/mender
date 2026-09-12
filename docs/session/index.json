@@ -57,9 +57,9 @@
     "ses_fb8bf7db7ed14e029a0773cf6e00fdae": {
       "path": "docs/session/ses_fb8bf7db7ed14e029a0773cf6e00fdae.md",
       "title": "Mender Upstream MCP Client Adapter Foundation",
-      "status": "active",
+      "status": "completed",
       "created_at": "unix:1789132507",
-      "updated_at": "unix:1789194276",
+      "updated_at": "unix:1789194432",
       "parent_session_id": "ses_0522c54fe991488e95259e466cb638d1"
     }
   },
