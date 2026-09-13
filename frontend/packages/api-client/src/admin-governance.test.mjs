@@ -55,3 +55,47 @@ test('Admin Governance history rejects numeric precision drift and sensitive pay
   await assert.rejects(client.history('ws_a', { beforeSequence: '0' }), /cursor/);
   await assert.rejects(client.history('ws_a', { limit: 101 }), /limit/);
 });
+
+const policyRevision = (state = 'active') => ({
+  id: 'policy_2', revision: '9007199254740993', state, max_risk_level: 'high', deny_unsafe_write: true, deny_mcp_unsafe_write: true,
+  created_by_user_id: 'owner_a', created_at: '2026-09-13T00:00:00Z', activated_by_user_id: state === 'draft' ? null : 'admin_a',
+  activated_at: state === 'draft' ? null : '2026-09-13T00:01:00Z', retired_at: null,
+});
+const policyDecision = () => ({
+  sequence: '9007199254740997', policy_revision_id: 'policy_2', policy_revision: '9007199254740993', target_kind: 'toolset', target_id: 'set_a',
+  target_revision: '9007199254740995', risk_level: 'critical', outcome: 'deny', reason_codes: ['tool_write_unsafe', 'risk_above_ceiling'], evaluated_at: '2026-09-13T00:02:00Z',
+});
+
+test('Admin Governance policy snapshot preserves exact revisions and safe server decisions', async () => {
+  const client = createAdminGovernanceClient('', async (url, init) => {
+    assert.equal(url, '/api/admin/v1/workspaces/ws_a/publication-policy');
+    assert.equal(init.credentials, 'same-origin'); assert.equal(new Headers(init.headers).get('Authorization'), null);
+    return Response.json({ data: { revisions: [policyRevision()], decisions: [policyDecision()] } });
+  });
+  const result = await client.policy('ws_a');
+  assert.equal(result.revisions[0].revision, '9007199254740993');
+  assert.equal(result.decisions[0].sequence, '9007199254740997');
+  assert.equal(result.decisions[0].targetRevision, '9007199254740995');
+});
+
+test('Admin Governance creates only declarative policy fields and activates with empty body', async () => {
+  const calls = [];
+  const client = createAdminGovernanceClient('', async (url, init) => {
+    calls.push({ url, init });
+    return Response.json({ data: policyRevision(url.endsWith('/activate') ? 'active' : 'draft') }, { status: url.endsWith('/activate') ? 200 : 201 });
+  });
+  await client.createPolicy('ws_a', { id: 'policy_2', maxRiskLevel: 'high', denyUnsafeWrite: true, denyMcpUnsafeWrite: false }, 'csrf_a');
+  assert.equal(calls[0].url, '/api/admin/v1/workspaces/ws_a/publication-policy/revisions');
+  assert.deepEqual(JSON.parse(calls[0].init.body), { id: 'policy_2', max_risk_level: 'high', deny_unsafe_write: true, deny_mcp_unsafe_write: false });
+  assert.equal(new Headers(calls[0].init.headers).get('X-Mender-CSRF'), 'csrf_a');
+  await client.activatePolicy('ws_a', 'policy_2', 'csrf_a');
+  assert.equal(calls[1].url, '/api/admin/v1/workspaces/ws_a/publication-policy/revisions/policy_2/activate');
+  assert.equal(calls[1].init.body, undefined);
+});
+
+test('Admin Governance policy fails closed on precision drift and sensitive projection', async () => {
+  const numeric = policyDecision(); numeric.sequence = 9007199254740997;
+  await assert.rejects(createAdminGovernanceClient('', async () => Response.json({ data: { revisions: [policyRevision()], decisions: [numeric] } })).policy('ws_a'), /exact integer|Governance 响应/);
+  const leaked = policyDecision(); leaked.arguments = { secret: true };
+  await assert.rejects(createAdminGovernanceClient('', async () => Response.json({ data: { revisions: [policyRevision()], decisions: [leaked] } })).policy('ws_a'), /敏感字段/);
+});

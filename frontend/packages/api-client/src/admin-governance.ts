@@ -15,6 +15,34 @@ export interface AdminPublicationApproval {
   decisionNote: string;
   consumedAt: string | null;
 }
+function bool(value: unknown) { if (typeof value !== 'boolean') throw new Error('服务返回了无法识别的 Governance policy'); return value; }
+function policyRevision(value: unknown): AdminPublicationPolicyRevision {
+  const raw = object(value); safeProjection(raw);
+  const state = string(raw.state); if (!['draft', 'active', 'retired'].includes(state)) throw new Error('服务返回了无法识别的 policy state');
+  const risk = string(raw.max_risk_level); if (!['low', 'medium', 'high', 'critical'].includes(risk)) throw new Error('服务返回了无法识别的 policy risk');
+  return { id: string(raw.id), revision: exactPositiveIntegerString(raw.revision), state: state as AdminPublicationPolicyRevision['state'], maxRiskLevel: risk as AdminPublicationRiskLevel, denyUnsafeWrite: bool(raw.deny_unsafe_write), denyMcpUnsafeWrite: bool(raw.deny_mcp_unsafe_write), createdByUserId: optionalString(raw.created_by_user_id), createdAt: string(raw.created_at), activatedByUserId: optionalString(raw.activated_by_user_id), activatedAt: optionalString(raw.activated_at), retiredAt: optionalString(raw.retired_at) };
+}
+function policyDecision(value: unknown): AdminPublicationPolicyDecision {
+  const raw = object(value); safeProjection(raw);
+  const kind = string(raw.target_kind); if (kind !== 'tool_version' && kind !== 'toolset') throw new Error('服务返回了无法识别的 policy target');
+  const risk = string(raw.risk_level); if (!['low', 'medium', 'high', 'critical'].includes(risk)) throw new Error('服务返回了无法识别的 policy risk');
+  const outcome = string(raw.outcome); if (outcome !== 'allow' && outcome !== 'deny') throw new Error('服务返回了无法识别的 policy outcome');
+  if (!Array.isArray(raw.reason_codes) || raw.reason_codes.length === 0 || raw.reason_codes.some((item) => typeof item !== 'string' || item.length === 0)) throw new Error('服务返回了无法识别的 policy reasons');
+  return { sequence: exactPositiveIntegerString(raw.sequence), policyRevisionId: string(raw.policy_revision_id), policyRevision: exactPositiveIntegerString(raw.policy_revision), targetKind: kind, targetId: string(raw.target_id), targetRevision: exactPositiveIntegerString(raw.target_revision), riskLevel: risk as AdminPublicationRiskLevel, outcome, reasonCodes: raw.reason_codes as string[], evaluatedAt: string(raw.evaluated_at) };
+}
+
+export type AdminPublicationRiskLevel = 'low' | 'medium' | 'high' | 'critical';
+export interface AdminPublicationPolicyRevision {
+  id: string; revision: string; state: 'draft' | 'active' | 'retired'; maxRiskLevel: AdminPublicationRiskLevel;
+  denyUnsafeWrite: boolean; denyMcpUnsafeWrite: boolean; createdByUserId: string | null; createdAt: string;
+  activatedByUserId: string | null; activatedAt: string | null; retiredAt: string | null;
+}
+export interface AdminPublicationPolicyDecision {
+  sequence: string; policyRevisionId: string; policyRevision: string; targetKind: 'tool_version' | 'toolset'; targetId: string;
+  targetRevision: string; riskLevel: AdminPublicationRiskLevel; outcome: 'allow' | 'deny'; reasonCodes: string[]; evaluatedAt: string;
+}
+export interface AdminPublicationPolicySnapshot { revisions: AdminPublicationPolicyRevision[]; decisions: AdminPublicationPolicyDecision[] }
+export interface AdminPublicationPolicyInput { id: string; maxRiskLevel: AdminPublicationRiskLevel; denyUnsafeWrite: boolean; denyMcpUnsafeWrite: boolean }
 
 export type AdminPublicationAuditEventKind =
   | 'audit_baseline'
@@ -103,6 +131,7 @@ export function createAdminGovernanceClient(baseUrl = '', fetcher: typeof fetch 
   const base = baseUrl.replace(/\/$/, '');
   const root = (workspaceId: string) => `${base}/api/admin/v1/workspaces/${encodeURIComponent(workspaceId)}/publication-approvals`;
   const historyRoot = (workspaceId: string) => `${base}/api/admin/v1/workspaces/${encodeURIComponent(workspaceId)}/publication-history`;
+  const policyRoot = (workspaceId: string) => `${base}/api/admin/v1/workspaces/${encodeURIComponent(workspaceId)}/publication-policy`;
   return {
     async list(workspaceId: string, signal?: AbortSignal): Promise<AdminPublicationApproval[]> {
       if (!workspaceId) throw new Error('Workspace ID is required');
@@ -132,6 +161,20 @@ export function createAdminGovernanceClient(baseUrl = '', fetcher: typeof fetch 
       if (!Array.isArray(data.events)) throw new Error('服务返回了无法识别的 Governance history');
       const next = data.next_before_sequence === null ? null : exactPositiveIntegerString(data.next_before_sequence);
       return { events: data.events.map(auditEvent), nextBeforeSequence: next };
+    },
+    async policy(workspaceId: string, signal?: AbortSignal): Promise<AdminPublicationPolicySnapshot> {
+      if (!workspaceId) throw new Error('Workspace ID is required');
+      const response = await request(fetcher, policyRoot(workspaceId), { signal }); const raw = object(await response.json()); const data = object(raw.data);
+      if (!Array.isArray(data.revisions) || !Array.isArray(data.decisions)) throw new Error('服务返回了无法识别的 Governance policy snapshot');
+      return { revisions: data.revisions.map(policyRevision), decisions: data.decisions.map(policyDecision) };
+    },
+    async createPolicy(workspaceId: string, input: AdminPublicationPolicyInput, csrfToken: string, signal?: AbortSignal) {
+      const response = await request(fetcher, `${policyRoot(workspaceId)}/revisions`, { method: 'POST', signal, headers: { 'X-Mender-CSRF': csrf(csrfToken), 'Content-Type': 'application/json' }, body: JSON.stringify({ id: input.id, max_risk_level: input.maxRiskLevel, deny_unsafe_write: input.denyUnsafeWrite, deny_mcp_unsafe_write: input.denyMcpUnsafeWrite }) });
+      return policyRevision(object(await response.json()).data);
+    },
+    async activatePolicy(workspaceId: string, policyId: string, csrfToken: string, signal?: AbortSignal) {
+      const response = await request(fetcher, `${policyRoot(workspaceId)}/revisions/${encodeURIComponent(policyId)}/activate`, { method: 'POST', signal, headers: { 'X-Mender-CSRF': csrf(csrfToken) } });
+      return policyRevision(object(await response.json()).data);
     },
   };
 }

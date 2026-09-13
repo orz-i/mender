@@ -26,6 +26,8 @@ export interface CatalogPriceOption { id: string; toolVersionId: string; currenc
 export interface CatalogBudgetOption { budgetId: string; periodId: string; currency: string; startsAt: string; endsAt: string; active: boolean }
 export type PublicationApprovalState = 'pending' | 'approved' | 'rejected' | 'consumed' | 'expired';
 export interface PublicationApproval { id: string; targetKind: 'tool_version' | 'toolset'; targetId: string; targetRevision: string; requesterUserId: string; state: PublicationApprovalState; requestedAt: string; expiresAt: string; reviewerUserId: string | null; reviewedAt: string | null; decisionNote: string; consumedAt: string | null }
+export interface PublicationPolicyDecision { sequence: string; policyRevisionId: string; policyRevision: string; targetKind: 'tool_version' | 'toolset'; targetId: string; targetRevision: string; riskLevel: 'low' | 'medium' | 'high' | 'critical'; outcome: 'allow' | 'deny'; reasonCodes: string[]; evaluatedAt: string }
+export interface PublicationSubmission { approval: PublicationApproval | null; policyDecision: PublicationPolicyDecision }
 export interface CatalogSnapshot { toolVersions: CatalogToolVersion[]; toolsets: CatalogToolset[]; connections: CatalogConnectionOption[]; priceVersions: CatalogPriceOption[]; budgetPeriods: CatalogBudgetOption[]; publicationApprovals: PublicationApproval[] }
 export interface CatalogIssue { code: string; targetId: string }
 export interface CatalogPreflight { ready: boolean; issues: CatalogIssue[] }

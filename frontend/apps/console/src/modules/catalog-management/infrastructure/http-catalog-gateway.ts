@@ -1,5 +1,5 @@
-import { createConsoleCatalogClient, createConsoleIdentityClient, MenderApiError } from '@mender/api-client';
-import { CatalogLoginRequiredError, type CatalogGateway } from '../application/catalog-gateway';
+import { ConsolePolicyDeniedError, createConsoleCatalogClient, createConsoleIdentityClient, MenderApiError } from '@mender/api-client';
+import { CatalogLoginRequiredError, CatalogPolicyDeniedError, type CatalogGateway } from '../application/catalog-gateway';
 
 function readCSRFCookie() {
   const prefix = 'mender_csrf=';
@@ -12,6 +12,7 @@ function readCSRFCookie() {
 
 function mapError(error: unknown): never {
   if (error instanceof MenderApiError && error.status === 401) throw new CatalogLoginRequiredError();
+  if (error instanceof ConsolePolicyDeniedError) throw new CatalogPolicyDeniedError(error.message, error.policyDecision);
   throw error;
 }
 

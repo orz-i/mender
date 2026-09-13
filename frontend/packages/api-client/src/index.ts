@@ -13,8 +13,9 @@ export type { ConsoleRunDelegation, RunDelegationScope } from './console-run-del
 export { createConsoleUsageClient } from './console-usage.ts';
 export type { ConsoleBudgetPeriod, ConsoleQuotaOutcome, ConsoleQuotaState, ConsoleUsageEntry, ConsoleUsageSnapshot } from './console-usage.ts';
 export { createConsoleCatalogClient } from './console-catalog.ts';
-export type { ConsoleCatalogBinding, ConsoleCatalogBindingInput, ConsoleCatalogBudgetOption, ConsoleCatalogConnectionOption, ConsoleCatalogIssue, ConsoleCatalogPreflight, ConsoleCatalogPriceOption, ConsoleCatalogSnapshot, ConsoleCatalogState, ConsoleCatalogToolVersion, ConsoleCatalogToolVersionInput, ConsoleCatalogToolset, ConsolePublicationApproval, ConsolePublicationApprovalState } from './console-catalog.ts';
+export type { ConsoleCatalogBinding, ConsoleCatalogBindingInput, ConsoleCatalogBudgetOption, ConsoleCatalogConnectionOption, ConsoleCatalogIssue, ConsoleCatalogPreflight, ConsoleCatalogPriceOption, ConsoleCatalogSnapshot, ConsoleCatalogState, ConsoleCatalogToolVersion, ConsoleCatalogToolVersionInput, ConsoleCatalogToolset, ConsolePublicationApproval, ConsolePublicationApprovalState, ConsolePublicationPolicyDecision, ConsolePublicationSubmission } from './console-catalog.ts';
+export { ConsolePolicyDeniedError } from './console-catalog.ts';
 export { createAdminGovernanceClient } from './admin-governance.ts';
-export type { AdminPublicationApproval, AdminPublicationApprovalState, AdminPublicationAuditEvent, AdminPublicationAuditEventKind, AdminPublicationHistoryFilter, AdminPublicationHistoryPage } from './admin-governance.ts';
+export type { AdminPublicationApproval, AdminPublicationApprovalState, AdminPublicationAuditEvent, AdminPublicationAuditEventKind, AdminPublicationHistoryFilter, AdminPublicationHistoryPage, AdminPublicationRiskLevel, AdminPublicationPolicyRevision, AdminPublicationPolicyDecision, AdminPublicationPolicySnapshot, AdminPublicationPolicyInput } from './admin-governance.ts';
 export { createConsoleRunsClient, createRunsClient, MenderApiError } from './runs.ts';
 export type { ArtifactRecord, Page, RunCostRecord, RunEventRecord, RunEventsPage, RunExecutionState, RunQuotaOutcome, RunQuotaState, RunRecord } from './runs.ts';

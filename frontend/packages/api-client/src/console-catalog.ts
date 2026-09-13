@@ -25,6 +25,21 @@ export interface ConsoleCatalogToolVersion {
   retiredAt: string | null;
 }
 
+function policyDecision(value: unknown): ConsolePublicationPolicyDecision {
+  const raw = object(value);
+  for (const forbidden of ['credential_version_ref', 'secret', 'token', 'arguments', 'artifact_body', 'reserve_micro', 'limit_micro', 'charge_micro', 'payment', 'invoice', 'revenue']) if (forbidden in raw) throw new Error('服务返回了不应暴露给 publication policy 的敏感字段');
+  const kind = string(raw.target_kind); if (kind !== 'tool_version' && kind !== 'toolset') throw new Error('服务返回了无法识别的 publication policy target');
+  const risk = string(raw.risk_level); if (!['low', 'medium', 'high', 'critical'].includes(risk)) throw new Error('服务返回了无法识别的 publication risk');
+  const outcome = string(raw.outcome); if (outcome !== 'allow' && outcome !== 'deny') throw new Error('服务返回了无法识别的 publication policy outcome');
+  if (!Array.isArray(raw.reason_codes) || raw.reason_codes.length === 0 || raw.reason_codes.some((item) => typeof item !== 'string' || item.length === 0)) throw new Error('服务返回了无法识别的 publication policy reasons');
+  return { sequence: exactIntegerString(raw.sequence), policyRevisionId: string(raw.policy_revision_id), policyRevision: exactIntegerString(raw.policy_revision), targetKind: kind, targetId: string(raw.target_id), targetRevision: exactIntegerString(raw.target_revision), riskLevel: risk as ConsolePublicationPolicyDecision['riskLevel'], outcome, reasonCodes: raw.reason_codes as string[], evaluatedAt: string(raw.evaluated_at) };
+}
+
+function submission(value: unknown): ConsolePublicationSubmission {
+  const raw = object(value);
+  return { approval: raw.approval === undefined || raw.approval === null ? null : approval(raw.approval), policyDecision: policyDecision(raw.policy_decision) };
+}
+
 function approval(value: unknown): ConsolePublicationApproval {
   const raw = object(value);
   for (const forbidden of ['credential_version_ref', 'secret', 'token', 'reserve_micro', 'limit_micro', 'consumed_micro', 'charged_micro']) {
@@ -58,6 +73,32 @@ export interface ConsolePublicationApproval {
   reviewedAt: string | null;
   decisionNote: string;
   consumedAt: string | null;
+}
+
+export interface ConsolePublicationPolicyDecision {
+  sequence: string;
+  policyRevisionId: string;
+  policyRevision: string;
+  targetKind: 'tool_version' | 'toolset';
+  targetId: string;
+  targetRevision: string;
+  riskLevel: 'low' | 'medium' | 'high' | 'critical';
+  outcome: 'allow' | 'deny';
+  reasonCodes: string[];
+  evaluatedAt: string;
+}
+
+export interface ConsolePublicationSubmission {
+  approval: ConsolePublicationApproval | null;
+  policyDecision: ConsolePublicationPolicyDecision;
+}
+
+export class ConsolePolicyDeniedError extends MenderApiError {
+  readonly policyDecision: ConsolePublicationPolicyDecision;
+  constructor(status: number, message: string, policyDecision: ConsolePublicationPolicyDecision) {
+    super(status, 'POLICY_DENIED', message);
+    this.policyDecision = policyDecision;
+  }
 }
 
 export interface ConsoleCatalogBinding {
@@ -252,8 +293,12 @@ function preflight(value: unknown): ConsoleCatalogPreflight {
 
 async function failure(response: Response) {
   try {
-    const raw = object(await response.json()); const error = object(raw.error);
-    return new MenderApiError(response.status, string(error.code), string(error.message));
+    const raw = object(await response.json()); const error = object(raw.error); const code = string(error.code); const message = string(error.message);
+    if (code === 'POLICY_DENIED') {
+      const data = object(raw.data);
+      return new ConsolePolicyDeniedError(response.status, message, policyDecision(data.policy_decision));
+    }
+    return new MenderApiError(response.status, code, message);
   } catch (error) {
     if (error instanceof MenderApiError) return error;
     return new MenderApiError(response.status, 'HTTP_ERROR', `Mender API 请求失败（HTTP ${response.status}）`);
@@ -293,11 +338,11 @@ export function createConsoleCatalogClient(baseUrl = '', fetcher: typeof fetch =
     },
     async requestToolsetReview(workspaceId: string, toolsetId: string, csrfToken: string, signal?: AbortSignal) {
       const response = await request(fetcher, `${root(workspaceId)}/toolsets/${encodeURIComponent(toolsetId)}/review-requests`, { method: 'POST', signal, headers: mutation(csrfToken) });
-      return approval(object(await response.json()).data);
+      return submission(object(await response.json()).data);
     },
     async requestToolVersionReview(workspaceId: string, toolVersionId: string, csrfToken: string, signal?: AbortSignal) {
       const response = await request(fetcher, `${root(workspaceId)}/tool-versions/${encodeURIComponent(toolVersionId)}/review-requests`, { method: 'POST', signal, headers: mutation(csrfToken) });
-      return approval(object(await response.json()).data);
+      return submission(object(await response.json()).data);
     },
     async createToolVersion(workspaceId: string, input: ConsoleCatalogToolVersionInput, csrfToken: string, signal?: AbortSignal) {
       const response = await request(fetcher, `${root(workspaceId)}/tool-versions`, { method: 'POST', signal, headers: { ...mutation(csrfToken), 'Content-Type': 'application/json' }, body: toolBody(input) });
