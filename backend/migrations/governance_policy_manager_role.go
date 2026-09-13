@@ -9,9 +9,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// GrantGovernancePolicyManager grants only publication-policy lifecycle authority.
-// The role can read policy revisions/decisions and invoke reviewed create/activate
-// functions. It cannot mutate Catalog, approvals, audit history, secrets or execution.
+// GrantGovernancePolicyManager grants reviewed policy lifecycle authority only.
+// The role can read publication/execution policy revisions and decisions and
+// invoke reviewed create/activate functions. It cannot mutate Catalog,
+// confirmations, approvals, audit history, secrets or Execution.
 func GrantGovernancePolicyManager(ctx context.Context, pool *pgxpool.Pool, role string) error {
 	if !regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`).MatchString(role) {
 		return errors.New("invalid governance-policy-manager role")
@@ -29,8 +30,9 @@ func GrantGovernancePolicyManager(ctx context.Context, pool *pgxpool.Pool, role 
 	for _, sql := range []string{
 		"GRANT USAGE ON SCHEMA governance,mender_meta TO " + id,
 		"GRANT SELECT ON mender_meta.schema_migrations TO " + id,
-		"GRANT SELECT ON governance.catalog_publication_policy_revisions,governance.catalog_publication_policy_decisions TO " + id,
+		"GRANT SELECT ON governance.catalog_publication_policy_revisions,governance.catalog_publication_policy_decisions,governance.execution_policy_revisions,governance.execution_policy_decisions TO " + id,
 		"GRANT EXECUTE ON FUNCTION governance.create_catalog_publication_policy(text,text,text,text,boolean,boolean,timestamptz),governance.activate_catalog_publication_policy(text,text,text,timestamptz) TO " + id,
+		"GRANT EXECUTE ON FUNCTION governance.create_execution_policy(text,text,text,text,boolean,timestamptz),governance.activate_execution_policy(text,text,text,timestamptz) TO " + id,
 	} {
 		if _, err = tx.Exec(ctx, sql); err != nil {
 			return errors.New("governance-policy-manager grant failed")
