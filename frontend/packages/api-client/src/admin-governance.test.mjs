@@ -94,7 +94,7 @@ test('Admin Governance creates only declarative policy fields and activates with
 });
 
 test('Admin Governance policy fails closed on precision drift and sensitive projection', async () => {
-  const numeric = policyDecision(); numeric.sequence = 9007199254740997;
+  const numeric = policyDecision(); numeric.sequence = Number('9007199254740997');
   await assert.rejects(createAdminGovernanceClient('', async () => Response.json({ data: { revisions: [policyRevision()], decisions: [numeric] } })).policy('ws_a'), /exact integer|Governance 响应/);
   const leaked = policyDecision(); leaked.arguments = { secret: true };
   await assert.rejects(createAdminGovernanceClient('', async () => Response.json({ data: { revisions: [policyRevision()], decisions: [leaked] } })).policy('ws_a'), /敏感字段/);
