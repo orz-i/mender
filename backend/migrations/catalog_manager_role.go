@@ -27,7 +27,7 @@ func GrantCatalogManager(ctx context.Context, pool *pgxpool.Pool, role string) e
 	}
 	defer rollback(tx)
 	for _, sql := range []string{
-		"GRANT USAGE ON SCHEMA catalog,distribution,connections,commerce,mender_meta TO " + id,
+		"GRANT USAGE ON SCHEMA catalog,distribution,connections,commerce,governance,mender_meta TO " + id,
 		"GRANT SELECT ON mender_meta.schema_migrations TO " + id,
 		"GRANT SELECT ON catalog.tool_version_management TO " + id,
 		"GRANT INSERT (workspace_id,tool_version_id,tool_id,version,provider_id,price_version_id,deployment_revision,title,description,input_schema,output_schema,side_effect,idempotency,mcp_publishable) ON catalog.tool_version_management TO " + id,
@@ -41,6 +41,8 @@ func GrantCatalogManager(ctx context.Context, pool *pgxpool.Pool, role string) e
 		"GRANT SELECT (workspace_id,id,provider_id,state,revision,created_at,expires_at) ON connections.connections TO " + id,
 		"GRANT SELECT (id,tool_version_id,currency,reserve_micro,starts_at,ends_at,active) ON commerce.price_versions TO " + id,
 		"GRANT SELECT (workspace_id,budget_id,period_id,currency,starts_at,ends_at,active) ON commerce.budget_periods TO " + id,
+		"GRANT SELECT ON governance.catalog_publication_approvals TO " + id,
+		"GRANT EXECUTE ON FUNCTION governance.submit_catalog_publication(text,text,text,text,text,timestamptz,timestamptz) TO " + id,
 		"GRANT EXECUTE ON FUNCTION catalog.tool_version_publish_issues(text,text,timestamptz),catalog.publish_tool_version(text,text,timestamptz),catalog.retire_tool_version(text,text,timestamptz) TO " + id,
 		"GRANT EXECUTE ON FUNCTION distribution.toolset_publish_issues(text,text,timestamptz),distribution.publish_toolset(text,text,timestamptz),distribution.retire_toolset(text,text,timestamptz) TO " + id,
 	} {

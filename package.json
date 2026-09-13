@@ -27,6 +27,7 @@
     "db:grant-browser-session": "node scripts/backend.mjs run ./cmd/operator grant-browser-session",
     "db:grant-connection-manager": "node scripts/backend.mjs run ./cmd/operator grant-connection-manager",
     "db:grant-catalog-manager": "node scripts/backend.mjs run ./cmd/operator grant-catalog-manager",
+    "db:grant-governance-reviewer": "node scripts/backend.mjs run ./cmd/operator grant-governance-reviewer",
     "db:grant-commerce-observer": "node scripts/backend.mjs run ./cmd/operator grant-commerce-observer",
     "db:grant-admission": "node scripts/backend.mjs run ./cmd/operator grant-admission",
     "db:grant-cancellation": "node scripts/backend.mjs run ./cmd/operator grant-cancellation",

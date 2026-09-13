@@ -15,9 +15,14 @@ import (
 func exerciseCatalogManagementFoundation(t *testing.T, ctx context.Context, owner, runtime *pgxpool.Pool, runtimeDSN string) {
 	t.Helper()
 	manager, _ := openTemporaryRole(t, ctx, owner, runtimeDSN, "mender_catalog_manager_", migrations.GrantCatalogManager)
+	reviewer, _ := openTemporaryRole(t, ctx, owner, runtimeDSN, "mender_governance_reviewer_", migrations.GrantGovernanceReviewer)
 	must(t, database.CatalogManagerRole(ctx, manager))
+	must(t, database.GovernanceReviewerRole(ctx, reviewer))
 	if database.CatalogManagerRole(ctx, owner) == nil || database.CatalogManagerRole(ctx, runtime) == nil {
 		t.Fatal("owner/runtime role accepted as catalog manager")
+	}
+	if database.GovernanceReviewerRole(ctx, owner) == nil || database.GovernanceReviewerRole(ctx, manager) == nil {
+		t.Fatal("owner/catalog-manager role accepted as governance reviewer")
 	}
 
 	tx, err := manager.Begin(ctx)
@@ -70,9 +75,13 @@ func exerciseCatalogManagementFoundation(t *testing.T, ctx context.Context, owne
 	_, err = ownerTx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_a',true)")
 	must(t, err)
 	_, err = ownerTx.Exec(ctx, `UPDATE distribution.toolset_bindings SET state='published',published_at=$1 WHERE workspace_id='ws_catalog_a' AND toolset_version_id='set_catalog_draft'`, at)
-	must(t, err)
+	if err != nil {
+		t.Fatal("legacy binding publication fixture failed", err)
+	}
 	_, err = ownerTx.Exec(ctx, `UPDATE distribution.toolsets SET state='published',published_at=$1,updated_at=$1 WHERE workspace_id='ws_catalog_a' AND id='set_catalog_draft'`, at)
-	must(t, err)
+	if err != nil {
+		t.Fatal("legacy parent Toolset publication fixture failed", err)
+	}
 	must(t, ownerTx.Commit(ctx))
 
 	tx, err = manager.Begin(ctx)
@@ -114,7 +123,69 @@ func exerciseCatalogManagementFoundation(t *testing.T, ctx context.Context, owne
 	if issueCount != 0 {
 		t.Fatal("valid ToolVersion preflight unexpectedly failed", issueCount)
 	}
-	_, err = tx.Exec(ctx, `SELECT catalog.publish_tool_version('ws_catalog_publish','tv_catalog_publish',$1)`, workflowAt)
+	_, err = tx.Exec(ctx, `SELECT governance.submit_catalog_publication('ws_catalog_publish','approval_tv_1','tool_version','tv_catalog_publish','maker_catalog',$1,$2)`, workflowAt, workflowAt.Add(time.Hour))
+	must(t, err)
+	must(t, tx.Commit(ctx))
+
+	// Reviewer authority is function-only and maker/checker is enforced even if
+	// a caller tries to pass the requester's identity as the reviewer.
+	reviewTx, err := reviewer.Begin(ctx)
+	must(t, err)
+	_, err = reviewTx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
+	must(t, err)
+	if _, err = reviewTx.Exec(ctx, `UPDATE governance.catalog_publication_approvals SET state='approved' WHERE id='approval_tv_1'`); err == nil {
+		t.Fatal("governance reviewer obtained direct approval-table mutation")
+	}
+	_ = reviewTx.Rollback(ctx)
+	reviewTx, err = reviewer.Begin(ctx)
+	must(t, err)
+	_, err = reviewTx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
+	must(t, err)
+	if _, err = reviewTx.Exec(ctx, `SELECT governance.approve_catalog_publication('ws_catalog_publish','approval_tv_1','maker_catalog',$1,'self')`, workflowAt.Add(time.Second)); err == nil {
+		t.Fatal("maker approved own publication")
+	}
+	_ = reviewTx.Rollback(ctx)
+	reviewTx, err = reviewer.Begin(ctx)
+	must(t, err)
+	_, err = reviewTx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
+	must(t, err)
+	_, err = reviewTx.Exec(ctx, `SELECT governance.approve_catalog_publication('ws_catalog_publish','approval_tv_1','reviewer_catalog',$1,'reviewed')`, workflowAt.Add(time.Second))
+	must(t, err)
+	must(t, reviewTx.Commit(ctx))
+
+	// Exact revision binding prevents reusing an approval after the draft changes.
+	tx, err = manager.Begin(ctx)
+	must(t, err)
+	_, err = tx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
+	must(t, err)
+	_, err = tx.Exec(ctx, `UPDATE catalog.tool_version_management SET title='Changed after approval' WHERE workspace_id='ws_catalog_publish' AND tool_version_id='tv_catalog_publish'`)
+	must(t, err)
+	if _, err = tx.Exec(ctx, `SELECT catalog.publish_tool_version('ws_catalog_publish','tv_catalog_publish',$1)`, workflowAt.Add(2*time.Second)); err == nil {
+		t.Fatal("stale approval published changed ToolVersion revision")
+	}
+	_ = tx.Rollback(ctx)
+
+	tx, err = manager.Begin(ctx)
+	must(t, err)
+	_, err = tx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
+	must(t, err)
+	_, err = tx.Exec(ctx, `UPDATE catalog.tool_version_management SET title='Changed after approval' WHERE workspace_id='ws_catalog_publish' AND tool_version_id='tv_catalog_publish'`)
+	must(t, err)
+	_, err = tx.Exec(ctx, `SELECT governance.submit_catalog_publication('ws_catalog_publish','approval_tv_2','tool_version','tv_catalog_publish','maker_catalog',$1,$2)`, workflowAt.Add(2*time.Second), workflowAt.Add(time.Hour))
+	must(t, err)
+	must(t, tx.Commit(ctx))
+	reviewTx, err = reviewer.Begin(ctx)
+	must(t, err)
+	_, err = reviewTx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
+	must(t, err)
+	_, err = reviewTx.Exec(ctx, `SELECT governance.approve_catalog_publication('ws_catalog_publish','approval_tv_2','reviewer_catalog',$1,'reviewed revision 2')`, workflowAt.Add(3*time.Second))
+	must(t, err)
+	must(t, reviewTx.Commit(ctx))
+	tx, err = manager.Begin(ctx)
+	must(t, err)
+	_, err = tx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
+	must(t, err)
+	_, err = tx.Exec(ctx, `SELECT catalog.publish_tool_version('ws_catalog_publish','tv_catalog_publish',$1)`, workflowAt.Add(4*time.Second))
 	must(t, err)
 	var state string
 	must(t, tx.QueryRow(ctx, `SELECT state FROM catalog.tool_version_management WHERE workspace_id='ws_catalog_publish' AND tool_version_id='tv_catalog_publish'`).Scan(&state))
@@ -122,7 +193,9 @@ func exerciseCatalogManagementFoundation(t *testing.T, ctx context.Context, owne
 		t.Fatal("ToolVersion workflow did not publish management fact", state)
 	}
 	_, err = tx.Exec(ctx, `INSERT INTO distribution.toolsets(workspace_id,id) VALUES('ws_catalog_publish','set_catalog_publish')`)
-	must(t, err)
+	if err != nil {
+		t.Fatal("governed Toolset draft creation failed", err)
+	}
 	_, err = tx.Exec(ctx, `INSERT INTO distribution.toolset_bindings(workspace_id,toolset_version_id,tool_id,tool_version_label,tool_version_id,budget_id,connection_id,mcp_name,mcp_exposed)
 	 VALUES('ws_catalog_publish','set_catalog_publish','tool_catalog_publish','1.0.0','tv_catalog_publish','budget_catalog_publish','conn_catalog_publish','catalog_publish',true)`)
 	must(t, err)
@@ -130,7 +203,16 @@ func exerciseCatalogManagementFoundation(t *testing.T, ctx context.Context, owne
 	if issueCount != 0 {
 		t.Fatal("valid Toolset preflight unexpectedly failed", issueCount)
 	}
+	_, err = tx.Exec(ctx, `SELECT governance.submit_catalog_publication('ws_catalog_publish','approval_set_1','toolset','set_catalog_publish','maker_catalog',$1,$2)`, workflowAt.Add(5*time.Second), workflowAt.Add(time.Hour))
+	must(t, err)
 	must(t, tx.Commit(ctx))
+	reviewTx, err = reviewer.Begin(ctx)
+	must(t, err)
+	_, err = reviewTx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
+	must(t, err)
+	_, err = reviewTx.Exec(ctx, `SELECT governance.approve_catalog_publication('ws_catalog_publish','approval_set_1','reviewer_catalog',$1,'toolset reviewed')`, workflowAt.Add(6*time.Second))
+	must(t, err)
+	must(t, reviewTx.Commit(ctx))
 
 	_, err = owner.Exec(ctx, `UPDATE connections.connections SET state='revoked',revision=revision+1 WHERE workspace_id='ws_catalog_publish' AND id='conn_catalog_publish'`)
 	must(t, err)
@@ -154,15 +236,22 @@ func exerciseCatalogManagementFoundation(t *testing.T, ctx context.Context, owne
 	must(t, err)
 	_, err = tx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
 	must(t, err)
-	_, err = tx.Exec(ctx, `SELECT distribution.publish_toolset('ws_catalog_publish','set_catalog_publish',$1)`, workflowAt)
-	must(t, err)
+	_, err = tx.Exec(ctx, `SELECT distribution.publish_toolset('ws_catalog_publish','set_catalog_publish',$1)`, workflowAt.Add(7*time.Second))
+	if err != nil {
+		t.Fatal("approved governed Toolset publication failed", err)
+	}
 	must(t, tx.Commit(ctx))
+	var approvalState string
+	must(t, owner.QueryRow(ctx, `SELECT state FROM governance.catalog_publication_approvals WHERE workspace_id='ws_catalog_publish' AND id='approval_set_1'`).Scan(&approvalState))
+	if approvalState != "consumed" {
+		t.Fatal("successful Toolset publish did not consume approval", approvalState)
+	}
 
 	tx, err = manager.Begin(ctx)
 	must(t, err)
 	_, err = tx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
 	must(t, err)
-	if _, err = tx.Exec(ctx, `SELECT catalog.retire_tool_version('ws_catalog_publish','tv_catalog_publish',$1)`, workflowAt.Add(time.Second)); err == nil {
+	if _, err = tx.Exec(ctx, `SELECT catalog.retire_tool_version('ws_catalog_publish','tv_catalog_publish',$1)`, workflowAt.Add(8*time.Second)); err == nil {
 		t.Fatal("ToolVersion retired while still bound by a published Toolset")
 	}
 	_ = tx.Rollback(ctx)
@@ -171,9 +260,11 @@ func exerciseCatalogManagementFoundation(t *testing.T, ctx context.Context, owne
 	must(t, err)
 	_, err = tx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
 	must(t, err)
-	_, err = tx.Exec(ctx, `SELECT distribution.retire_toolset('ws_catalog_publish','set_catalog_publish',$1)`, workflowAt.Add(time.Second))
-	must(t, err)
-	_, err = tx.Exec(ctx, `SELECT catalog.retire_tool_version('ws_catalog_publish','tv_catalog_publish',$1)`, workflowAt.Add(2*time.Second))
+	_, err = tx.Exec(ctx, `SELECT distribution.retire_toolset('ws_catalog_publish','set_catalog_publish',$1)`, workflowAt.Add(9*time.Second))
+	if err != nil {
+		t.Fatal("governed Toolset retirement failed", err)
+	}
+	_, err = tx.Exec(ctx, `SELECT catalog.retire_tool_version('ws_catalog_publish','tv_catalog_publish',$1)`, workflowAt.Add(10*time.Second))
 	must(t, err)
 	must(t, tx.Commit(ctx))
 	must(t, owner.QueryRow(ctx, `SELECT state FROM catalog.tool_versions WHERE id='tv_catalog_publish'`).Scan(&state))
