@@ -46,6 +46,10 @@ import (
 	"github.com/orz-i/mender/backend/internal/processes/admission/adapters/outbound/identitycancel"
 	admissionidentitystart "github.com/orz-i/mender/backend/internal/processes/admission/adapters/outbound/identitystart"
 	admissionapp "github.com/orz-i/mender/backend/internal/processes/admission/application"
+	catalogmanagementhttp "github.com/orz-i/mender/backend/internal/processes/catalogmanagement/adapters/inbound/httpapi"
+	catalogmanagementidentity "github.com/orz-i/mender/backend/internal/processes/catalogmanagement/adapters/outbound/identityaccess"
+	catalogmanagementpg "github.com/orz-i/mender/backend/internal/processes/catalogmanagement/adapters/outbound/postgres"
+	catalogmanagementapp "github.com/orz-i/mender/backend/internal/processes/catalogmanagement/application"
 	consolelaunchhttp "github.com/orz-i/mender/backend/internal/processes/consolelaunch/adapters/inbound/httpapi"
 	consolelaunchidentity "github.com/orz-i/mender/backend/internal/processes/consolelaunch/adapters/outbound/identityaccess"
 	consolelaunchpg "github.com/orz-i/mender/backend/internal/processes/consolelaunch/adapters/outbound/postgres"
@@ -88,6 +92,8 @@ type APIConfig struct {
 	CommerceObserverDatabaseURL     string
 	ConsoleConnectionsEnabled       bool
 	ConnectionManagerDatabaseURL    string
+	ConsoleCatalogEnabled           bool
+	CatalogManagerDatabaseURL       string
 	ConsoleConnectionOAuthEnabled   bool
 	ConnectionOAuthProviderID       string
 	ConnectionOAuthAuthorizationURL string
@@ -181,6 +187,20 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 		}
 	default:
 		return c, errors.New("MENDER_CONSOLE_CONNECTIONS_ENABLED must be true or false")
+	}
+	switch getenv("MENDER_CONSOLE_CATALOG_ENABLED") {
+	case "", "false":
+	case "true":
+		if !c.ConsoleOIDCEnabled {
+			return APIConfig{}, errors.New("Console Catalog requires Console OIDC")
+		}
+		c.ConsoleCatalogEnabled = true
+		c.CatalogManagerDatabaseURL = getenv("MENDER_CATALOG_MANAGER_DATABASE_URL")
+		if c.CatalogManagerDatabaseURL == "" {
+			return APIConfig{}, errors.New("Console Catalog requires a separate catalog-manager database role")
+		}
+	default:
+		return c, errors.New("MENDER_CONSOLE_CATALOG_ENABLED must be true or false")
 	}
 	switch getenv("MENDER_CONSOLE_LAUNCH_DISCOVERY_ENABLED") {
 	case "", "false":
@@ -336,7 +356,7 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	}
 	switch getenv("MENDER_RUN_API_ENABLED") {
 	case "", "false":
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleConnectionOAuthEnabled {
+		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleCatalogEnabled || c.ConsoleConnectionOAuthEnabled {
 			return APIConfig{}, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return c, nil
@@ -370,7 +390,7 @@ func (systemClock) Now() time.Time { return time.Now().UTC().Truncate(time.Micro
 // BuildAPI never migrates, seeds data or falls back to a test repository.
 func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	if !c.RunAPIEnabled {
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleConnectionOAuthEnabled {
+		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleCatalogEnabled || c.ConsoleConnectionOAuthEnabled {
 			return nil, nil, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return httpserver.NewRouter(), func() {}, nil
@@ -386,6 +406,9 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	}
 	if c.ConsoleUsageEnabled && !c.ConsoleOIDCEnabled {
 		return nil, nil, errors.New("Console Usage requires Console OIDC")
+	}
+	if c.ConsoleCatalogEnabled && !c.ConsoleOIDCEnabled {
+		return nil, nil, errors.New("Console Catalog requires Console OIDC")
 	}
 	if c.ConsoleHumanStartEnabled && (!c.ConsoleOIDCEnabled || !c.ConsoleLaunchDiscoveryEnabled || !c.StartRunAPIEnabled) {
 		return nil, nil, errors.New("Console Human StartRun requires Console OIDC, launch discovery and StartRun API")
@@ -417,9 +440,13 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	var admissionPool *pgxpool.Pool
 	var browserSessionPool *pgxpool.Pool
 	var connectionManagerPool *pgxpool.Pool
+	var catalogManagerPool *pgxpool.Pool
 	var commerceObserverPool *pgxpool.Pool
 	var startDelegationFacade *facade.RunStartDelegations
 	closePools := func() {
+		if catalogManagerPool != nil {
+			catalogManagerPool.Close()
+		}
 		if commerceObserverPool != nil {
 			commerceObserverPool.Close()
 		}
@@ -701,6 +728,32 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 				registers = append(registers, oauthHandler.Register)
 			}
 		}
+		if c.ConsoleCatalogEnabled {
+			catalogManagerPool, buildErr = database.Open(start, c.CatalogManagerDatabaseURL)
+			if buildErr != nil {
+				return failed(buildErr)
+			}
+			catalogCfg := catalogManagerPool.Config().ConnConfig
+			if readerCfg.Host != catalogCfg.Host || readerCfg.Port != catalogCfg.Port || readerCfg.Database != catalogCfg.Database || catalogCfg.User == readerCfg.User || catalogCfg.User == sessionCfg.User || (connectionManagerPool != nil && catalogCfg.User == connectionManagerPool.Config().ConnConfig.User) || (commerceObserverPool != nil && catalogCfg.User == commerceObserverPool.Config().ConnConfig.User) {
+				return failed(errors.New("Console Catalog requires the same database with a distinct restricted role"))
+			}
+			if buildErr = migrations.Verify(start, catalogManagerPool); buildErr != nil {
+				return failed(buildErr)
+			}
+			if buildErr = database.CatalogManagerRole(start, catalogManagerPool); buildErr != nil {
+				return failed(buildErr)
+			}
+			catalogAccess := catalogmanagementidentity.New(humanIdentity)
+			catalogService, serviceErr := catalogmanagementapp.New(catalogmanagementpg.New(catalogManagerPool), catalogAccess, systemClock{})
+			if serviceErr != nil {
+				return failed(serviceErr)
+			}
+			catalogHandler, handlerErr := catalogmanagementhttp.New(catalogService, catalogAccess)
+			if handlerErr != nil {
+				return failed(handlerErr)
+			}
+			registers = append(registers, catalogHandler.Register)
+		}
 	}
 	var queries *runapp.Queries
 	if c.RunReadAPIEnabled {
@@ -829,6 +882,14 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 				return err
 			}
 			if err := database.ConnectionManagerRole(ctx, connectionManagerPool); err != nil {
+				return err
+			}
+		}
+		if catalogManagerPool != nil {
+			if err := migrations.Verify(ctx, catalogManagerPool); err != nil {
+				return err
+			}
+			if err := database.CatalogManagerRole(ctx, catalogManagerPool); err != nil {
 				return err
 			}
 		}

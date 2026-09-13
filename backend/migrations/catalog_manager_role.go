@@ -41,6 +41,8 @@ func GrantCatalogManager(ctx context.Context, pool *pgxpool.Pool, role string) e
 		"GRANT SELECT (workspace_id,id,provider_id,state,revision,created_at,expires_at) ON connections.connections TO " + id,
 		"GRANT SELECT (id,tool_version_id,currency,reserve_micro,starts_at,ends_at,active) ON commerce.price_versions TO " + id,
 		"GRANT SELECT (workspace_id,budget_id,period_id,currency,starts_at,ends_at,active) ON commerce.budget_periods TO " + id,
+		"GRANT EXECUTE ON FUNCTION catalog.tool_version_publish_issues(text,text,timestamptz),catalog.publish_tool_version(text,text,timestamptz),catalog.retire_tool_version(text,text,timestamptz) TO " + id,
+		"GRANT EXECUTE ON FUNCTION distribution.toolset_publish_issues(text,text,timestamptz),distribution.publish_toolset(text,text,timestamptz),distribution.retire_toolset(text,text,timestamptz) TO " + id,
 	} {
 		if _, err = tx.Exec(ctx, sql); err != nil {
 			return errors.New("catalog-manager grant failed")
