@@ -12,5 +12,7 @@ export { createConsoleRunDelegationClient } from './console-run-delegation.ts';
 export type { ConsoleRunDelegation, RunDelegationScope } from './console-run-delegation.ts';
 export { createConsoleUsageClient } from './console-usage.ts';
 export type { ConsoleBudgetPeriod, ConsoleQuotaOutcome, ConsoleQuotaState, ConsoleUsageEntry, ConsoleUsageSnapshot } from './console-usage.ts';
+export { createConsoleCatalogClient } from './console-catalog.ts';
+export type { ConsoleCatalogBinding, ConsoleCatalogBindingInput, ConsoleCatalogBudgetOption, ConsoleCatalogConnectionOption, ConsoleCatalogIssue, ConsoleCatalogPreflight, ConsoleCatalogPriceOption, ConsoleCatalogSnapshot, ConsoleCatalogState, ConsoleCatalogToolVersion, ConsoleCatalogToolVersionInput, ConsoleCatalogToolset } from './console-catalog.ts';
 export { createConsoleRunsClient, createRunsClient, MenderApiError } from './runs.ts';
 export type { ArtifactRecord, Page, RunCostRecord, RunEventRecord, RunEventsPage, RunExecutionState, RunQuotaOutcome, RunQuotaState, RunRecord } from './runs.ts';
