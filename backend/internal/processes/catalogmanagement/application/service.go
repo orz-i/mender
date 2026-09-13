@@ -25,12 +25,20 @@ type Authorizer interface {
 	Authorize(context.Context, Actor, string, string) error
 }
 
+type PublicationApproval struct {
+	WorkspaceID, ID, TargetKind, TargetID, RequesterUserID, ReviewerUserID, State, DecisionNote string
+	TargetRevision                                                                              int64
+	RequestedAt, ExpiresAt, ReviewedAt, ConsumedAt                                              time.Time
+}
+
 type Clock interface{ Now() time.Time }
+type IDGenerator interface{ NewID() (string, error) }
 
 type ToolVersion struct {
 	WorkspaceID, ToolVersionID, ToolID, Version, ProviderID, PriceVersionID, DeploymentRevision string
 	Title, Description, InputSchema, OutputSchema, SideEffect, Idempotency                      string
 	MCPPublishable                                                                              bool
+	Revision                                                                                    int64
 	State                                                                                       string
 	CreatedAt, UpdatedAt, PublishedAt, RetiredAt                                                time.Time
 }
@@ -56,6 +64,7 @@ type BindingInput struct {
 
 type Toolset struct {
 	WorkspaceID, ID                              string
+	Revision                                     int64
 	State                                        string
 	CreatedAt, UpdatedAt, PublishedAt, RetiredAt time.Time
 	Bindings                                     []Binding
@@ -86,6 +95,7 @@ type Snapshot struct {
 	Connections  []ConnectionOption
 	Prices       []PriceOption
 	Budgets      []BudgetOption
+	Approvals    []PublicationApproval
 }
 
 type Issue struct{ Code, TargetID string }
@@ -107,19 +117,28 @@ type Repository interface {
 	ToolsetPreflight(context.Context, string, string, time.Time) (Preflight, error)
 	PublishToolset(context.Context, string, string, time.Time) (Toolset, error)
 	RetireToolset(context.Context, string, string, time.Time) (Toolset, error)
+	SubmitPublication(context.Context, string, string, string, string, string, time.Time, time.Time) (PublicationApproval, error)
 }
 
 type Service struct {
 	repository Repository
 	auth       Authorizer
 	clock      Clock
+	ids        IDGenerator
 }
 
-func New(repository Repository, auth Authorizer, clock Clock) (*Service, error) {
+func New(repository Repository, auth Authorizer, clock Clock, generators ...IDGenerator) (*Service, error) {
 	if repository == nil || auth == nil || clock == nil {
 		return nil, ErrUnavailable
 	}
-	return &Service{repository: repository, auth: auth, clock: clock}, nil
+	var ids IDGenerator
+	if len(generators) > 1 {
+		return nil, ErrUnavailable
+	}
+	if len(generators) == 1 {
+		ids = generators[0]
+	}
+	return &Service{repository: repository, auth: auth, clock: clock, ids: ids}, nil
 }
 
 func validID(v string) bool {
@@ -349,4 +368,25 @@ func (s *Service) RetireToolset(ctx context.Context, actor Actor, workspace, id 
 		return Toolset{}, err
 	}
 	return s.repository.RetireToolset(ctx, workspace, id, now)
+}
+
+func (s *Service) SubmitPublication(ctx context.Context, actor Actor, workspace, kind, id string) (PublicationApproval, error) {
+	if !validID(actor.UserID) || !validID(workspace) || !validID(id) || (kind != "tool_version" && kind != "toolset") {
+		return PublicationApproval{}, ErrInvalid
+	}
+	if err := s.auth.Authorize(ctx, actor, workspace, "catalog:manage"); err != nil {
+		return PublicationApproval{}, err
+	}
+	if s.ids == nil {
+		return PublicationApproval{}, ErrUnavailable
+	}
+	requestID, err := s.ids.NewID()
+	if err != nil || !validID(requestID) {
+		return PublicationApproval{}, ErrUnavailable
+	}
+	now, err := s.now()
+	if err != nil {
+		return PublicationApproval{}, err
+	}
+	return s.repository.SubmitPublication(ctx, workspace, requestID, kind, id, actor.UserID, now, now.Add(30*time.Minute))
 }

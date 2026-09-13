@@ -17,6 +17,25 @@ type testAuth struct{ forbid bool }
 func (a *testAuth) Authenticate(context.Context, string) (application.Actor, error) {
 	return application.Actor{UserID: "user_1"}, nil
 }
+
+func TestPublicationReviewRequestUsesSessionActorAndServerGeneratedID(t *testing.T) {
+	repo := &testRepo{}
+	r := testRouter(t, repo, &testAuth{})
+	path := "/api/console/v1/workspaces/ws_1/catalog/tool-versions/tv_1/review-requests"
+	if w := request(r, http.MethodPost, path, "", ""); w.Code != 403 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if repo.submitCalls != 0 {
+		t.Fatal("review request reached repository without CSRF")
+	}
+	w := request(r, http.MethodPost, path, "", "csrf_1")
+	if w.Code != http.StatusCreated {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if repo.submitCalls != 1 || !strings.Contains(w.Body.String(), `"id":"approval_test_1"`) || !strings.Contains(w.Body.String(), `"target_revision":"7"`) || !strings.Contains(w.Body.String(), `"requester_user_id":"user_1"`) {
+		t.Fatal("server-owned approval request facts missing", w.Body.String())
+	}
+}
 func (a *testAuth) AuthenticateMutation(_ context.Context, _ string, csrf string) (application.Actor, error) {
 	if csrf != "csrf_1" {
 		return application.Actor{}, application.ErrForbidden
@@ -34,9 +53,14 @@ type testClock struct{ at time.Time }
 
 func (c testClock) Now() time.Time { return c.at }
 
+type testIDs struct{}
+
+func (testIDs) NewID() (string, error) { return "approval_test_1", nil }
+
 type testRepo struct {
 	preflight   application.Preflight
 	createCalls int
+	submitCalls int
 }
 
 func (r *testRepo) Snapshot(context.Context, string, time.Time) (application.Snapshot, error) {
@@ -76,11 +100,15 @@ func (*testRepo) PublishToolset(context.Context, string, string, time.Time) (app
 func (*testRepo) RetireToolset(context.Context, string, string, time.Time) (application.Toolset, error) {
 	return application.Toolset{}, application.ErrUnavailable
 }
+func (r *testRepo) SubmitPublication(_ context.Context, workspace, requestID, kind, targetID, requester string, at, expires time.Time) (application.PublicationApproval, error) {
+	r.submitCalls++
+	return application.PublicationApproval{WorkspaceID: workspace, ID: requestID, TargetKind: kind, TargetID: targetID, TargetRevision: 7, RequesterUserID: requester, State: "pending", RequestedAt: at, ExpiresAt: expires}, nil
+}
 
 func testRouter(t *testing.T, repo *testRepo, auth *testAuth) *gin.Engine {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	service, err := application.New(repo, auth, testClock{at: time.Date(2026, 9, 12, 20, 0, 0, 0, time.UTC)})
+	service, err := application.New(repo, auth, testClock{at: time.Date(2026, 9, 12, 20, 0, 0, 0, time.UTC)}, testIDs{})
 	if err != nil {
 		t.Fatal(err)
 	}

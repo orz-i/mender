@@ -21,6 +21,41 @@ type Handler struct {
 	auth    application.Authorizer
 }
 
+func (h *Handler) requestToolsetReview(c *gin.Context) {
+	configure(c)
+	if !emptyMutation(c) {
+		return
+	}
+	ctx, cancel, a, ok := h.actor(c, true)
+	defer cancel()
+	if !ok {
+		return
+	}
+	v, err := h.service.SubmitPublication(ctx, a, c.Param("workspace_id"), "toolset", c.Param("toolset_id"))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"data": approvalView(v)})
+}
+func (h *Handler) requestToolReview(c *gin.Context) {
+	configure(c)
+	if !emptyMutation(c) {
+		return
+	}
+	ctx, cancel, a, ok := h.actor(c, true)
+	defer cancel()
+	if !ok {
+		return
+	}
+	v, err := h.service.SubmitPublication(ctx, a, c.Param("workspace_id"), "tool_version", c.Param("tool_version_id"))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"data": approvalView(v)})
+}
+
 func New(service *application.Service, auth application.Authorizer) (*Handler, error) {
 	if service == nil || auth == nil {
 		return nil, application.ErrUnavailable
@@ -33,12 +68,14 @@ func (h *Handler) Register(router *gin.Engine) {
 	router.POST(base+"/tool-versions", h.createTool)
 	router.PUT(base+"/tool-versions/:tool_version_id", h.updateTool)
 	router.POST(base+"/tool-versions/:tool_version_id/preflight", h.toolPreflight)
+	router.POST(base+"/tool-versions/:tool_version_id/review-requests", h.requestToolReview)
 	router.POST(base+"/tool-versions/:tool_version_id/publish", h.publishTool)
 	router.POST(base+"/tool-versions/:tool_version_id/retire", h.retireTool)
 	router.POST(base+"/toolsets", h.createToolset)
 	router.PUT(base+"/toolsets/:toolset_id/bindings/:tool_version_id", h.upsertBinding)
 	router.DELETE(base+"/toolsets/:toolset_id/bindings/:tool_version_id", h.deleteBinding)
 	router.POST(base+"/toolsets/:toolset_id/preflight", h.toolsetPreflight)
+	router.POST(base+"/toolsets/:toolset_id/review-requests", h.requestToolsetReview)
 	router.POST(base+"/toolsets/:toolset_id/publish", h.publishToolset)
 	router.POST(base+"/toolsets/:toolset_id/retire", h.retireToolset)
 }
@@ -155,7 +192,7 @@ type toolsetInput struct {
 }
 
 func toolView(v application.ToolVersion) gin.H {
-	return gin.H{"tool_version_id": v.ToolVersionID, "tool_id": v.ToolID, "version": v.Version, "provider_id": v.ProviderID, "price_version_id": v.PriceVersionID, "deployment_revision": v.DeploymentRevision, "title": v.Title, "description": v.Description, "input_schema": json.RawMessage(v.InputSchema), "output_schema": json.RawMessage(v.OutputSchema), "side_effect": v.SideEffect, "idempotency": v.Idempotency, "mcp_publishable": v.MCPPublishable, "state": v.State, "created_at": v.CreatedAt, "updated_at": v.UpdatedAt, "published_at": nullableTime(v.PublishedAt), "retired_at": nullableTime(v.RetiredAt)}
+	return gin.H{"tool_version_id": v.ToolVersionID, "tool_id": v.ToolID, "version": v.Version, "provider_id": v.ProviderID, "price_version_id": v.PriceVersionID, "deployment_revision": v.DeploymentRevision, "title": v.Title, "description": v.Description, "input_schema": json.RawMessage(v.InputSchema), "output_schema": json.RawMessage(v.OutputSchema), "side_effect": v.SideEffect, "idempotency": v.Idempotency, "mcp_publishable": v.MCPPublishable, "revision": strconv.FormatInt(v.Revision, 10), "state": v.State, "created_at": v.CreatedAt, "updated_at": v.UpdatedAt, "published_at": nullableTime(v.PublishedAt), "retired_at": nullableTime(v.RetiredAt)}
 }
 func bindingView(v application.Binding) gin.H {
 	return gin.H{"tool_id": v.ToolID, "tool_version_label": v.ToolVersionLabel, "tool_version_id": v.ToolVersionID, "budget_id": v.BudgetID, "connection_id": v.ConnectionID, "mcp_name": v.MCPName, "mcp_exposed": v.MCPExposed, "state": v.State, "published_at": nullableTime(v.PublishedAt)}
@@ -165,7 +202,16 @@ func toolsetView(v application.Toolset) gin.H {
 	for _, b := range v.Bindings {
 		bindings = append(bindings, bindingView(b))
 	}
-	return gin.H{"id": v.ID, "state": v.State, "created_at": v.CreatedAt, "updated_at": v.UpdatedAt, "published_at": nullableTime(v.PublishedAt), "retired_at": nullableTime(v.RetiredAt), "bindings": bindings}
+	return gin.H{"id": v.ID, "revision": strconv.FormatInt(v.Revision, 10), "state": v.State, "created_at": v.CreatedAt, "updated_at": v.UpdatedAt, "published_at": nullableTime(v.PublishedAt), "retired_at": nullableTime(v.RetiredAt), "bindings": bindings}
+}
+func approvalView(v application.PublicationApproval) gin.H {
+	return gin.H{"id": v.ID, "target_kind": v.TargetKind, "target_id": v.TargetID, "target_revision": strconv.FormatInt(v.TargetRevision, 10), "requester_user_id": v.RequesterUserID, "state": v.State, "requested_at": v.RequestedAt, "expires_at": v.ExpiresAt, "reviewer_user_id": nullableString(v.ReviewerUserID), "reviewed_at": nullableTime(v.ReviewedAt), "decision_note": v.DecisionNote, "consumed_at": nullableTime(v.ConsumedAt)}
+}
+func nullableString(v string) any {
+	if v == "" {
+		return nil
+	}
+	return v
 }
 func nullableTime(v time.Time) any {
 	if v.IsZero() {
@@ -222,7 +268,11 @@ func (h *Handler) snapshot(c *gin.Context) {
 	for _, v := range s.Budgets {
 		budgets = append(budgets, gin.H{"budget_id": v.BudgetID, "period_id": v.PeriodID, "currency": v.Currency, "starts_at": v.StartsAt, "ends_at": v.EndsAt, "active": v.Active})
 	}
-	c.JSON(200, gin.H{"data": gin.H{"tool_versions": tools, "toolsets": sets, "connections": connections, "price_versions": prices, "budget_periods": budgets}})
+	approvals := make([]gin.H, 0, len(s.Approvals))
+	for _, v := range s.Approvals {
+		approvals = append(approvals, approvalView(v))
+	}
+	c.JSON(200, gin.H{"data": gin.H{"tool_versions": tools, "toolsets": sets, "connections": connections, "price_versions": prices, "budget_periods": budgets, "publication_approvals": approvals}})
 }
 func (h *Handler) createTool(c *gin.Context) {
 	configure(c)

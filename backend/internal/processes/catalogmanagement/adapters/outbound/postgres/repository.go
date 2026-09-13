@@ -21,6 +21,38 @@ func rollback(tx pgx.Tx) {
 	_ = tx.Rollback(ctx)
 }
 
+func scanApproval(row pgx.Row) (application.PublicationApproval, error) {
+	var a application.PublicationApproval
+	var reviewed, consumed *time.Time
+	err := row.Scan(&a.WorkspaceID, &a.ID, &a.TargetKind, &a.TargetID, &a.TargetRevision, &a.RequesterUserID, &a.State, &a.RequestedAt, &a.ExpiresAt, &a.ReviewerUserID, &reviewed, &a.DecisionNote, &consumed)
+	if reviewed != nil {
+		a.ReviewedAt = *reviewed
+	}
+	if consumed != nil {
+		a.ConsumedAt = *consumed
+	}
+	return a, mapErr(err)
+}
+
+func (r *Repository) SubmitPublication(ctx context.Context, workspace, requestID, kind, id, requester string, at, expires time.Time) (application.PublicationApproval, error) {
+	tx, err := r.begin(ctx, workspace)
+	if err != nil {
+		return application.PublicationApproval{}, err
+	}
+	defer rollback(tx)
+	if _, err = tx.Exec(ctx, `SELECT governance.submit_catalog_publication($1,$2,$3,$4,$5,$6,$7)`, workspace, requestID, kind, id, requester, at, expires); err != nil {
+		return application.PublicationApproval{}, mapErr(err)
+	}
+	a, err := scanApproval(tx.QueryRow(ctx, `SELECT workspace_id,id,target_kind,target_id,target_revision,requester_user_id,state,requested_at,expires_at,coalesce(reviewer_user_id,''),reviewed_at,decision_note,consumed_at FROM governance.catalog_publication_approvals WHERE workspace_id=$1 AND id=$2`, workspace, requestID))
+	if err != nil {
+		return application.PublicationApproval{}, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return application.PublicationApproval{}, application.ErrUnavailable
+	}
+	return a, nil
+}
+
 func mapErr(err error) error {
 	if err == nil {
 		return nil
@@ -62,7 +94,7 @@ func scanTool(row pgx.Row) (application.ToolVersion, error) {
 	var v application.ToolVersion
 	var published, retired *time.Time
 	err := row.Scan(&v.WorkspaceID, &v.ToolVersionID, &v.ToolID, &v.Version, &v.ProviderID, &v.PriceVersionID, &v.DeploymentRevision,
-		&v.Title, &v.Description, &v.InputSchema, &v.OutputSchema, &v.SideEffect, &v.Idempotency, &v.MCPPublishable, &v.State, &v.CreatedAt, &v.UpdatedAt, &published, &retired)
+		&v.Title, &v.Description, &v.InputSchema, &v.OutputSchema, &v.SideEffect, &v.Idempotency, &v.MCPPublishable, &v.Revision, &v.State, &v.CreatedAt, &v.UpdatedAt, &published, &retired)
 	if published != nil {
 		v.PublishedAt = *published
 	}
@@ -72,7 +104,7 @@ func scanTool(row pgx.Row) (application.ToolVersion, error) {
 	return v, mapErr(err)
 }
 
-const toolCols = `workspace_id,tool_version_id,tool_id,version,provider_id,price_version_id,deployment_revision,title,description,input_schema::text,output_schema::text,side_effect,idempotency,mcp_publishable,state,created_at,updated_at,published_at,retired_at`
+const toolCols = `workspace_id,tool_version_id,tool_id,version,provider_id,price_version_id,deployment_revision,title,description,input_schema::text,output_schema::text,side_effect,idempotency,mcp_publishable,revision,state,created_at,updated_at,published_at,retired_at`
 
 func (r *Repository) Snapshot(ctx context.Context, workspace string, at time.Time) (application.Snapshot, error) {
 	tx, err := r.begin(ctx, workspace)
@@ -80,7 +112,7 @@ func (r *Repository) Snapshot(ctx context.Context, workspace string, at time.Tim
 		return application.Snapshot{}, err
 	}
 	defer rollback(tx)
-	out := application.Snapshot{ToolVersions: []application.ToolVersion{}, Toolsets: []application.Toolset{}, Connections: []application.ConnectionOption{}, Prices: []application.PriceOption{}, Budgets: []application.BudgetOption{}}
+	out := application.Snapshot{ToolVersions: []application.ToolVersion{}, Toolsets: []application.Toolset{}, Connections: []application.ConnectionOption{}, Prices: []application.PriceOption{}, Budgets: []application.BudgetOption{}, Approvals: []application.PublicationApproval{}}
 	rows, err := tx.Query(ctx, `SELECT `+toolCols+` FROM catalog.tool_version_management WHERE workspace_id=$1 ORDER BY tool_id,version`, workspace)
 	if err != nil {
 		return out, mapErr(err)
@@ -99,14 +131,14 @@ func (r *Repository) Snapshot(ctx context.Context, workspace string, at time.Tim
 	}
 	rows.Close()
 	toolsets := map[string]int{}
-	rows, err = tx.Query(ctx, `SELECT workspace_id,id,state,created_at,updated_at,published_at,retired_at FROM distribution.toolsets WHERE workspace_id=$1 ORDER BY id`, workspace)
+	rows, err = tx.Query(ctx, `SELECT workspace_id,id,revision,state,created_at,updated_at,published_at,retired_at FROM distribution.toolsets WHERE workspace_id=$1 ORDER BY id`, workspace)
 	if err != nil {
 		return out, mapErr(err)
 	}
 	for rows.Next() {
 		var s application.Toolset
 		var p, ret *time.Time
-		if rows.Scan(&s.WorkspaceID, &s.ID, &s.State, &s.CreatedAt, &s.UpdatedAt, &p, &ret) != nil {
+		if rows.Scan(&s.WorkspaceID, &s.ID, &s.Revision, &s.State, &s.CreatedAt, &s.UpdatedAt, &p, &ret) != nil {
 			rows.Close()
 			return out, application.ErrUnavailable
 		}
@@ -193,6 +225,33 @@ func (r *Repository) Snapshot(ctx context.Context, workspace string, at time.Tim
 			return out, application.ErrUnavailable
 		}
 		out.Budgets = append(out.Budgets, v)
+	}
+	if rows.Err() != nil {
+		rows.Close()
+		return out, application.ErrUnavailable
+	}
+	rows.Close()
+	rows, err = tx.Query(ctx, `SELECT workspace_id,id,target_kind,target_id,target_revision,requester_user_id,
+	 CASE WHEN state IN ('pending','approved') AND expires_at<=$2 THEN 'expired' ELSE state END,
+	 requested_at,expires_at,coalesce(reviewer_user_id,''),reviewed_at,decision_note,consumed_at
+	 FROM governance.catalog_publication_approvals WHERE workspace_id=$1 ORDER BY requested_at DESC,id`, workspace, at)
+	if err != nil {
+		return out, mapErr(err)
+	}
+	for rows.Next() {
+		var a application.PublicationApproval
+		var reviewed, consumed *time.Time
+		if rows.Scan(&a.WorkspaceID, &a.ID, &a.TargetKind, &a.TargetID, &a.TargetRevision, &a.RequesterUserID, &a.State, &a.RequestedAt, &a.ExpiresAt, &a.ReviewerUserID, &reviewed, &a.DecisionNote, &consumed) != nil {
+			rows.Close()
+			return out, application.ErrUnavailable
+		}
+		if reviewed != nil {
+			a.ReviewedAt = *reviewed
+		}
+		if consumed != nil {
+			a.ConsumedAt = *consumed
+		}
+		out.Approvals = append(out.Approvals, a)
 	}
 	if rows.Err() != nil {
 		rows.Close()
@@ -301,7 +360,7 @@ func (r *Repository) transitionTool(ctx context.Context, workspace, id string, a
 func scanToolset(row pgx.Row) (application.Toolset, error) {
 	var s application.Toolset
 	var p, r *time.Time
-	err := row.Scan(&s.WorkspaceID, &s.ID, &s.State, &s.CreatedAt, &s.UpdatedAt, &p, &r)
+	err := row.Scan(&s.WorkspaceID, &s.ID, &s.Revision, &s.State, &s.CreatedAt, &s.UpdatedAt, &p, &r)
 	if p != nil {
 		s.PublishedAt = *p
 	}
@@ -312,7 +371,7 @@ func scanToolset(row pgx.Row) (application.Toolset, error) {
 	return s, mapErr(err)
 }
 
-const toolsetCols = `workspace_id,id,state,created_at,updated_at,published_at,retired_at`
+const toolsetCols = `workspace_id,id,revision,state,created_at,updated_at,published_at,retired_at`
 
 func (r *Repository) CreateToolset(ctx context.Context, workspace, id string) (application.Toolset, error) {
 	tx, err := r.begin(ctx, workspace)

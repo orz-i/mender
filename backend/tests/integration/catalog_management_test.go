@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	governancepg "github.com/orz-i/mender/backend/internal/contexts/governance/adapters/outbound/postgres"
 	database "github.com/orz-i/mender/backend/internal/platform/postgres"
+	catalogmanagementpg "github.com/orz-i/mender/backend/internal/processes/catalogmanagement/adapters/outbound/postgres"
 	"github.com/orz-i/mender/backend/migrations"
 )
 
@@ -203,16 +205,19 @@ func exerciseCatalogManagementFoundation(t *testing.T, ctx context.Context, owne
 	if issueCount != 0 {
 		t.Fatal("valid Toolset preflight unexpectedly failed", issueCount)
 	}
-	_, err = tx.Exec(ctx, `SELECT governance.submit_catalog_publication('ws_catalog_publish','approval_set_1','toolset','set_catalog_publish','maker_catalog',$1,$2)`, workflowAt.Add(5*time.Second), workflowAt.Add(time.Hour))
-	must(t, err)
 	must(t, tx.Commit(ctx))
-	reviewTx, err = reviewer.Begin(ctx)
+	catalogRepo := catalogmanagementpg.New(manager)
+	approval, err := catalogRepo.SubmitPublication(ctx, "ws_catalog_publish", "approval_set_1", "toolset", "set_catalog_publish", "maker_catalog", workflowAt.Add(5*time.Second), workflowAt.Add(time.Hour))
 	must(t, err)
-	_, err = reviewTx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
+	if approval.TargetRevision < 1 || approval.State != "pending" || approval.RequesterUserID != "maker_catalog" {
+		t.Fatal("catalog management repository did not return exact approval request", approval)
+	}
+	reviewRepo := governancepg.NewPublicationReview(reviewer)
+	reviewed, err := reviewRepo.ApprovePublication(ctx, "ws_catalog_publish", "approval_set_1", "reviewer_catalog", "toolset reviewed", workflowAt.Add(6*time.Second))
 	must(t, err)
-	_, err = reviewTx.Exec(ctx, `SELECT governance.approve_catalog_publication('ws_catalog_publish','approval_set_1','reviewer_catalog',$1,'toolset reviewed')`, workflowAt.Add(6*time.Second))
-	must(t, err)
-	must(t, reviewTx.Commit(ctx))
+	if reviewed.State != "approved" || reviewed.ReviewerUserID != "reviewer_catalog" {
+		t.Fatal("governance repository did not return reviewed approval", reviewed)
+	}
 
 	_, err = owner.Exec(ctx, `UPDATE connections.connections SET state='revoked',revision=revision+1 WHERE workspace_id='ws_catalog_publish' AND id='conn_catalog_publish'`)
 	must(t, err)
@@ -245,6 +250,16 @@ func exerciseCatalogManagementFoundation(t *testing.T, ctx context.Context, owne
 	must(t, owner.QueryRow(ctx, `SELECT state FROM governance.catalog_publication_approvals WHERE workspace_id='ws_catalog_publish' AND id='approval_set_1'`).Scan(&approvalState))
 	if approvalState != "consumed" {
 		t.Fatal("successful Toolset publish did not consume approval", approvalState)
+	}
+	snapshot, err := catalogRepo.Snapshot(ctx, "ws_catalog_publish", workflowAt.Add(8*time.Second))
+	must(t, err)
+	if len(snapshot.Approvals) < 2 || snapshot.ToolVersions[0].Revision < 1 || snapshot.Toolsets[0].Revision < 1 {
+		t.Fatal("Catalog snapshot omitted revision-bound publication governance facts", len(snapshot.Approvals))
+	}
+	reviewList, err := reviewRepo.ListPublicationApprovals(ctx, "ws_catalog_publish", workflowAt.Add(8*time.Second))
+	must(t, err)
+	if len(reviewList) < 2 {
+		t.Fatal("Governance reviewer repository omitted workspace approvals", reviewList)
 	}
 
 	tx, err = manager.Begin(ctx)

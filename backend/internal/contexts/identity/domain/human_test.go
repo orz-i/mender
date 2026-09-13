@@ -10,11 +10,12 @@ func TestCatalogWorkspaceAuthorization(t *testing.T) {
 	roles := []struct {
 		role      MembershipRole
 		canManage bool
+		canReview bool
 	}{
-		{RoleOwner, true},
-		{RoleAdmin, true},
-		{RoleDeveloper, true},
-		{RoleViewer, false},
+		{RoleOwner, true, true},
+		{RoleAdmin, true, true},
+		{RoleDeveloper, true, false},
+		{RoleViewer, false, false},
 	}
 	for _, tc := range roles {
 		membership := WorkspaceMembership{WorkspaceID: "ws_catalog", UserID: "user_catalog", Role: tc.role, CreatedAt: createdAt}
@@ -24,9 +25,12 @@ func TestCatalogWorkspaceAuthorization(t *testing.T) {
 		if got := membership.Allows("catalog:manage"); got != tc.canManage {
 			t.Fatal("unexpected Catalog manage authorization", tc.role, got)
 		}
+		if got := membership.Allows("catalog:review"); got != tc.canReview {
+			t.Fatal("unexpected Catalog review authorization", tc.role, got)
+		}
 	}
 	disabled := WorkspaceMembership{WorkspaceID: "ws_catalog", UserID: "user_catalog", Role: RoleOwner, Disabled: true, CreatedAt: createdAt}
-	if disabled.Allows("catalog:read") || disabled.Allows("catalog:manage") {
+	if disabled.Allows("catalog:read") || disabled.Allows("catalog:manage") || disabled.Allows("catalog:review") {
 		t.Fatal("disabled membership retained Catalog authority")
 	}
 }
