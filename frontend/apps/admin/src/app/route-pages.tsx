@@ -5,6 +5,7 @@ export function Layout() {
   return <Shell label="Admin" navigation={<>
     <NavLink className="nav-link" to="/" end>开始</NavLink>
     <NavLink className="nav-link" to="/publication-reviews">发布审核</NavLink>
+    <NavLink className="nav-link" to="/publication-history">审计历史</NavLink>
     <NavLink className="nav-link" to="/status">服务状态</NavLink>
   </>}><Outlet /></Shell>;
 }

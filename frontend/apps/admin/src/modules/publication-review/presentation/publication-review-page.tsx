@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { Button } from '@mender/ui';
 import { ReviewLoginRequiredError, type ReviewGateway } from '../application/review-gateway';
 import type { PublicationReview, PublicationReviewState } from '../domain/review';
@@ -37,11 +37,11 @@ export function PublicationReviewPage({ gateway }: { gateway: ReviewGateway }) {
       {approve.error && <div className="error-panel" role="alert">{message(approve.error)}</div>}
       {reject.error && <div className="error-panel" role="alert">{message(reject.error)}</div>}
       {approvals.data && approvals.data.length === 0 && <div className="empty-state"><strong>当前 Workspace 没有发布审核记录</strong></div>}
-      {approvals.data && approvals.data.length > 0 && <ReviewTable items={approvals.data} busy={approve.isPending || reject.isPending} approve={(id) => approve.mutate(id)} reject={(id) => reject.mutate(id)} />}
+      {approvals.data && approvals.data.length > 0 && <ReviewTable workspaceId={workspaceId} items={approvals.data} busy={approve.isPending || reject.isPending} approve={(id) => approve.mutate(id)} reject={(id) => reject.mutate(id)} />}
     </section>}
   </>;
 }
 
-function ReviewTable({ items, busy, approve, reject }: { items: PublicationReview[]; busy: boolean; approve: (id: string) => void; reject: (id: string) => void }) {
-  return <div className="run-table-wrap"><table className="run-table"><thead><tr><th>Target</th><th>Requester</th><th>状态</th><th>时间</th><th>Reviewer / Note</th><th>操作</th></tr></thead><tbody>{items.map((item) => <tr key={item.id}><td><strong>{item.targetKind === 'tool_version' ? 'ToolVersion' : 'Toolset'}</strong><div className="mono">{item.targetId}</div><div className="muted-copy">revision {item.targetRevision} · {item.id}</div></td><td className="mono">{item.requesterUserId}</td><td><span className={`state-badge state-${item.state}`}>{stateLabel[item.state]}</span></td><td><div>Requested {formatTime(item.requestedAt)}</div><div className="muted-copy">Expires {formatTime(item.expiresAt)}</div></td><td><div className="mono">{item.reviewerUserId ?? '—'}</div><div className="muted-copy">{item.decisionNote || '无 decision note'}</div></td><td>{item.state === 'pending' ? <div className="credential-actions"><Button type="button" disabled={busy} onClick={() => approve(item.id)}>批准</Button><Button type="button" variant="outline" disabled={busy} onClick={() => reject(item.id)}>拒绝</Button></div> : <span className="muted-copy">只读</span>}</td></tr>)}</tbody></table></div>;
+function ReviewTable({ workspaceId, items, busy, approve, reject }: { workspaceId: string; items: PublicationReview[]; busy: boolean; approve: (id: string) => void; reject: (id: string) => void }) {
+  return <div className="run-table-wrap"><table className="run-table"><thead><tr><th>Target</th><th>Requester</th><th>状态</th><th>时间</th><th>Reviewer / Note</th><th>操作</th></tr></thead><tbody>{items.map((item) => <tr key={item.id}><td><strong>{item.targetKind === 'tool_version' ? 'ToolVersion' : 'Toolset'}</strong><div className="mono">{item.targetId}</div><div className="muted-copy">revision {item.targetRevision} · {item.id}</div></td><td className="mono">{item.requesterUserId}</td><td><span className={`state-badge state-${item.state}`}>{stateLabel[item.state]}</span></td><td><div>Requested {formatTime(item.requestedAt)}</div><div className="muted-copy">Expires {formatTime(item.expiresAt)}</div></td><td><div className="mono">{item.reviewerUserId ?? '—'}</div><div className="muted-copy">{item.decisionNote || '无 decision note'}</div></td><td><div className="credential-actions">{item.state === 'pending' && <><Button type="button" disabled={busy} onClick={() => approve(item.id)}>批准</Button><Button type="button" variant="outline" disabled={busy} onClick={() => reject(item.id)}>拒绝</Button></>}<Button asChild type="button" variant="outline"><Link to={`/publication-history?workspace=${encodeURIComponent(workspaceId)}&approval=${encodeURIComponent(item.id)}`}>查看历史</Link></Button></div></td></tr>)}</tbody></table></div>;
 }
