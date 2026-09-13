@@ -47,6 +47,7 @@ func CatalogManagerRole(ctx context.Context, pool *pgxpool.Pool) error {
 	 AND has_function_privilege(current_user,'distribution.toolset_publish_issues(text,text,timestamptz)','EXECUTE')
 	 AND has_function_privilege(current_user,'distribution.publish_toolset(text,text,timestamptz)','EXECUTE')
 	 AND has_function_privilege(current_user,'distribution.retire_toolset(text,text,timestamptz)','EXECUTE')
+	 AND NOT has_table_privilege(current_user,'governance.catalog_publication_audit_events','SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
 	 AND NOT has_schema_privilege(current_user,'identity','USAGE')
 	 AND NOT has_schema_privilege(current_user,'execution','USAGE')
 	 AND NOT has_table_privilege(current_user,'commerce.reservations','SELECT,INSERT,UPDATE,DELETE,TRUNCATE')`).Scan(&grants)

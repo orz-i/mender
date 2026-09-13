@@ -286,4 +286,95 @@ func exerciseCatalogManagementFoundation(t *testing.T, ctx context.Context, owne
 	if state != "retired" {
 		t.Fatal("retired ToolVersion remained runtime-callable", state)
 	}
+
+	// Expiry is persisted as a governance fact when a reviewer observes an
+	// elapsed approval. The reviewed function returns without granting approval.
+	_, err = owner.Exec(ctx, `INSERT INTO commerce.price_versions(id,tool_version_id,currency,reserve_micro,starts_at,ends_at,active,charge_micro,billing_policy)
+	 VALUES('price_catalog_expire','tv_catalog_expire','USD',1,$1,$2,true,1,'fixed_success_only')`, workflowAt.Add(-time.Hour), workflowAt.Add(time.Hour))
+	must(t, err)
+	tx, err = manager.Begin(ctx)
+	must(t, err)
+	_, err = tx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
+	must(t, err)
+	_, err = tx.Exec(ctx, `INSERT INTO catalog.tool_version_management(
+	 workspace_id,tool_version_id,tool_id,version,provider_id,price_version_id,deployment_revision,title,description,input_schema,output_schema,side_effect,idempotency,mcp_publishable)
+	 VALUES('ws_catalog_publish','tv_catalog_expire','tool_catalog_expire','1.0.0','provider_catalog_publish','price_catalog_expire','deploy_catalog_expire','Expiry audit','',
+	 '{"type":"object"}'::jsonb,'{"type":"object"}'::jsonb,'read_only','safe_read',false)`)
+	must(t, err)
+	_, err = tx.Exec(ctx, `SELECT governance.submit_catalog_publication('ws_catalog_publish','approval_expire_1','tool_version','tv_catalog_expire','maker_catalog',$1,$2)`, workflowAt.Add(11*time.Second), workflowAt.Add(12*time.Second))
+	must(t, err)
+	must(t, tx.Commit(ctx))
+	reviewTx, err = reviewer.Begin(ctx)
+	must(t, err)
+	_, err = reviewTx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
+	must(t, err)
+	_, err = reviewTx.Exec(ctx, `SELECT governance.approve_catalog_publication('ws_catalog_publish','approval_expire_1','reviewer_catalog',$1,'too late')`, workflowAt.Add(13*time.Second))
+	must(t, err)
+	must(t, reviewTx.Commit(ctx))
+	must(t, owner.QueryRow(ctx, `SELECT state FROM governance.catalog_publication_approvals WHERE workspace_id='ws_catalog_publish' AND id='approval_expire_1'`).Scan(&approvalState))
+	if approvalState != "expired" {
+		t.Fatal("elapsed publication approval was not durably expired", approvalState)
+	}
+
+	// Catalog management can cause audited transitions but cannot read or write
+	// the append-only history directly.
+	tx, err = manager.Begin(ctx)
+	must(t, err)
+	_, err = tx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
+	must(t, err)
+	if _, err = tx.Exec(ctx, `SELECT sequence FROM governance.catalog_publication_audit_events LIMIT 1`); err == nil {
+		t.Fatal("catalog manager obtained governance audit read authority")
+	}
+	_ = tx.Rollback(ctx)
+
+	reviewTx, err = reviewer.Begin(ctx)
+	must(t, err)
+	_, err = reviewTx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
+	must(t, err)
+	if _, err = reviewTx.Exec(ctx, `INSERT INTO governance.catalog_publication_audit_events(workspace_id,approval_id,target_kind,target_id,target_revision,event_kind,occurred_at) VALUES('ws_catalog_publish','forged','tool_version','tv_catalog_publish',1,'approval_consumed',$1)`, workflowAt); err == nil {
+		t.Fatal("governance reviewer obtained direct audit append authority")
+	}
+	_ = reviewTx.Rollback(ctx)
+
+	ownerAuditTx, err := owner.Begin(ctx)
+	must(t, err)
+	_, err = ownerAuditTx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
+	must(t, err)
+	if _, err = ownerAuditTx.Exec(ctx, `UPDATE governance.catalog_publication_audit_events SET note='tampered' WHERE workspace_id='ws_catalog_publish'`); err == nil {
+		t.Fatal("append-only publication audit accepted UPDATE")
+	}
+	_ = ownerAuditTx.Rollback(ctx)
+
+	reviewTx, err = reviewer.Begin(ctx)
+	must(t, err)
+	_, err = reviewTx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
+	must(t, err)
+	var tv1History, tv2History, setHistory, expiryHistory string
+	must(t, reviewTx.QueryRow(ctx, `SELECT string_agg(event_kind||':'||reason_code,',' ORDER BY sequence) FROM governance.catalog_publication_audit_events WHERE workspace_id='ws_catalog_publish' AND approval_id='approval_tv_1'`).Scan(&tv1History))
+	must(t, reviewTx.QueryRow(ctx, `SELECT string_agg(event_kind||':'||reason_code,',' ORDER BY sequence) FROM governance.catalog_publication_audit_events WHERE workspace_id='ws_catalog_publish' AND approval_id='approval_tv_2'`).Scan(&tv2History))
+	must(t, reviewTx.QueryRow(ctx, `SELECT string_agg(event_kind||':'||reason_code,',' ORDER BY sequence) FROM governance.catalog_publication_audit_events WHERE workspace_id='ws_catalog_publish' AND approval_id='approval_set_1'`).Scan(&setHistory))
+	must(t, reviewTx.QueryRow(ctx, `SELECT string_agg(event_kind||':'||reason_code,',' ORDER BY sequence) FROM governance.catalog_publication_audit_events WHERE workspace_id='ws_catalog_publish' AND approval_id='approval_expire_1'`).Scan(&expiryHistory))
+	if tv1History != "approval_submitted:,approval_approved:,approval_expired:revision_drift" {
+		t.Fatal("ToolVersion stale approval audit history mismatch", tv1History)
+	}
+	if tv2History != "approval_submitted:,approval_approved:,approval_consumed:,publication_committed:" {
+		t.Fatal("ToolVersion publication audit history mismatch", tv2History)
+	}
+	if setHistory != "approval_submitted:,approval_approved:,approval_consumed:,publication_committed:" {
+		t.Fatal("Toolset publication audit history mismatch", setHistory)
+	}
+	if expiryHistory != "approval_submitted:,approval_expired:ttl_elapsed" {
+		t.Fatal("elapsed approval audit history mismatch", expiryHistory)
+	}
+	var staleRevision, observedRevision int64
+	must(t, reviewTx.QueryRow(ctx, `SELECT target_revision,observed_revision FROM governance.catalog_publication_audit_events WHERE workspace_id='ws_catalog_publish' AND approval_id='approval_tv_1' AND event_kind='approval_expired'`).Scan(&staleRevision, &observedRevision))
+	if staleRevision != 1 || observedRevision != 2 {
+		t.Fatal("revision drift audit lost exact revisions", staleRevision, observedRevision)
+	}
+	var retiredCount int
+	must(t, reviewTx.QueryRow(ctx, `SELECT count(*) FROM governance.catalog_publication_audit_events WHERE workspace_id='ws_catalog_publish' AND event_kind='publication_retired' AND target_id IN ('set_catalog_publish','tv_catalog_publish')`).Scan(&retiredCount))
+	if retiredCount != 2 {
+		t.Fatal("publication retirement audit facts missing", retiredCount)
+	}
+	must(t, reviewTx.Commit(ctx))
 }

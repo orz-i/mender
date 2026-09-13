@@ -15,6 +15,8 @@ func GovernanceReviewerRole(ctx context.Context, pool *pgxpool.Pool) error {
 	err := pool.QueryRow(ctx, `SELECT
 	 has_table_privilege(current_user,'governance.catalog_publication_approvals','SELECT')
 	 AND NOT has_table_privilege(current_user,'governance.catalog_publication_approvals','INSERT,UPDATE,DELETE,TRUNCATE')
+	 AND has_table_privilege(current_user,'governance.catalog_publication_audit_events','SELECT')
+	 AND NOT has_table_privilege(current_user,'governance.catalog_publication_audit_events','INSERT,UPDATE,DELETE,TRUNCATE')
 	 AND has_function_privilege(current_user,'governance.approve_catalog_publication(text,text,text,timestamptz,text)','EXECUTE')
 	 AND has_function_privilege(current_user,'governance.reject_catalog_publication(text,text,text,timestamptz,text)','EXECUTE')
 	 AND NOT has_schema_privilege(current_user,'catalog','USAGE')

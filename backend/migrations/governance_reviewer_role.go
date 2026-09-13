@@ -29,7 +29,7 @@ func GrantGovernanceReviewer(ctx context.Context, pool *pgxpool.Pool, role strin
 	for _, sql := range []string{
 		"GRANT USAGE ON SCHEMA governance,mender_meta TO " + id,
 		"GRANT SELECT ON mender_meta.schema_migrations TO " + id,
-		"GRANT SELECT ON governance.catalog_publication_approvals TO " + id,
+		"GRANT SELECT ON governance.catalog_publication_approvals,governance.catalog_publication_audit_events TO " + id,
 		"GRANT EXECUTE ON FUNCTION governance.approve_catalog_publication(text,text,text,timestamptz,text),governance.reject_catalog_publication(text,text,text,timestamptz,text) TO " + id,
 	} {
 		if _, err = tx.Exec(ctx, sql); err != nil {
