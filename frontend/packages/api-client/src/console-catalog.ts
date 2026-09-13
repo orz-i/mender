@@ -1,6 +1,7 @@
 import { MenderApiError } from './runs.ts';
 
 export type ConsoleCatalogState = 'draft' | 'published' | 'retired';
+export type ConsolePublicationApprovalState = 'pending' | 'approved' | 'rejected' | 'consumed' | 'expired';
 
 export interface ConsoleCatalogToolVersion {
   toolVersionId: string;
@@ -16,11 +17,47 @@ export interface ConsoleCatalogToolVersion {
   sideEffect: 'read_only' | 'write';
   idempotency: 'safe_read' | 'idempotent' | 'unsafe';
   mcpPublishable: boolean;
+  revision: string;
   state: ConsoleCatalogState;
   createdAt: string;
   updatedAt: string;
   publishedAt: string | null;
   retiredAt: string | null;
+}
+
+function approval(value: unknown): ConsolePublicationApproval {
+  const raw = object(value);
+  for (const forbidden of ['credential_version_ref', 'secret', 'token', 'reserve_micro', 'limit_micro', 'consumed_micro', 'charged_micro']) {
+    if (forbidden in raw) throw new Error('服务返回了不应暴露给 publication approval 的敏感字段');
+  }
+  const targetKind = string(raw.target_kind);
+  if (targetKind !== 'tool_version' && targetKind !== 'toolset') throw new Error('服务返回了无法识别的 publication approval target');
+  return {
+    id: string(raw.id), targetKind, targetId: string(raw.target_id), targetRevision: exactIntegerString(raw.target_revision),
+    requesterUserId: string(raw.requester_user_id), state: approvalState(raw.state), requestedAt: string(raw.requested_at), expiresAt: string(raw.expires_at),
+    reviewerUserId: optionalString(raw.reviewer_user_id), reviewedAt: optionalString(raw.reviewed_at), decisionNote: typeof raw.decision_note === 'string' ? raw.decision_note : '', consumedAt: optionalString(raw.consumed_at),
+  };
+}
+
+function approvalState(value: unknown): ConsolePublicationApprovalState {
+  const raw = string(value);
+  if (!['pending', 'approved', 'rejected', 'consumed', 'expired'].includes(raw)) throw new Error('服务返回了无法识别的 publication approval 状态');
+  return raw as ConsolePublicationApprovalState;
+}
+
+export interface ConsolePublicationApproval {
+  id: string;
+  targetKind: 'tool_version' | 'toolset';
+  targetId: string;
+  targetRevision: string;
+  requesterUserId: string;
+  state: ConsolePublicationApprovalState;
+  requestedAt: string;
+  expiresAt: string;
+  reviewerUserId: string | null;
+  reviewedAt: string | null;
+  decisionNote: string;
+  consumedAt: string | null;
 }
 
 export interface ConsoleCatalogBinding {
@@ -37,6 +74,7 @@ export interface ConsoleCatalogBinding {
 
 export interface ConsoleCatalogToolset {
   id: string;
+  revision: string;
   state: ConsoleCatalogState;
   createdAt: string;
   updatedAt: string;
@@ -79,6 +117,7 @@ export interface ConsoleCatalogSnapshot {
   connections: ConsoleCatalogConnectionOption[];
   priceVersions: ConsoleCatalogPriceOption[];
   budgetPeriods: ConsoleCatalogBudgetOption[];
+  publicationApprovals: ConsolePublicationApproval[];
 }
 
 export interface ConsoleCatalogIssue { code: string; targetId: string }
@@ -156,7 +195,7 @@ function tool(value: unknown): ConsoleCatalogToolVersion {
     providerId: string(raw.provider_id), priceVersionId: string(raw.price_version_id), deploymentRevision: string(raw.deployment_revision),
     title: string(raw.title), description: typeof raw.description === 'string' ? raw.description : '',
     inputSchema: schema(raw.input_schema), outputSchema: schema(raw.output_schema), sideEffect, idempotency: idempotency as ConsoleCatalogToolVersion['idempotency'],
-    mcpPublishable: boolean(raw.mcp_publishable), state: state(raw.state), createdAt: string(raw.created_at), updatedAt: string(raw.updated_at),
+    mcpPublishable: boolean(raw.mcp_publishable), revision: exactIntegerString(raw.revision), state: state(raw.state), createdAt: string(raw.created_at), updatedAt: string(raw.updated_at),
     publishedAt: optionalString(raw.published_at), retiredAt: optionalString(raw.retired_at),
   };
 }
@@ -174,7 +213,7 @@ function toolset(value: unknown): ConsoleCatalogToolset {
   const raw = object(value);
   if (!Array.isArray(raw.bindings)) throw new Error('服务返回了无法识别的 Toolset 响应');
   return {
-    id: string(raw.id), state: state(raw.state), createdAt: string(raw.created_at), updatedAt: string(raw.updated_at),
+    id: string(raw.id), revision: exactIntegerString(raw.revision), state: state(raw.state), createdAt: string(raw.created_at), updatedAt: string(raw.updated_at),
     publishedAt: optionalString(raw.published_at), retiredAt: optionalString(raw.retired_at), bindings: raw.bindings.map(binding),
   };
 }
@@ -249,8 +288,16 @@ export function createConsoleCatalogClient(baseUrl = '', fetcher: typeof fetch =
     async snapshot(workspaceId: string, signal?: AbortSignal): Promise<ConsoleCatalogSnapshot> {
       if (!workspaceId) throw new Error('Workspace ID is required');
       const response = await request(fetcher, root(workspaceId), { signal }); const raw = object(await response.json()); const data = object(raw.data);
-      if (!Array.isArray(data.tool_versions) || !Array.isArray(data.toolsets) || !Array.isArray(data.connections) || !Array.isArray(data.price_versions) || !Array.isArray(data.budget_periods)) throw new Error('服务返回了无法识别的 Catalog snapshot');
-      return { toolVersions: data.tool_versions.map(tool), toolsets: data.toolsets.map(toolset), connections: data.connections.map(connection), priceVersions: data.price_versions.map(price), budgetPeriods: data.budget_periods.map(budget) };
+      if (!Array.isArray(data.tool_versions) || !Array.isArray(data.toolsets) || !Array.isArray(data.connections) || !Array.isArray(data.price_versions) || !Array.isArray(data.budget_periods) || !Array.isArray(data.publication_approvals)) throw new Error('服务返回了无法识别的 Catalog snapshot');
+      return { toolVersions: data.tool_versions.map(tool), toolsets: data.toolsets.map(toolset), connections: data.connections.map(connection), priceVersions: data.price_versions.map(price), budgetPeriods: data.budget_periods.map(budget), publicationApprovals: data.publication_approvals.map(approval) };
+    },
+    async requestToolsetReview(workspaceId: string, toolsetId: string, csrfToken: string, signal?: AbortSignal) {
+      const response = await request(fetcher, `${root(workspaceId)}/toolsets/${encodeURIComponent(toolsetId)}/review-requests`, { method: 'POST', signal, headers: mutation(csrfToken) });
+      return approval(object(await response.json()).data);
+    },
+    async requestToolVersionReview(workspaceId: string, toolVersionId: string, csrfToken: string, signal?: AbortSignal) {
+      const response = await request(fetcher, `${root(workspaceId)}/tool-versions/${encodeURIComponent(toolVersionId)}/review-requests`, { method: 'POST', signal, headers: mutation(csrfToken) });
+      return approval(object(await response.json()).data);
     },
     async createToolVersion(workspaceId: string, input: ConsoleCatalogToolVersionInput, csrfToken: string, signal?: AbortSignal) {
       const response = await request(fetcher, `${root(workspaceId)}/tool-versions`, { method: 'POST', signal, headers: { ...mutation(csrfToken), 'Content-Type': 'application/json' }, body: toolBody(input) });

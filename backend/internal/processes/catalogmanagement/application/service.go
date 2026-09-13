@@ -233,7 +233,36 @@ func (s *Service) Snapshot(ctx context.Context, actor Actor, workspace string) (
 	if err != nil {
 		return Snapshot{}, err
 	}
-	return s.repository.Snapshot(ctx, workspace, now)
+	snapshot, err := s.repository.Snapshot(ctx, workspace, now)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	toolRevisions := make(map[string]int64, len(snapshot.ToolVersions))
+	for _, tool := range snapshot.ToolVersions {
+		toolRevisions[tool.ToolVersionID] = tool.Revision
+	}
+	toolsetRevisions := make(map[string]int64, len(snapshot.Toolsets))
+	for _, toolset := range snapshot.Toolsets {
+		toolsetRevisions[toolset.ID] = toolset.Revision
+	}
+	for i := range snapshot.Approvals {
+		approval := &snapshot.Approvals[i]
+		if approval.State != "pending" && approval.State != "approved" {
+			continue
+		}
+		var revision int64
+		var ok bool
+		switch approval.TargetKind {
+		case "tool_version":
+			revision, ok = toolRevisions[approval.TargetID]
+		case "toolset":
+			revision, ok = toolsetRevisions[approval.TargetID]
+		}
+		if !ok || revision != approval.TargetRevision {
+			approval.State = "expired"
+		}
+	}
+	return snapshot, nil
 }
 
 func (s *Service) CreateToolVersion(ctx context.Context, actor Actor, workspace string, in ToolVersionInput) (ToolVersion, error) {

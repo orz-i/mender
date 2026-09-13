@@ -18,6 +18,19 @@ func (a *testAuth) Authenticate(context.Context, string) (application.Actor, err
 	return application.Actor{UserID: "user_1"}, nil
 }
 
+func TestSnapshotMarksRevisionStaleApprovalExpiredServerSide(t *testing.T) {
+	at := time.Date(2026, 9, 12, 20, 0, 0, 0, time.UTC)
+	repo := &testRepo{snapshot: &application.Snapshot{
+		ToolVersions: []application.ToolVersion{{WorkspaceID: "ws_1", ToolVersionID: "tv_1", ToolID: "tool_1", Version: "1.0.0", ProviderID: "provider_1", PriceVersionID: "price_1", DeploymentRevision: "deploy_1", Title: "Tool", InputSchema: `{"type":"object"}`, OutputSchema: `{"type":"object"}`, SideEffect: "read_only", Idempotency: "safe_read", Revision: 2, State: "draft", CreatedAt: at.Add(-time.Hour), UpdatedAt: at}},
+		Toolsets:     []application.Toolset{}, Connections: []application.ConnectionOption{}, Prices: []application.PriceOption{}, Budgets: []application.BudgetOption{},
+		Approvals: []application.PublicationApproval{{WorkspaceID: "ws_1", ID: "approval_1", TargetKind: "tool_version", TargetID: "tv_1", TargetRevision: 1, RequesterUserID: "maker_1", State: "approved", RequestedAt: at.Add(-time.Minute), ExpiresAt: at.Add(time.Hour)}},
+	}}
+	w := request(testRouter(t, repo, &testAuth{}), http.MethodGet, "/api/console/v1/workspaces/ws_1/catalog", "", "")
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"state":"expired"`) {
+		t.Fatal("stale approval was not expired by server projection", w.Code, w.Body.String())
+	}
+}
+
 func TestPublicationReviewRequestUsesSessionActorAndServerGeneratedID(t *testing.T) {
 	repo := &testRepo{}
 	r := testRouter(t, repo, &testAuth{})
@@ -59,11 +72,15 @@ func (testIDs) NewID() (string, error) { return "approval_test_1", nil }
 
 type testRepo struct {
 	preflight   application.Preflight
+	snapshot    *application.Snapshot
 	createCalls int
 	submitCalls int
 }
 
 func (r *testRepo) Snapshot(context.Context, string, time.Time) (application.Snapshot, error) {
+	if r.snapshot != nil {
+		return *r.snapshot, nil
+	}
 	return application.Snapshot{ToolVersions: []application.ToolVersion{}, Toolsets: []application.Toolset{}, Connections: []application.ConnectionOption{}, Prices: []application.PriceOption{{ID: "price_1", ToolVersionID: "tv_1", Currency: "USD", ReserveMicro: 9007199254740993, Active: true}}, Budgets: []application.BudgetOption{}}, nil
 }
 func (r *testRepo) CreateToolVersion(_ context.Context, ws string, in application.ToolVersionInput) (application.ToolVersion, error) {
