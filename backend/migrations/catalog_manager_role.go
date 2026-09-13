@@ -42,7 +42,9 @@ func GrantCatalogManager(ctx context.Context, pool *pgxpool.Pool, role string) e
 		"GRANT SELECT (id,tool_version_id,currency,reserve_micro,starts_at,ends_at,active) ON commerce.price_versions TO " + id,
 		"GRANT SELECT (workspace_id,budget_id,period_id,currency,starts_at,ends_at,active) ON commerce.budget_periods TO " + id,
 		"GRANT SELECT ON governance.catalog_publication_approvals TO " + id,
+		"GRANT SELECT ON governance.catalog_publication_policy_decisions TO " + id,
 		"GRANT EXECUTE ON FUNCTION governance.submit_catalog_publication(text,text,text,text,text,timestamptz,timestamptz) TO " + id,
+		"GRANT EXECUTE ON FUNCTION governance.submit_catalog_publication_with_policy(text,text,text,text,text,timestamptz,timestamptz) TO " + id,
 		"GRANT EXECUTE ON FUNCTION catalog.tool_version_publish_issues(text,text,timestamptz),catalog.publish_tool_version(text,text,timestamptz),catalog.retire_tool_version(text,text,timestamptz) TO " + id,
 		"GRANT EXECUTE ON FUNCTION distribution.toolset_publish_issues(text,text,timestamptz),distribution.publish_toolset(text,text,timestamptz),distribution.retire_toolset(text,text,timestamptz) TO " + id,
 	} {

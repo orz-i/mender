@@ -34,23 +34,38 @@ func scanApproval(row pgx.Row) (application.PublicationApproval, error) {
 	return a, mapErr(err)
 }
 
-func (r *Repository) SubmitPublication(ctx context.Context, workspace, requestID, kind, id, requester string, at, expires time.Time) (application.PublicationApproval, error) {
+func scanPolicyDecision(row pgx.Row) (application.PolicyDecision, error) {
+	var d application.PolicyDecision
+	err := row.Scan(&d.Sequence, &d.PolicyRevisionID, &d.PolicyRevision, &d.TargetKind, &d.TargetID, &d.TargetRevision, &d.RiskLevel, &d.Outcome, &d.ReasonCodes, &d.EvaluatedAt)
+	return d, mapErr(err)
+}
+
+func (r *Repository) SubmitPublication(ctx context.Context, workspace, requestID, kind, id, requester string, at, expires time.Time) (application.PublicationSubmission, error) {
 	tx, err := r.begin(ctx, workspace)
 	if err != nil {
-		return application.PublicationApproval{}, err
+		return application.PublicationSubmission{}, err
 	}
 	defer rollback(tx)
-	if _, err = tx.Exec(ctx, `SELECT governance.submit_catalog_publication($1,$2,$3,$4,$5,$6,$7)`, workspace, requestID, kind, id, requester, at, expires); err != nil {
-		return application.PublicationApproval{}, mapErr(err)
+	var decisionSeq int64
+	if err = tx.QueryRow(ctx, `SELECT governance.submit_catalog_publication_with_policy($1,$2,$3,$4,$5,$6,$7)`, workspace, requestID, kind, id, requester, at, expires).Scan(&decisionSeq); err != nil {
+		return application.PublicationSubmission{}, mapErr(err)
 	}
-	a, err := scanApproval(tx.QueryRow(ctx, `SELECT workspace_id,id,target_kind,target_id,target_revision,requester_user_id,state,requested_at,expires_at,coalesce(reviewer_user_id,''),reviewed_at,decision_note,consumed_at FROM governance.catalog_publication_approvals WHERE workspace_id=$1 AND id=$2`, workspace, requestID))
+	d, err := scanPolicyDecision(tx.QueryRow(ctx, `SELECT sequence,policy_revision_id,policy_revision,target_kind,target_id,target_revision,risk_level,outcome,reason_codes,evaluated_at FROM governance.catalog_publication_policy_decisions WHERE workspace_id=$1 AND sequence=$2`, workspace, decisionSeq))
 	if err != nil {
-		return application.PublicationApproval{}, err
+		return application.PublicationSubmission{}, err
+	}
+	result := application.PublicationSubmission{PolicyDecision: d}
+	if d.Outcome == "allow" {
+		a, scanErr := scanApproval(tx.QueryRow(ctx, `SELECT workspace_id,id,target_kind,target_id,target_revision,requester_user_id,state,requested_at,expires_at,coalesce(reviewer_user_id,''),reviewed_at,decision_note,consumed_at FROM governance.catalog_publication_approvals WHERE workspace_id=$1 AND id=$2`, workspace, requestID))
+		if scanErr != nil {
+			return application.PublicationSubmission{}, scanErr
+		}
+		result.Approval = &a
 	}
 	if err = tx.Commit(ctx); err != nil {
-		return application.PublicationApproval{}, application.ErrUnavailable
+		return application.PublicationSubmission{}, application.ErrUnavailable
 	}
-	return a, nil
+	return result, nil
 }
 
 func mapErr(err error) error {

@@ -68,49 +68,51 @@ import (
 )
 
 type APIConfig struct {
-	RunAPIEnabled                   bool
-	RunReadAPIEnabled               bool
-	DatabaseURL                     string
-	CursorSigningKey                []byte
-	CoordinatedCancelEnabled        bool
-	ProviderCancelEnabled           bool
-	CancellationDatabaseURL         string
-	StartRunAPIEnabled              bool
-	AdmissionDatabaseURL            string
-	MCPGatewayEnabled               bool
-	MCPFixedToolsetEnabled          bool
-	ConsoleOIDCEnabled              bool
-	BrowserSessionDatabaseURL       string
-	OIDCIssuer                      string
-	OIDCClientID                    string
-	OIDCClientSecretFile            string
-	OIDCRedirectURL                 string
-	FlowSigningKeyFile              string
-	ConsoleCookieSecure             bool
-	ConsoleSessionTTL               time.Duration
-	ConsoleRunDelegationEnabled     bool
-	ConsoleRunDelegationTTL         time.Duration
-	ConsoleHumanStartEnabled        bool
-	ConsoleHumanStartDelegationTTL  time.Duration
-	ConsoleLaunchDiscoveryEnabled   bool
-	ConsoleUsageEnabled             bool
-	CommerceObserverDatabaseURL     string
-	ConsoleConnectionsEnabled       bool
-	ConnectionManagerDatabaseURL    string
-	ConsoleCatalogEnabled           bool
-	CatalogManagerDatabaseURL       string
-	AdminCatalogReviewEnabled       bool
-	GovernanceReviewerDatabaseURL   string
-	ConsoleConnectionOAuthEnabled   bool
-	ConnectionOAuthProviderID       string
-	ConnectionOAuthAuthorizationURL string
-	ConnectionOAuthTokenURL         string
-	ConnectionOAuthClientID         string
-	ConnectionOAuthClientSecretFile string
-	ConnectionOAuthRedirectURL      string
-	ConnectionOAuthScopes           []string
-	ConnectionOAuthSecretRoot       string
-	ConnectionOAuthFlowTTL          time.Duration
+	RunAPIEnabled                      bool
+	RunReadAPIEnabled                  bool
+	DatabaseURL                        string
+	CursorSigningKey                   []byte
+	CoordinatedCancelEnabled           bool
+	ProviderCancelEnabled              bool
+	CancellationDatabaseURL            string
+	StartRunAPIEnabled                 bool
+	AdmissionDatabaseURL               string
+	MCPGatewayEnabled                  bool
+	MCPFixedToolsetEnabled             bool
+	ConsoleOIDCEnabled                 bool
+	BrowserSessionDatabaseURL          string
+	OIDCIssuer                         string
+	OIDCClientID                       string
+	OIDCClientSecretFile               string
+	OIDCRedirectURL                    string
+	FlowSigningKeyFile                 string
+	ConsoleCookieSecure                bool
+	ConsoleSessionTTL                  time.Duration
+	ConsoleRunDelegationEnabled        bool
+	ConsoleRunDelegationTTL            time.Duration
+	ConsoleHumanStartEnabled           bool
+	ConsoleHumanStartDelegationTTL     time.Duration
+	ConsoleLaunchDiscoveryEnabled      bool
+	ConsoleUsageEnabled                bool
+	CommerceObserverDatabaseURL        string
+	ConsoleConnectionsEnabled          bool
+	ConnectionManagerDatabaseURL       string
+	ConsoleCatalogEnabled              bool
+	CatalogManagerDatabaseURL          string
+	AdminCatalogReviewEnabled          bool
+	GovernanceReviewerDatabaseURL      string
+	AdminCatalogPolicyEnabled          bool
+	GovernancePolicyManagerDatabaseURL string
+	ConsoleConnectionOAuthEnabled      bool
+	ConnectionOAuthProviderID          string
+	ConnectionOAuthAuthorizationURL    string
+	ConnectionOAuthTokenURL            string
+	ConnectionOAuthClientID            string
+	ConnectionOAuthClientSecretFile    string
+	ConnectionOAuthRedirectURL         string
+	ConnectionOAuthScopes              []string
+	ConnectionOAuthSecretRoot          string
+	ConnectionOAuthFlowTTL             time.Duration
 }
 
 func loadMountedTextSecret(path, label string) (string, error) {
@@ -222,6 +224,20 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 		}
 	default:
 		return c, errors.New("MENDER_ADMIN_CATALOG_REVIEW_ENABLED must be true or false")
+	}
+	switch getenv("MENDER_ADMIN_CATALOG_POLICY_ENABLED") {
+	case "", "false":
+	case "true":
+		if !c.ConsoleOIDCEnabled || !c.ConsoleCatalogEnabled {
+			return APIConfig{}, errors.New("Admin Catalog policy requires Console OIDC and Console Catalog")
+		}
+		c.AdminCatalogPolicyEnabled = true
+		c.GovernancePolicyManagerDatabaseURL = getenv("MENDER_GOVERNANCE_POLICY_MANAGER_DATABASE_URL")
+		if c.GovernancePolicyManagerDatabaseURL == "" {
+			return APIConfig{}, errors.New("Admin Catalog policy requires a separate governance-policy-manager database role")
+		}
+	default:
+		return c, errors.New("MENDER_ADMIN_CATALOG_POLICY_ENABLED must be true or false")
 	}
 	switch getenv("MENDER_CONSOLE_LAUNCH_DISCOVERY_ENABLED") {
 	case "", "false":
@@ -377,7 +393,7 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	}
 	switch getenv("MENDER_RUN_API_ENABLED") {
 	case "", "false":
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleCatalogEnabled || c.AdminCatalogReviewEnabled || c.ConsoleConnectionOAuthEnabled {
+		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleCatalogEnabled || c.AdminCatalogReviewEnabled || c.AdminCatalogPolicyEnabled || c.ConsoleConnectionOAuthEnabled {
 			return APIConfig{}, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return c, nil
@@ -411,7 +427,7 @@ func (systemClock) Now() time.Time { return time.Now().UTC().Truncate(time.Micro
 // BuildAPI never migrates, seeds data or falls back to a test repository.
 func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	if !c.RunAPIEnabled {
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleCatalogEnabled || c.AdminCatalogReviewEnabled || c.ConsoleConnectionOAuthEnabled {
+		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleCatalogEnabled || c.AdminCatalogReviewEnabled || c.AdminCatalogPolicyEnabled || c.ConsoleConnectionOAuthEnabled {
 			return nil, nil, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return httpserver.NewRouter(), func() {}, nil
@@ -433,6 +449,9 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	}
 	if c.AdminCatalogReviewEnabled && (!c.ConsoleOIDCEnabled || !c.ConsoleCatalogEnabled) {
 		return nil, nil, errors.New("Admin Catalog review requires Console OIDC and Console Catalog")
+	}
+	if c.AdminCatalogPolicyEnabled && (!c.ConsoleOIDCEnabled || !c.ConsoleCatalogEnabled) {
+		return nil, nil, errors.New("Admin Catalog policy requires Console OIDC and Console Catalog")
 	}
 	if c.ConsoleHumanStartEnabled && (!c.ConsoleOIDCEnabled || !c.ConsoleLaunchDiscoveryEnabled || !c.StartRunAPIEnabled) {
 		return nil, nil, errors.New("Console Human StartRun requires Console OIDC, launch discovery and StartRun API")
@@ -466,9 +485,13 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	var connectionManagerPool *pgxpool.Pool
 	var catalogManagerPool *pgxpool.Pool
 	var governanceReviewerPool *pgxpool.Pool
+	var governancePolicyManagerPool *pgxpool.Pool
 	var commerceObserverPool *pgxpool.Pool
 	var startDelegationFacade *facade.RunStartDelegations
 	closePools := func() {
+		if governancePolicyManagerPool != nil {
+			governancePolicyManagerPool.Close()
+		}
 		if governanceReviewerPool != nil {
 			governanceReviewerPool.Close()
 		}
@@ -818,6 +841,32 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 			}
 			registers = append(registers, historyHandler.Register)
 		}
+		if c.AdminCatalogPolicyEnabled {
+			governancePolicyManagerPool, buildErr = database.Open(start, c.GovernancePolicyManagerDatabaseURL)
+			if buildErr != nil {
+				return failed(buildErr)
+			}
+			policyCfg := governancePolicyManagerPool.Config().ConnConfig
+			if readerCfg.Host != policyCfg.Host || readerCfg.Port != policyCfg.Port || readerCfg.Database != policyCfg.Database || policyCfg.User == readerCfg.User || policyCfg.User == sessionCfg.User || (catalogManagerPool != nil && policyCfg.User == catalogManagerPool.Config().ConnConfig.User) || (governanceReviewerPool != nil && policyCfg.User == governanceReviewerPool.Config().ConnConfig.User) || (connectionManagerPool != nil && policyCfg.User == connectionManagerPool.Config().ConnConfig.User) || (commerceObserverPool != nil && policyCfg.User == commerceObserverPool.Config().ConnConfig.User) {
+				return failed(errors.New("Admin Catalog policy requires the same database with a distinct restricted role"))
+			}
+			if buildErr = migrations.Verify(start, governancePolicyManagerPool); buildErr != nil {
+				return failed(buildErr)
+			}
+			if buildErr = database.GovernancePolicyManagerRole(start, governancePolicyManagerPool); buildErr != nil {
+				return failed(buildErr)
+			}
+			policyAccess := governanceidentity.New(humanIdentity)
+			policyService, serviceErr := governanceapp.NewPolicy(governancepg.NewPublicationPolicy(governancePolicyManagerPool), policyAccess, systemClock{})
+			if serviceErr != nil {
+				return failed(serviceErr)
+			}
+			policyHandler, handlerErr := governancehttp.NewPublicationPolicy(policyService, policyAccess)
+			if handlerErr != nil {
+				return failed(handlerErr)
+			}
+			registers = append(registers, policyHandler.Register)
+		}
 	}
 	var queries *runapp.Queries
 	if c.RunReadAPIEnabled {
@@ -962,6 +1011,14 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 				return err
 			}
 			if err := database.GovernanceReviewerRole(ctx, governanceReviewerPool); err != nil {
+				return err
+			}
+		}
+		if governancePolicyManagerPool != nil {
+			if err := migrations.Verify(ctx, governancePolicyManagerPool); err != nil {
+				return err
+			}
+			if err := database.GovernancePolicyManagerRole(ctx, governancePolicyManagerPool); err != nil {
 				return err
 			}
 		}

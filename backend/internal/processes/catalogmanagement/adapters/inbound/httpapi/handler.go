@@ -33,10 +33,14 @@ func (h *Handler) requestToolsetReview(c *gin.Context) {
 	}
 	v, err := h.service.SubmitPublication(ctx, a, c.Param("workspace_id"), "toolset", c.Param("toolset_id"))
 	if err != nil {
-		fail(c, err)
+		if errors.Is(err, application.ErrPolicyDenied) {
+			policyDenied(c, v.PolicyDecision)
+		} else {
+			fail(c, err)
+		}
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"data": approvalView(v)})
+	c.JSON(http.StatusCreated, gin.H{"data": submissionView(v)})
 }
 func (h *Handler) requestToolReview(c *gin.Context) {
 	configure(c)
@@ -50,10 +54,28 @@ func (h *Handler) requestToolReview(c *gin.Context) {
 	}
 	v, err := h.service.SubmitPublication(ctx, a, c.Param("workspace_id"), "tool_version", c.Param("tool_version_id"))
 	if err != nil {
-		fail(c, err)
+		if errors.Is(err, application.ErrPolicyDenied) {
+			policyDenied(c, v.PolicyDecision)
+		} else {
+			fail(c, err)
+		}
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"data": approvalView(v)})
+	c.JSON(http.StatusCreated, gin.H{"data": submissionView(v)})
+}
+
+func policyDecisionView(v application.PolicyDecision) gin.H {
+	return gin.H{"sequence": strconv.FormatInt(v.Sequence, 10), "policy_revision_id": v.PolicyRevisionID, "policy_revision": strconv.FormatInt(v.PolicyRevision, 10), "target_kind": v.TargetKind, "target_id": v.TargetID, "target_revision": strconv.FormatInt(v.TargetRevision, 10), "risk_level": v.RiskLevel, "outcome": v.Outcome, "reason_codes": v.ReasonCodes, "evaluated_at": v.EvaluatedAt}
+}
+func submissionView(v application.PublicationSubmission) gin.H {
+	result := gin.H{"policy_decision": policyDecisionView(v.PolicyDecision)}
+	if v.Approval != nil {
+		result["approval"] = approvalView(*v.Approval)
+	}
+	return result
+}
+func policyDenied(c *gin.Context, v application.PolicyDecision) {
+	c.JSON(http.StatusConflict, gin.H{"error": gin.H{"code": "POLICY_DENIED", "message": "Publication policy denied this target revision."}, "data": gin.H{"policy_decision": policyDecisionView(v)}})
 }
 
 func New(service *application.Service, auth application.Authorizer) (*Handler, error) {
@@ -107,6 +129,8 @@ func fail(c *gin.Context, err error) {
 		c.JSON(404, gin.H{"error": gin.H{"code": "NOT_FOUND", "message": "Catalog record was not found."}})
 	case errors.Is(err, application.ErrConflict):
 		c.JSON(409, gin.H{"error": gin.H{"code": "CONFLICT", "message": "Catalog state changed or publication requirements are not satisfied."}})
+	case errors.Is(err, application.ErrPolicyDenied):
+		c.JSON(409, gin.H{"error": gin.H{"code": "POLICY_DENIED", "message": "Publication policy denied this target revision."}})
 	case errors.Is(err, context.DeadlineExceeded):
 		c.JSON(504, gin.H{"error": gin.H{"code": "TIMEOUT", "message": "Request deadline exceeded."}})
 	default:

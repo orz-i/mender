@@ -110,6 +110,9 @@ func exerciseCatalogManagementFoundation(t *testing.T, ctx context.Context, owne
 	_, err = owner.Exec(ctx, `INSERT INTO commerce.price_versions(id,tool_version_id,currency,reserve_micro,starts_at,ends_at,active,charge_micro,billing_policy)
 	 VALUES('price_catalog_publish','tv_catalog_publish','USD',125000,$1,$2,true,125000,'fixed_success_only')`, workflowAt.Add(-time.Hour), workflowAt.Add(time.Hour))
 	must(t, err)
+	_, err = owner.Exec(ctx, `INSERT INTO commerce.price_versions(id,tool_version_id,currency,reserve_micro,starts_at,ends_at,active,charge_micro,billing_policy)
+	 VALUES('price_catalog_unsafe','tv_catalog_unsafe','USD',125000,$1,$2,true,125000,'fixed_success_only')`, workflowAt.Add(-time.Hour), workflowAt.Add(time.Hour))
+	must(t, err)
 	_, err = owner.Exec(ctx, `INSERT INTO connections.connections(workspace_id,id,provider_id,credential_version_ref,state,revision,created_at,expires_at)
 	 VALUES('ws_catalog_publish','conn_catalog_publish','provider_catalog_publish','secret_catalog_publish','active',1,$1,$2)`, workflowAt.Add(-time.Hour), workflowAt.Add(time.Hour))
 	must(t, err)
@@ -128,7 +131,7 @@ func exerciseCatalogManagementFoundation(t *testing.T, ctx context.Context, owne
 	must(t, err)
 	_, err = tx.Exec(ctx, `INSERT INTO catalog.tool_version_management(
 	 workspace_id,tool_version_id,tool_id,version,provider_id,price_version_id,deployment_revision,title,description,input_schema,output_schema,side_effect,idempotency,mcp_publishable)
-	 VALUES('ws_catalog_publish','tv_catalog_unsafe','tool_catalog_unsafe','1.0.0','provider_catalog_publish','price_catalog_publish','deploy_catalog_unsafe','Unsafe write draft','',
+	 VALUES('ws_catalog_publish','tv_catalog_unsafe','tool_catalog_unsafe','1.0.0','provider_catalog_publish','price_catalog_unsafe','deploy_catalog_unsafe','Unsafe write draft','',
 	 '{"type":"object"}'::jsonb,'{"type":"object"}'::jsonb,'write','unsafe',true)`)
 	must(t, err)
 	var issueCount int
@@ -205,6 +208,7 @@ func exerciseCatalogManagementFoundation(t *testing.T, ctx context.Context, owne
 	}
 	must(t, policyTx.Commit(ctx))
 
+	var approvalState, expirationReason string
 	tx, err = manager.Begin(ctx)
 	must(t, err)
 	_, err = tx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
@@ -212,6 +216,17 @@ func exerciseCatalogManagementFoundation(t *testing.T, ctx context.Context, owne
 	_, err = tx.Exec(ctx, `SELECT governance.submit_catalog_publication('ws_catalog_publish','approval_policy_old','tool_version','tv_catalog_publish','maker_catalog',$1,$2)`, workflowAt.Add(time.Second), workflowAt.Add(time.Hour))
 	must(t, err)
 	must(t, tx.Commit(ctx))
+	reviewTx, err := reviewer.Begin(ctx)
+	must(t, err)
+	_, err = reviewTx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
+	must(t, err)
+	_, err = reviewTx.Exec(ctx, `SELECT governance.approve_catalog_publication('ws_catalog_publish','approval_policy_old','reviewer_catalog',$1,'policy checked')`, workflowAt.Add(1500*time.Millisecond))
+	must(t, err)
+	must(t, reviewTx.Commit(ctx))
+	must(t, owner.QueryRow(ctx, `SELECT state FROM governance.catalog_publication_approvals WHERE workspace_id='ws_catalog_publish' AND id='approval_policy_old'`).Scan(&approvalState))
+	if approvalState != "approved" {
+		t.Fatal("allow policy did not preserve maker/checker approval", approvalState)
+	}
 
 	policyTx, err = policyManager.Begin(ctx)
 	must(t, err)
@@ -220,7 +235,6 @@ func exerciseCatalogManagementFoundation(t *testing.T, ctx context.Context, owne
 	_, err = policyTx.Exec(ctx, `SELECT governance.activate_catalog_publication_policy('ws_catalog_publish','policy_strict_v2','policy_admin',$1)`, workflowAt.Add(2*time.Second))
 	must(t, err)
 	must(t, policyTx.Commit(ctx))
-	var approvalState, expirationReason string
 	must(t, owner.QueryRow(ctx, `SELECT state FROM governance.catalog_publication_approvals WHERE workspace_id='ws_catalog_publish' AND id='approval_policy_old'`).Scan(&approvalState))
 	if approvalState != "expired" {
 		t.Fatal("policy activation did not invalidate active approval", approvalState)
@@ -228,6 +242,32 @@ func exerciseCatalogManagementFoundation(t *testing.T, ctx context.Context, owne
 	must(t, owner.QueryRow(ctx, `SELECT reason_code FROM governance.catalog_publication_audit_events WHERE workspace_id='ws_catalog_publish' AND approval_id='approval_policy_old' AND event_kind='approval_expired' ORDER BY sequence DESC LIMIT 1`).Scan(&expirationReason))
 	if expirationReason != "policy_revision_changed" {
 		t.Fatal("policy activation audit reason drift", expirationReason)
+	}
+	tx, err = manager.Begin(ctx)
+	must(t, err)
+	_, err = tx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
+	must(t, err)
+	if _, err = tx.Exec(ctx, `SELECT catalog.publish_tool_version('ws_catalog_publish','tv_catalog_publish',$1)`, workflowAt.Add(2500*time.Millisecond)); err == nil {
+		t.Fatal("publication reused approval invalidated by policy revision change")
+	}
+	_ = tx.Rollback(ctx)
+
+	tx, err = manager.Begin(ctx)
+	must(t, err)
+	_, err = tx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
+	must(t, err)
+	var deniedSubmitDecision int64
+	must(t, tx.QueryRow(ctx, `SELECT governance.submit_catalog_publication_with_policy('ws_catalog_publish','approval_policy_denied','tool_version','tv_catalog_unsafe','maker_catalog',$1,$2)`, workflowAt.Add(3*time.Second), workflowAt.Add(time.Hour)).Scan(&deniedSubmitDecision))
+	must(t, tx.Commit(ctx))
+	var deniedOutcome string
+	must(t, owner.QueryRow(ctx, `SELECT outcome FROM governance.catalog_publication_policy_decisions WHERE sequence=$1`, deniedSubmitDecision).Scan(&deniedOutcome))
+	if deniedOutcome != "deny" {
+		t.Fatal("strict policy did not deny review submission", deniedOutcome)
+	}
+	var deniedApprovalCount int
+	must(t, owner.QueryRow(ctx, `SELECT count(*) FROM governance.catalog_publication_approvals WHERE workspace_id='ws_catalog_publish' AND id='approval_policy_denied'`).Scan(&deniedApprovalCount))
+	if deniedApprovalCount != 0 {
+		t.Fatal("policy denied submission still created approval", deniedApprovalCount)
 	}
 
 	policyEvalTx, err = owner.Begin(ctx)
@@ -251,7 +291,7 @@ func exerciseCatalogManagementFoundation(t *testing.T, ctx context.Context, owne
 
 	// Reviewer authority is function-only and maker/checker is enforced even if
 	// a caller tries to pass the requester's identity as the reviewer.
-	reviewTx, err := reviewer.Begin(ctx)
+	reviewTx, err = reviewer.Begin(ctx)
 	must(t, err)
 	_, err = reviewTx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
 	must(t, err)
@@ -327,10 +367,10 @@ func exerciseCatalogManagementFoundation(t *testing.T, ctx context.Context, owne
 	}
 	must(t, tx.Commit(ctx))
 	catalogRepo := catalogmanagementpg.New(manager)
-	approval, err := catalogRepo.SubmitPublication(ctx, "ws_catalog_publish", "approval_set_1", "toolset", "set_catalog_publish", "maker_catalog", workflowAt.Add(5*time.Second), workflowAt.Add(time.Hour))
+	submission, err := catalogRepo.SubmitPublication(ctx, "ws_catalog_publish", "approval_set_1", "toolset", "set_catalog_publish", "maker_catalog", workflowAt.Add(5*time.Second), workflowAt.Add(time.Hour))
 	must(t, err)
-	if approval.TargetRevision < 1 || approval.State != "pending" || approval.RequesterUserID != "maker_catalog" {
-		t.Fatal("catalog management repository did not return exact approval request", approval)
+	if submission.Approval == nil || submission.Approval.TargetRevision < 1 || submission.Approval.State != "pending" || submission.Approval.RequesterUserID != "maker_catalog" || submission.PolicyDecision.Outcome != "allow" {
+		t.Fatal("catalog management repository did not return exact approval + policy decision", submission)
 	}
 	reviewRepo := governancepg.NewPublicationReview(reviewer)
 	reviewed, err := reviewRepo.ApprovePublication(ctx, "ws_catalog_publish", "approval_set_1", "reviewer_catalog", "toolset reviewed", workflowAt.Add(6*time.Second))

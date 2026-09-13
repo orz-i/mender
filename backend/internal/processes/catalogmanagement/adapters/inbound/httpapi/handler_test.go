@@ -18,6 +18,18 @@ func (a *testAuth) Authenticate(context.Context, string) (application.Actor, err
 	return application.Actor{UserID: "user_1"}, nil
 }
 
+func TestPublicationReviewPolicyDenyReturnsServerDecisionWithoutApproval(t *testing.T) {
+	at := time.Date(2026, 9, 12, 20, 0, 0, 0, time.UTC)
+	repo := &testRepo{submission: &application.PublicationSubmission{PolicyDecision: application.PolicyDecision{
+		Sequence: 9007199254740993, PolicyRevisionID: "policy_2", PolicyRevision: 2, TargetKind: "tool_version", TargetID: "tv_1", TargetRevision: 7,
+		RiskLevel: "critical", Outcome: "deny", ReasonCodes: []string{"tool_write_unsafe", "risk_above_ceiling"}, EvaluatedAt: at,
+	}}}
+	w := request(testRouter(t, repo, &testAuth{}), http.MethodPost, "/api/console/v1/workspaces/ws_1/catalog/tool-versions/tv_1/review-requests", "", "csrf_1")
+	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), `"code":"POLICY_DENIED"`) || !strings.Contains(w.Body.String(), `"sequence":"9007199254740993"`) || strings.Contains(w.Body.String(), `"approval"`) {
+		t.Fatal("policy deny response drift", w.Code, w.Body.String())
+	}
+}
+
 func TestSnapshotMarksRevisionStaleApprovalExpiredServerSide(t *testing.T) {
 	at := time.Date(2026, 9, 12, 20, 0, 0, 0, time.UTC)
 	repo := &testRepo{snapshot: &application.Snapshot{
@@ -73,6 +85,7 @@ func (testIDs) NewID() (string, error) { return "approval_test_1", nil }
 type testRepo struct {
 	preflight   application.Preflight
 	snapshot    *application.Snapshot
+	submission  *application.PublicationSubmission
 	createCalls int
 	submitCalls int
 }
@@ -117,9 +130,14 @@ func (*testRepo) PublishToolset(context.Context, string, string, time.Time) (app
 func (*testRepo) RetireToolset(context.Context, string, string, time.Time) (application.Toolset, error) {
 	return application.Toolset{}, application.ErrUnavailable
 }
-func (r *testRepo) SubmitPublication(_ context.Context, workspace, requestID, kind, targetID, requester string, at, expires time.Time) (application.PublicationApproval, error) {
+func (r *testRepo) SubmitPublication(_ context.Context, workspace, requestID, kind, targetID, requester string, at, expires time.Time) (application.PublicationSubmission, error) {
 	r.submitCalls++
-	return application.PublicationApproval{WorkspaceID: workspace, ID: requestID, TargetKind: kind, TargetID: targetID, TargetRevision: 7, RequesterUserID: requester, State: "pending", RequestedAt: at, ExpiresAt: expires}, nil
+	if r.submission != nil {
+		return *r.submission, nil
+	}
+	a := application.PublicationApproval{WorkspaceID: workspace, ID: requestID, TargetKind: kind, TargetID: targetID, TargetRevision: 7, RequesterUserID: requester, State: "pending", RequestedAt: at, ExpiresAt: expires}
+	d := application.PolicyDecision{Sequence: 11, PolicyRevisionID: "policy_1", PolicyRevision: 1, TargetKind: kind, TargetID: targetID, TargetRevision: 7, RiskLevel: "low", Outcome: "allow", ReasonCodes: []string{"tool_read_only_safe", "within_risk_ceiling"}, EvaluatedAt: at}
+	return application.PublicationSubmission{Approval: &a, PolicyDecision: d}, nil
 }
 
 func testRouter(t *testing.T, repo *testRepo, auth *testAuth) *gin.Engine {

@@ -14,6 +14,7 @@ var (
 	ErrInvalid         = errors.New("catalog management invalid argument")
 	ErrNotFound        = errors.New("catalog management record not found")
 	ErrConflict        = errors.New("catalog management conflict")
+	ErrPolicyDenied    = errors.New("catalog publication policy denied")
 	ErrUnavailable     = errors.New("catalog management unavailable")
 )
 
@@ -23,6 +24,22 @@ type Authorizer interface {
 	Authenticate(context.Context, string) (Actor, error)
 	AuthenticateMutation(context.Context, string, string) (Actor, error)
 	Authorize(context.Context, Actor, string, string) error
+}
+
+type PolicyDecision struct {
+	Sequence             int64
+	PolicyRevisionID     string
+	PolicyRevision       int64
+	TargetKind, TargetID string
+	TargetRevision       int64
+	RiskLevel, Outcome   string
+	ReasonCodes          []string
+	EvaluatedAt          time.Time
+}
+
+type PublicationSubmission struct {
+	Approval       *PublicationApproval
+	PolicyDecision PolicyDecision
 }
 
 type PublicationApproval struct {
@@ -117,7 +134,7 @@ type Repository interface {
 	ToolsetPreflight(context.Context, string, string, time.Time) (Preflight, error)
 	PublishToolset(context.Context, string, string, time.Time) (Toolset, error)
 	RetireToolset(context.Context, string, string, time.Time) (Toolset, error)
-	SubmitPublication(context.Context, string, string, string, string, string, time.Time, time.Time) (PublicationApproval, error)
+	SubmitPublication(context.Context, string, string, string, string, string, time.Time, time.Time) (PublicationSubmission, error)
 }
 
 type Service struct {
@@ -310,7 +327,14 @@ func (s *Service) PublishToolVersion(ctx context.Context, actor Actor, workspace
 	if err != nil {
 		return ToolVersion{}, err
 	}
-	return s.repository.PublishToolVersion(ctx, workspace, id, now)
+	v, err := s.repository.PublishToolVersion(ctx, workspace, id, now)
+	if err != nil {
+		return ToolVersion{}, err
+	}
+	if v.State != "published" {
+		return ToolVersion{}, ErrConflict
+	}
+	return v, nil
 }
 
 func (s *Service) RetireToolVersion(ctx context.Context, actor Actor, workspace, id string) (ToolVersion, error) {
@@ -382,7 +406,14 @@ func (s *Service) PublishToolset(ctx context.Context, actor Actor, workspace, id
 	if err != nil {
 		return Toolset{}, err
 	}
-	return s.repository.PublishToolset(ctx, workspace, id, now)
+	v, err := s.repository.PublishToolset(ctx, workspace, id, now)
+	if err != nil {
+		return Toolset{}, err
+	}
+	if v.State != "published" {
+		return Toolset{}, ErrConflict
+	}
+	return v, nil
 }
 
 func (s *Service) RetireToolset(ctx context.Context, actor Actor, workspace, id string) (Toolset, error) {
@@ -399,23 +430,52 @@ func (s *Service) RetireToolset(ctx context.Context, actor Actor, workspace, id 
 	return s.repository.RetireToolset(ctx, workspace, id, now)
 }
 
-func (s *Service) SubmitPublication(ctx context.Context, actor Actor, workspace, kind, id string) (PublicationApproval, error) {
+func validPolicyDecision(v PolicyDecision, workspace, kind, id string) bool {
+	if v.Sequence < 1 || !validID(v.PolicyRevisionID) || v.PolicyRevision < 1 || v.TargetKind != kind || v.TargetID != id || v.TargetRevision < 1 || v.EvaluatedAt.IsZero() {
+		return false
+	}
+	if v.RiskLevel != "low" && v.RiskLevel != "medium" && v.RiskLevel != "high" && v.RiskLevel != "critical" {
+		return false
+	}
+	if v.Outcome != "allow" && v.Outcome != "deny" || len(v.ReasonCodes) == 0 {
+		return false
+	}
+	return validID(workspace)
+}
+
+func (s *Service) SubmitPublication(ctx context.Context, actor Actor, workspace, kind, id string) (PublicationSubmission, error) {
 	if !validID(actor.UserID) || !validID(workspace) || !validID(id) || (kind != "tool_version" && kind != "toolset") {
-		return PublicationApproval{}, ErrInvalid
+		return PublicationSubmission{}, ErrInvalid
 	}
 	if err := s.auth.Authorize(ctx, actor, workspace, "catalog:manage"); err != nil {
-		return PublicationApproval{}, err
+		return PublicationSubmission{}, err
 	}
 	if s.ids == nil {
-		return PublicationApproval{}, ErrUnavailable
+		return PublicationSubmission{}, ErrUnavailable
 	}
 	requestID, err := s.ids.NewID()
 	if err != nil || !validID(requestID) {
-		return PublicationApproval{}, ErrUnavailable
+		return PublicationSubmission{}, ErrUnavailable
 	}
 	now, err := s.now()
 	if err != nil {
-		return PublicationApproval{}, err
+		return PublicationSubmission{}, err
 	}
-	return s.repository.SubmitPublication(ctx, workspace, requestID, kind, id, actor.UserID, now, now.Add(30*time.Minute))
+	result, err := s.repository.SubmitPublication(ctx, workspace, requestID, kind, id, actor.UserID, now, now.Add(30*time.Minute))
+	if err != nil {
+		return PublicationSubmission{}, err
+	}
+	if !validPolicyDecision(result.PolicyDecision, workspace, kind, id) {
+		return PublicationSubmission{}, ErrUnavailable
+	}
+	if result.PolicyDecision.Outcome == "deny" {
+		if result.Approval != nil {
+			return PublicationSubmission{}, ErrUnavailable
+		}
+		return result, ErrPolicyDenied
+	}
+	if result.Approval == nil || result.Approval.WorkspaceID != workspace || result.Approval.ID != requestID || result.Approval.TargetKind != kind || result.Approval.TargetID != id || result.Approval.State != "pending" {
+		return PublicationSubmission{}, ErrUnavailable
+	}
+	return result, nil
 }
