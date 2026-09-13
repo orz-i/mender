@@ -46,7 +46,7 @@ func validVersion(value string) bool {
 }
 
 func (v ToolVersion) Validate() error {
-	if !validID(v.ID) || !validID(v.ToolID) || !validVersion(v.Version) || !validID(v.ProviderID) || !validID(v.PriceVersionID) || !validID(v.DeploymentRevision) || (v.State != "published" && v.State != "disabled") || v.PublishedAt.IsZero() {
+	if !validID(v.ID) || !validID(v.ToolID) || !validVersion(v.Version) || !validID(v.ProviderID) || !validID(v.PriceVersionID) || !validID(v.DeploymentRevision) || (v.State != "published" && v.State != "disabled" && v.State != "retired") || v.PublishedAt.IsZero() {
 		return ErrInvalidToolVersion
 	}
 	if v.MCPPublishable && !v.validDirectContract() {
@@ -73,7 +73,9 @@ func (v ToolVersion) validDirectContract() bool {
 
 func (v ToolVersion) Callable() bool { return v.Validate() == nil && v.State == "published" }
 
-func (v ToolVersion) DirectPublishable() bool { return v.Callable() && v.MCPPublishable && v.validDirectContract() }
+func (v ToolVersion) DirectPublishable() bool {
+	return v.Callable() && v.MCPPublishable && v.validDirectContract()
+}
 
 func objectSchema(raw string, requireObjectType bool) bool {
 	if len(raw) < 2 || len(raw) > 1<<20 || !json.Valid([]byte(raw)) {
