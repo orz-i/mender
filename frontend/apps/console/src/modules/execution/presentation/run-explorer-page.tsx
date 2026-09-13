@@ -33,6 +33,13 @@ function formatTime(value: string) {
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'medium' }).format(date);
 }
 
+function formatMicro(value: string, currency: string) {
+  const micro = BigInt(value);
+  const whole = micro / 1_000_000n;
+  const fraction = (micro % 1_000_000n).toString().padStart(6, '0').replace(/0+$/, '');
+  return `${currency} ${whole}${fraction ? `.${fraction}` : ''}`;
+}
+
 function RunList({ items, selected, onSelect }: { items: Run[]; selected: string | null; onSelect: (id: string) => void }) {
   if (items.length === 0) return <div className="empty-state"><strong>当前筛选没有 Run</strong><span>新的调用受理后会出现在这里。</span></div>;
   return <div className="run-table-wrap"><table className="run-table">
@@ -63,11 +70,13 @@ export function RunExplorerPage({ gateway }: { gateway: RunGateway }) {
     void queryClient.cancelQueries({ queryKey: ['run-events'] });
     void queryClient.cancelQueries({ queryKey: ['run-artifacts'] });
     void queryClient.cancelQueries({ queryKey: ['run-artifact-content'] });
+    void queryClient.cancelQueries({ queryKey: ['run-cost'] });
     queryClient.removeQueries({ queryKey: ['run-list'] });
     queryClient.removeQueries({ queryKey: ['run-detail'] });
     queryClient.removeQueries({ queryKey: ['run-events'] });
     queryClient.removeQueries({ queryKey: ['run-artifacts'] });
     queryClient.removeQueries({ queryKey: ['run-artifact-content'] });
+    queryClient.removeQueries({ queryKey: ['run-cost'] });
     setAccess(null); setSelectedRun(null); setSelectedArtifact(null); setCursor(null); setCancelReason('');
   };
 
@@ -81,6 +90,13 @@ export function RunExplorerPage({ gateway }: { gateway: RunGateway }) {
       clearAccess();
       setAccess({ ...delegation, sessionKey: accessRevision.current });
     },
+  });
+
+  const costQuery = useQuery({
+    queryKey: ['run-cost', access?.sessionKey, access?.workspaceId, selectedRun],
+    enabled: access !== null && selectedRun !== null,
+    retry: false,
+    queryFn: ({ signal }) => gateway.cost(access!, selectedRun!, signal),
   });
 
   const disconnectMutation = useMutation({
@@ -134,6 +150,7 @@ export function RunExplorerPage({ gateway }: { gateway: RunGateway }) {
         queryClient.invalidateQueries({ queryKey: ['run-list', access?.sessionKey] }),
         queryClient.invalidateQueries({ queryKey: ['run-detail', access?.sessionKey] }),
         queryClient.invalidateQueries({ queryKey: ['run-events', access?.sessionKey] }),
+        queryClient.invalidateQueries({ queryKey: ['run-cost', access?.sessionKey] }),
       ]);
     },
   });
@@ -143,6 +160,7 @@ export function RunExplorerPage({ gateway }: { gateway: RunGateway }) {
   const events = eventPages.flatMap((page) => page.items);
   const eventThroughVersion = eventPages[0]?.throughVersion;
   const artifacts = artifactsQuery.data ?? [];
+  const cost = costQuery.data;
   const canCancel = Boolean(detail && access?.canCancel && canRequestCancellation(detail.state));
   const activeNote = access ? `短期委托至 ${formatTime(access.expiresAt)}` : '尚未建立短期委托';
 
@@ -180,6 +198,19 @@ export function RunExplorerPage({ gateway }: { gateway: RunGateway }) {
         {detail && <>
           <div className="detail-title"><div><p className="section-kicker">Run</p><h2 className="mono">{detail.id}</h2></div><span className={`state-badge state-${detail.state}`}>{stateLabel(detail.state)}</span></div>
           <dl className="fact-grid"><div><dt>版本</dt><dd>v{detail.version}</dd></div><div><dt>创建</dt><dd>{formatTime(detail.createdAt)}</dd></div><div><dt>更新</dt><dd>{formatTime(detail.updatedAt)}</dd></div><div><dt>事件快照</dt><dd>{eventThroughVersion ? `v${eventThroughVersion}` : '—'}</dd></div></dl>
+          <section className="detail-section quota-cost-section"><div className="detail-section-heading"><h3>Quota cost</h3><span className="muted-copy">quota_only · 非支付账务</span></div>
+            {costQuery.isPending && <p className="muted-copy">正在读取 reservation / settlement 事实…</p>}
+            {costQuery.error && <div className="error-panel" role="alert">{errorMessage(costQuery.error)}</div>}
+            {!costQuery.isPending && !costQuery.error && cost === null && <p className="muted-copy">该 Run 没有可读的 quota cost 投影，或当前部署未启用 Usage observability。</p>}
+            {cost && <dl className="quota-cost-grid">
+              <div><dt>Quota state</dt><dd><span className={`quota-badge quota-${cost.quotaState}`}>{cost.quotaState}</span></dd></div>
+              <div><dt>Reserved</dt><dd>{formatMicro(cost.reservedMicro, cost.currency)}</dd></div>
+              <div><dt>Charged</dt><dd>{cost.chargedMicro === null ? '待 settlement' : formatMicro(cost.chargedMicro, cost.currency)}</dd></div>
+              <div><dt>Released</dt><dd>{formatMicro(cost.releasedMicro, cost.currency)}</dd></div>
+              <div><dt>Budget</dt><dd className="mono">{cost.budgetId} / {cost.periodId}</dd></div>
+              <div><dt>Outcome</dt><dd>{cost.outcome ?? '—'}</dd></div>
+            </dl>}
+          </section>
           <section className="detail-section"><div className="detail-section-heading"><h3>事件时间线</h3>{eventThroughVersion && <span className="muted-copy">固定到 v{eventThroughVersion}</span>}</div>{events.length === 0 ? <p className="muted-copy">当前没有后续状态事件。</p> : <ol className="event-list">{events.map((event) => <li key={event.version}><span className="event-dot" aria-hidden="true" /><div><strong>{stateLabel(event.state)}</strong><span>{formatTime(event.occurredAt)} · v{event.version}</span>{event.reason && <p>{event.reason}</p>}</div></li>)}</ol>}{eventsQuery.hasNextPage && <div className="result-actions"><Button type="button" variant="outline" disabled={eventsQuery.isFetchingNextPage} onClick={() => void eventsQuery.fetchNextPage()}>{eventsQuery.isFetchingNextPage ? '正在读取…' : '加载更多事件'}</Button><span className="muted-copy">更多页继续使用首屏 through-version；刷新详情才观察更新事件。</span></div>}</section>
           <section className="detail-section"><h3>Artifacts</h3>{artifacts.length === 0 ? <p className="muted-copy">尚无结果 Artifact。</p> : <ul className="artifact-list artifact-select-list">{artifacts.map((artifact) => <li key={artifact.id} className={selectedArtifact === artifact.id ? 'selected' : undefined}><button type="button" className="artifact-button" onClick={() => setSelectedArtifact(artifact.id)}><div><strong>{artifact.kind}</strong><span className="mono">{artifact.id}</span></div><span>{artifact.mediaType} · {artifact.sizeBytes.toLocaleString()} B</span></button></li>)}</ul>}
             {artifactContentQuery.isPending && selectedArtifact && <div className="empty-state compact"><strong>正在读取 Artifact 内容…</strong></div>}

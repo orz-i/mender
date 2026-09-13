@@ -18,7 +18,7 @@
     "build:backend": "node scripts/backend.mjs build ./...",
     "lint": "eslint frontend scripts eslint.config.mjs --max-warnings 0",
     "typecheck": "pnpm -r run typecheck",
-    "test": "node --test scripts/architecture.test.mjs scripts/postgres-test.test.mjs frontend/packages/api-client/src/health.test.mjs frontend/packages/api-client/src/runs.test.mjs frontend/packages/api-client/src/console-identity.test.mjs frontend/packages/api-client/src/console-connections.test.mjs frontend/packages/api-client/src/console-run-delegation.test.mjs frontend/packages/api-client/src/console-launch.test.mjs frontend/packages/api-client/src/console-start-run.test.mjs",
+    "test": "node --test scripts/architecture.test.mjs scripts/postgres-test.test.mjs frontend/packages/api-client/src/health.test.mjs frontend/packages/api-client/src/runs.test.mjs frontend/packages/api-client/src/console-identity.test.mjs frontend/packages/api-client/src/console-connections.test.mjs frontend/packages/api-client/src/console-run-delegation.test.mjs frontend/packages/api-client/src/console-launch.test.mjs frontend/packages/api-client/src/console-start-run.test.mjs frontend/packages/api-client/src/console-usage.test.mjs",
     "test:backend": "node scripts/backend.mjs test ./...",
     "test:integration": "node scripts/backend.mjs test -tags=integration -count=1 -timeout=120s ./tests/integration",
     "test:integration:docker": "node scripts/test-postgres.mjs",

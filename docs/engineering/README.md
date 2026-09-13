@@ -23,6 +23,9 @@
 | [2026-09-12 Console Artifact content Alpha](2026-09-12-console-artifact-content-alpha.md) | Machine Key + Human Run delegation 的 bounded inline JSON Artifact detail，补充 size/UTF-8 完整性检查 |
 | [2026-09-12 Run Event pagination Alpha](2026-09-12-run-event-pagination-alpha.md) | Run Event cursor/through-version 有限快照分页，并正式覆盖 Human Run delegation Console 路径 |
 | [2026-09-12 Console Run Results Alpha](2026-09-12-console-run-results-alpha.md) | Run Explorer 的 Event 分页、按需 Artifact JSON 内容预览与短期 delegation cache 清理 |
+| [2026-09-12 Usage / Budget Observability Alpha](2026-09-12-usage-budget-observability-alpha.md) | Human `usage:read`、独立 Commerce observer DB role、Budget/Usage 安全只读投影 |
+| [2026-09-12 Run Quota Cost Alpha](2026-09-12-run-quota-cost-alpha.md) | 基于持久 Commerce 事实的单 Run reserve/charge/release/settlement 投影 |
+| [2026-09-12 Console Usage Observability Alpha](2026-09-12-console-usage-observability-alpha.md) | `/usage` Budget/Usage 页面与 Run Explorer quota-cost 展示，micro string/BigInt 精度边界 |
 | [2026-09-12 Usage / Budget Observability Alpha](2026-09-12-usage-budget-observability-alpha.md) | Human Console 的只读 quota Budget/Usage 投影、精确 micro 字符串与独立 `commerce-observer` RLS 角色；明确不是支付账务 |
 | [2026-09-12 Run Quota Cost Alpha](2026-09-12-run-quota-cost-alpha.md) | 短期 Human Run delegation 保护的单 Run reservation/charge/release 投影；Commerce 保持数据所有权，Machine API 不虚构 cost route |
 

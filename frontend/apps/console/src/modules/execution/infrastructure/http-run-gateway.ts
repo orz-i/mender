@@ -1,6 +1,6 @@
-import { createConsoleIdentityClient, createConsoleRunDelegationClient, createConsoleRunsClient, type ConsoleWorkspaceRecord, type RunDelegationScope } from '@mender/api-client';
+import { createConsoleIdentityClient, createConsoleRunDelegationClient, createConsoleRunsClient, MenderApiError, type ConsoleWorkspaceRecord, type RunDelegationScope } from '@mender/api-client';
 import type { RunGateway } from '../application/run-gateway';
-import type { Run, RunArtifact, RunArtifactDetail, RunEvent } from '../domain/run';
+import type { Run, RunArtifact, RunArtifactDetail, RunEvent, RunQuotaCost } from '../domain/run';
 
 function run(value: Awaited<ReturnType<ReturnType<typeof createConsoleRunsClient>['getRun']>>): Run {
   return {
@@ -10,6 +10,22 @@ function run(value: Awaited<ReturnType<ReturnType<typeof createConsoleRunsClient
     version: value.version,
     createdAt: value.createdAt,
     updatedAt: value.updatedAt,
+  };
+}
+
+function quotaCost(value: Awaited<ReturnType<ReturnType<typeof createConsoleRunsClient>['getRunCost']>>): RunQuotaCost {
+  return {
+    runId: value.runId,
+    budgetId: value.budgetId,
+    periodId: value.periodId,
+    currency: value.currency,
+    quotaState: value.quotaState,
+    reservedMicro: value.reservedMicro,
+    chargedMicro: value.chargedMicro,
+    releasedMicro: value.releasedMicro,
+    outcome: value.outcome,
+    createdAt: value.createdAt,
+    finalizedAt: value.finalizedAt,
   };
 }
 
@@ -110,6 +126,14 @@ export function createRunGateway(): RunGateway {
     },
     async artifact(access, runId, artifactId, signal) {
       return artifactDetail(await client.getRunArtifact({ workspaceId: access.workspaceId, token: access.delegatedToken, runId, artifactId, signal }));
+    },
+    async cost(access, runId, signal) {
+      try {
+        return quotaCost(await client.getRunCost({ workspaceId: access.workspaceId, token: access.delegatedToken, runId, signal }));
+      } catch (error) {
+        if (error instanceof MenderApiError && error.status === 404) return null;
+        throw error;
+      }
     },
     async cancel(access, runId, reason, signal) {
       if (!access.canCancel) throw new Error('当前 Workspace 角色没有 Run 取消权限');

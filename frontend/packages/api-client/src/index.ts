@@ -10,5 +10,7 @@ export { createConsoleStartRunClient } from './console-start-run.ts';
 export type { ConsoleStartConstraint, ConsoleStartDelegation, ConsoleStartResult } from './console-start-run.ts';
 export { createConsoleRunDelegationClient } from './console-run-delegation.ts';
 export type { ConsoleRunDelegation, RunDelegationScope } from './console-run-delegation.ts';
+export { createConsoleUsageClient } from './console-usage.ts';
+export type { ConsoleBudgetPeriod, ConsoleQuotaOutcome, ConsoleQuotaState, ConsoleUsageEntry, ConsoleUsageSnapshot } from './console-usage.ts';
 export { createConsoleRunsClient, createRunsClient, MenderApiError } from './runs.ts';
-export type { ArtifactRecord, Page, RunEventRecord, RunEventsPage, RunExecutionState, RunRecord } from './runs.ts';
+export type { ArtifactRecord, Page, RunCostRecord, RunEventRecord, RunEventsPage, RunExecutionState, RunQuotaOutcome, RunQuotaState, RunRecord } from './runs.ts';

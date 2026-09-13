@@ -38,6 +38,20 @@ export interface RunArtifactDetail extends RunArtifact {
   content: unknown;
 }
 
+export interface RunQuotaCost {
+  runId: string;
+  budgetId: string;
+  periodId: string;
+  currency: string;
+  quotaState: 'held' | 'released' | 'settled';
+  reservedMicro: string;
+  chargedMicro: string | null;
+  releasedMicro: string;
+  outcome: 'succeeded' | 'failed' | 'canceled' | null;
+  createdAt: string;
+  finalizedAt: string | null;
+}
+
 export function isTerminal(state: RunState) {
   return state === 'succeeded' || state === 'failed' || state === 'canceled' || state === 'timed_out';
 }

@@ -6,12 +6,14 @@ import { RunExplorerPage, createRunGateway } from '../modules/execution';
 import { WorkspacesPage, createWorkspaceGateway } from '../modules/workspace-access';
 import { ConnectionsPage, createConnectionGateway } from '../modules/connection-access';
 import { ToolLaunchPage, createLaunchGateway } from '../modules/tool-launch';
+import { UsagePage, createUsageGateway } from '../modules/usage-observability';
 
 const readStatus = createStatusReader();
 const runGateway = createRunGateway();
 const workspaceGateway = createWorkspaceGateway();
 const connectionGateway = createConnectionGateway();
 const launchGateway = createLaunchGateway();
+const usageGateway = createUsageGateway();
 
 export const router = createBrowserRouter([{
   element: <Layout />,
@@ -22,6 +24,7 @@ export const router = createBrowserRouter([{
     { path: 'workspaces', element: <WorkspacesPage gateway={workspaceGateway} /> },
     { path: 'connections', element: <ConnectionsPage gateway={connectionGateway} /> },
     { path: 'launch', element: <ToolLaunchPage gateway={launchGateway} /> },
+    { path: 'usage', element: <UsagePage gateway={usageGateway} /> },
     { path: 'runs', element: <RunExplorerPage gateway={runGateway} /> },
     { path: '*', element: <NotFound /> },
   ],

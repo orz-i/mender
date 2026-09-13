@@ -36,7 +36,7 @@ export function WorkspacesPage({ gateway }: { gateway: WorkspaceGateway }) {
       <div className="panel-heading"><div><p className="section-kicker">Memberships</p><h2 id="workspace-heading">可访问 Workspace</h2></div><span>{query.data.workspaces.length} 个</span></div>
       {query.data.workspaces.length === 0 ? <div className="empty-state"><strong>没有有效 Workspace 成员关系</strong><span>请联系 Workspace Owner 或平台管理员。</span></div> : <div className="workspace-card-grid">{query.data.workspaces.map((workspace) => <article className="workspace-card" key={workspace.id}>
         <div><p className="section-kicker">{roleLabel[workspace.role]}</p><h3 className="mono">{workspace.id}</h3></div>
-        <div className="workspace-card-actions"><Button asChild><Link to={`/launch?workspace=${encodeURIComponent(workspace.id)}`}>启动工具</Link></Button><Button asChild variant="outline"><Link to={`/runs?workspace=${encodeURIComponent(workspace.id)}`}>打开 Runs</Link></Button></div>
+        <div className="workspace-card-actions"><Button asChild><Link to={`/launch?workspace=${encodeURIComponent(workspace.id)}`}>启动工具</Link></Button><Button asChild variant="outline"><Link to={`/usage?workspace=${encodeURIComponent(workspace.id)}`}>额度用量</Link></Button><Button asChild variant="outline"><Link to={`/runs?workspace=${encodeURIComponent(workspace.id)}`}>打开 Runs</Link></Button></div>
       </article>)}</div>}
     </section>}
   </>;

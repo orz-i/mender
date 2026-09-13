@@ -7,6 +7,7 @@ export function Layout() {
     <NavLink className="nav-link" to="/workspaces">工作空间</NavLink>
     <NavLink className="nav-link" to="/connections">授权连接</NavLink>
     <NavLink className="nav-link" to="/launch">启动工具</NavLink>
+    <NavLink className="nav-link" to="/usage">额度用量</NavLink>
     <NavLink className="nav-link" to="/runs">运行记录</NavLink>
     <NavLink className="nav-link" to="/status">服务状态</NavLink>
   </>}><Outlet /></Shell>;
