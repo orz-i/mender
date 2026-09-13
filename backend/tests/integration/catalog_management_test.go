@@ -19,13 +19,18 @@ func exerciseCatalogManagementFoundation(t *testing.T, ctx context.Context, owne
 	t.Helper()
 	manager, _ := openTemporaryRole(t, ctx, owner, runtimeDSN, "mender_catalog_manager_", migrations.GrantCatalogManager)
 	reviewer, _ := openTemporaryRole(t, ctx, owner, runtimeDSN, "mender_governance_reviewer_", migrations.GrantGovernanceReviewer)
+	policyManager, _ := openTemporaryRole(t, ctx, owner, runtimeDSN, "mender_gov_policy_", migrations.GrantGovernancePolicyManager)
 	must(t, database.CatalogManagerRole(ctx, manager))
 	must(t, database.GovernanceReviewerRole(ctx, reviewer))
+	must(t, database.GovernancePolicyManagerRole(ctx, policyManager))
 	if database.CatalogManagerRole(ctx, owner) == nil || database.CatalogManagerRole(ctx, runtime) == nil {
 		t.Fatal("owner/runtime role accepted as catalog manager")
 	}
 	if database.GovernanceReviewerRole(ctx, owner) == nil || database.GovernanceReviewerRole(ctx, manager) == nil {
 		t.Fatal("owner/catalog-manager role accepted as governance reviewer")
+	}
+	if database.GovernancePolicyManagerRole(ctx, owner) == nil || database.GovernancePolicyManagerRole(ctx, reviewer) == nil || database.GovernancePolicyManagerRole(ctx, manager) == nil {
+		t.Fatal("owner/reviewer/catalog-manager role accepted as governance policy manager")
 	}
 
 	tx, err := manager.Begin(ctx)
@@ -121,11 +126,125 @@ func exerciseCatalogManagementFoundation(t *testing.T, ctx context.Context, owne
 	 VALUES('ws_catalog_publish','tv_catalog_publish','tool_catalog_publish','1.0.0','provider_catalog_publish','price_catalog_publish','deploy_catalog_publish','Published through workflow','',
 	 '{"type":"object","additionalProperties":false}'::jsonb,'{"type":"object"}'::jsonb,'read_only','safe_read',true)`)
 	must(t, err)
+	_, err = tx.Exec(ctx, `INSERT INTO catalog.tool_version_management(
+	 workspace_id,tool_version_id,tool_id,version,provider_id,price_version_id,deployment_revision,title,description,input_schema,output_schema,side_effect,idempotency,mcp_publishable)
+	 VALUES('ws_catalog_publish','tv_catalog_unsafe','tool_catalog_unsafe','1.0.0','provider_catalog_publish','price_catalog_publish','deploy_catalog_unsafe','Unsafe write draft','',
+	 '{"type":"object"}'::jsonb,'{"type":"object"}'::jsonb,'write','unsafe',true)`)
+	must(t, err)
 	var issueCount int
 	must(t, tx.QueryRow(ctx, `SELECT count(*) FROM catalog.tool_version_publish_issues('ws_catalog_publish','tv_catalog_publish',$1)`, workflowAt).Scan(&issueCount))
 	if issueCount != 0 {
 		t.Fatal("valid ToolVersion preflight unexpectedly failed", issueCount)
 	}
+	must(t, tx.Commit(ctx))
+
+	policyTx, err := policyManager.Begin(ctx)
+	must(t, err)
+	_, err = policyTx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
+	must(t, err)
+	if _, err = policyTx.Exec(ctx, `SELECT * FROM catalog.tool_version_management LIMIT 1`); err == nil {
+		t.Fatal("governance policy manager gained Catalog read authority")
+	}
+	_ = policyTx.Rollback(ctx)
+	policyTx, err = policyManager.Begin(ctx)
+	must(t, err)
+	_, err = policyTx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
+	must(t, err)
+	var policyRevision int64
+	must(t, policyTx.QueryRow(ctx, `SELECT governance.create_catalog_publication_policy('ws_catalog_publish','policy_allow_v1','policy_admin','critical',false,false,$1)`, workflowAt).Scan(&policyRevision))
+	if policyRevision != 1 {
+		t.Fatal("unexpected first policy revision", policyRevision)
+	}
+	_, err = policyTx.Exec(ctx, `SELECT governance.activate_catalog_publication_policy('ws_catalog_publish','policy_allow_v1','policy_admin',$1)`, workflowAt)
+	must(t, err)
+	if _, err = policyTx.Exec(ctx, `UPDATE governance.catalog_publication_policy_revisions SET max_risk_level='low' WHERE workspace_id='ws_catalog_publish' AND id='policy_allow_v1'`); err == nil {
+		t.Fatal("policy manager obtained direct policy mutation authority")
+	}
+	_ = policyTx.Rollback(ctx)
+	policyTx, err = policyManager.Begin(ctx)
+	must(t, err)
+	_, err = policyTx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
+	must(t, err)
+	must(t, policyTx.QueryRow(ctx, `SELECT governance.create_catalog_publication_policy('ws_catalog_publish','policy_allow_v1','policy_admin','critical',false,false,$1)`, workflowAt).Scan(&policyRevision))
+	_, err = policyTx.Exec(ctx, `SELECT governance.activate_catalog_publication_policy('ws_catalog_publish','policy_allow_v1','policy_admin',$1)`, workflowAt)
+	must(t, err)
+	must(t, policyTx.Commit(ctx))
+
+	policyEvalTx, err := owner.Begin(ctx)
+	must(t, err)
+	_, err = policyEvalTx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
+	must(t, err)
+	var decisionSeq int64
+	must(t, policyEvalTx.QueryRow(ctx, `SELECT governance.evaluate_catalog_publication_policy('ws_catalog_publish','tool_version','tv_catalog_publish',$1)`, workflowAt).Scan(&decisionSeq))
+	must(t, policyEvalTx.Commit(ctx))
+	var riskLevel, outcome string
+	var reasonCodes []string
+	must(t, owner.QueryRow(ctx, `SELECT risk_level,outcome,reason_codes FROM governance.catalog_publication_policy_decisions WHERE sequence=$1`, decisionSeq).Scan(&riskLevel, &outcome, &reasonCodes))
+	if riskLevel != "low" || outcome != "allow" || len(reasonCodes) != 2 || reasonCodes[1] != "within_risk_ceiling" {
+		t.Fatal("safe read policy decision drift", riskLevel, outcome, reasonCodes)
+	}
+	tx, err = manager.Begin(ctx)
+	must(t, err)
+	_, err = tx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
+	must(t, err)
+	if _, err = tx.Exec(ctx, `UPDATE governance.catalog_publication_policy_decisions SET outcome='deny' WHERE sequence=$1`, decisionSeq); err == nil {
+		t.Fatal("catalog manager obtained policy decision mutation authority")
+	}
+	_ = tx.Rollback(ctx)
+	if _, err = owner.Exec(ctx, `UPDATE governance.catalog_publication_policy_decisions SET outcome='deny' WHERE sequence=$1`, decisionSeq); err == nil {
+		t.Fatal("immutable policy decision accepted update")
+	}
+
+	policyTx, err = policyManager.Begin(ctx)
+	must(t, err)
+	_, err = policyTx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
+	must(t, err)
+	must(t, policyTx.QueryRow(ctx, `SELECT governance.create_catalog_publication_policy('ws_catalog_publish','policy_strict_v2','policy_admin','high',true,true,$1)`, workflowAt.Add(time.Second)).Scan(&policyRevision))
+	if policyRevision != 2 {
+		t.Fatal("policy revision did not advance", policyRevision)
+	}
+	must(t, policyTx.Commit(ctx))
+
+	tx, err = manager.Begin(ctx)
+	must(t, err)
+	_, err = tx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
+	must(t, err)
+	_, err = tx.Exec(ctx, `SELECT governance.submit_catalog_publication('ws_catalog_publish','approval_policy_old','tool_version','tv_catalog_publish','maker_catalog',$1,$2)`, workflowAt.Add(time.Second), workflowAt.Add(time.Hour))
+	must(t, err)
+	must(t, tx.Commit(ctx))
+
+	policyTx, err = policyManager.Begin(ctx)
+	must(t, err)
+	_, err = policyTx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
+	must(t, err)
+	_, err = policyTx.Exec(ctx, `SELECT governance.activate_catalog_publication_policy('ws_catalog_publish','policy_strict_v2','policy_admin',$1)`, workflowAt.Add(2*time.Second))
+	must(t, err)
+	must(t, policyTx.Commit(ctx))
+	var approvalState, expirationReason string
+	must(t, owner.QueryRow(ctx, `SELECT state FROM governance.catalog_publication_approvals WHERE workspace_id='ws_catalog_publish' AND id='approval_policy_old'`).Scan(&approvalState))
+	if approvalState != "expired" {
+		t.Fatal("policy activation did not invalidate active approval", approvalState)
+	}
+	must(t, owner.QueryRow(ctx, `SELECT reason_code FROM governance.catalog_publication_audit_events WHERE workspace_id='ws_catalog_publish' AND approval_id='approval_policy_old' AND event_kind='approval_expired' ORDER BY sequence DESC LIMIT 1`).Scan(&expirationReason))
+	if expirationReason != "policy_revision_changed" {
+		t.Fatal("policy activation audit reason drift", expirationReason)
+	}
+
+	policyEvalTx, err = owner.Begin(ctx)
+	must(t, err)
+	_, err = policyEvalTx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
+	must(t, err)
+	must(t, policyEvalTx.QueryRow(ctx, `SELECT governance.evaluate_catalog_publication_policy('ws_catalog_publish','tool_version','tv_catalog_unsafe',$1)`, workflowAt.Add(3*time.Second)).Scan(&decisionSeq))
+	must(t, policyEvalTx.Commit(ctx))
+	must(t, owner.QueryRow(ctx, `SELECT risk_level,outcome,reason_codes FROM governance.catalog_publication_policy_decisions WHERE sequence=$1`, decisionSeq).Scan(&riskLevel, &outcome, &reasonCodes))
+	if riskLevel != "critical" || outcome != "deny" || len(reasonCodes) < 2 {
+		t.Fatal("unsafe write policy decision did not deny", riskLevel, outcome, reasonCodes)
+	}
+
+	tx, err = manager.Begin(ctx)
+	must(t, err)
+	_, err = tx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_catalog_publish',true)")
+	must(t, err)
 	_, err = tx.Exec(ctx, `SELECT governance.submit_catalog_publication('ws_catalog_publish','approval_tv_1','tool_version','tv_catalog_publish','maker_catalog',$1,$2)`, workflowAt, workflowAt.Add(time.Hour))
 	must(t, err)
 	must(t, tx.Commit(ctx))
@@ -247,7 +366,6 @@ func exerciseCatalogManagementFoundation(t *testing.T, ctx context.Context, owne
 		t.Fatal("approved governed Toolset publication failed", err)
 	}
 	must(t, tx.Commit(ctx))
-	var approvalState string
 	must(t, owner.QueryRow(ctx, `SELECT state FROM governance.catalog_publication_approvals WHERE workspace_id='ws_catalog_publish' AND id='approval_set_1'`).Scan(&approvalState))
 	if approvalState != "consumed" {
 		t.Fatal("successful Toolset publish did not consume approval", approvalState)
