@@ -798,7 +798,8 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 				return failed(buildErr)
 			}
 			reviewAccess := governanceidentity.New(humanIdentity)
-			reviewService, serviceErr := governanceapp.New(governancepg.NewPublicationReview(governanceReviewerPool), reviewAccess, systemClock{})
+			reviewRepository := governancepg.NewPublicationReview(governanceReviewerPool)
+			reviewService, serviceErr := governanceapp.New(reviewRepository, reviewAccess, systemClock{})
 			if serviceErr != nil {
 				return failed(serviceErr)
 			}
@@ -807,6 +808,15 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 				return failed(handlerErr)
 			}
 			registers = append(registers, reviewHandler.Register)
+			historyService, serviceErr := governanceapp.NewHistory(reviewRepository, reviewAccess)
+			if serviceErr != nil {
+				return failed(serviceErr)
+			}
+			historyHandler, handlerErr := governancehttp.NewPublicationHistory(historyService, reviewAccess)
+			if handlerErr != nil {
+				return failed(handlerErr)
+			}
+			registers = append(registers, historyHandler.Register)
 		}
 	}
 	var queries *runapp.Queries

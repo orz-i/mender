@@ -38,6 +38,7 @@ type reviewRepo struct {
 	approveCalls int
 	reviewer     string
 	note         string
+	approveState string
 }
 
 func (*reviewRepo) ListPublicationApprovals(_ context.Context, ws string, at time.Time) ([]application.PublicationApproval, error) {
@@ -47,6 +48,9 @@ func (r *reviewRepo) ApprovePublication(_ context.Context, ws, id, reviewer, not
 	r.approveCalls++
 	r.reviewer = reviewer
 	r.note = note
+	if r.approveState == "expired" {
+		return application.PublicationApproval{WorkspaceID: ws, ID: id, TargetKind: "toolset", TargetID: "set_1", TargetRevision: 3, RequesterUserID: "maker_1", State: "expired", RequestedAt: at.Add(-2 * time.Hour), ExpiresAt: at.Add(-time.Hour)}, nil
+	}
 	return application.PublicationApproval{WorkspaceID: ws, ID: id, TargetKind: "toolset", TargetID: "set_1", TargetRevision: 3, RequesterUserID: "maker_1", ReviewerUserID: reviewer, State: "approved", RequestedAt: at.Add(-time.Minute), ExpiresAt: at.Add(time.Hour), ReviewedAt: at, DecisionNote: note}, nil
 }
 func (*reviewRepo) RejectPublication(context.Context, string, string, string, string, time.Time) (application.PublicationApproval, error) {
@@ -112,5 +116,13 @@ func TestAdminApproveUsesAuthenticatedReviewerAndStrictCSRFJSON(t *testing.T) {
 	}
 	if repo.approveCalls != 1 || repo.reviewer != "reviewer_1" || repo.note != "reviewed" {
 		t.Fatal("reviewer was not derived from authenticated session", repo.reviewer, repo.note)
+	}
+}
+
+func TestAdminApproveReturnsConflictAfterServerPersistsExpiry(t *testing.T) {
+	repo := &reviewRepo{approveState: "expired"}
+	w := reviewRequest(reviewRouter(t, repo, &reviewAuth{}), http.MethodPost, "/api/admin/v1/workspaces/ws_1/publication-approvals/approval_1/approve", `{"note":"late"}`, "csrf_1")
+	if w.Code != http.StatusConflict {
+		t.Fatal(w.Code, w.Body.String())
 	}
 }

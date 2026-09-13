@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	governancepg "github.com/orz-i/mender/backend/internal/contexts/governance/adapters/outbound/postgres"
+	governanceapp "github.com/orz-i/mender/backend/internal/contexts/governance/application"
 	database "github.com/orz-i/mender/backend/internal/platform/postgres"
 	catalogmanagementpg "github.com/orz-i/mender/backend/internal/processes/catalogmanagement/adapters/outbound/postgres"
 	"github.com/orz-i/mender/backend/migrations"
@@ -377,4 +378,25 @@ func exerciseCatalogManagementFoundation(t *testing.T, ctx context.Context, owne
 		t.Fatal("publication retirement audit facts missing", retiredCount)
 	}
 	must(t, reviewTx.Commit(ctx))
+
+	historyPage, err := reviewRepo.ListPublicationHistory(ctx, "ws_catalog_publish", governanceapp.PublicationHistoryFilter{TargetKind: "tool_version", TargetID: "tv_catalog_publish", Limit: 2})
+	must(t, err)
+	if len(historyPage.Events) != 2 || historyPage.NextBeforeSequence < 1 || historyPage.Events[0].Sequence <= historyPage.Events[1].Sequence {
+		t.Fatal("publication history first page did not preserve bounded descending cursor", historyPage)
+	}
+	historyNext, err := reviewRepo.ListPublicationHistory(ctx, "ws_catalog_publish", governanceapp.PublicationHistoryFilter{TargetKind: "tool_version", TargetID: "tv_catalog_publish", BeforeSequence: historyPage.NextBeforeSequence, Limit: 2})
+	must(t, err)
+	if len(historyNext.Events) == 0 || historyNext.Events[0].Sequence >= historyPage.NextBeforeSequence {
+		t.Fatal("publication history cursor repeated or reordered events", historyNext)
+	}
+	expiryPage, err := reviewRepo.ListPublicationHistory(ctx, "ws_catalog_publish", governanceapp.PublicationHistoryFilter{ApprovalID: "approval_expire_1", EventKind: "approval_expired", Limit: 10})
+	must(t, err)
+	if len(expiryPage.Events) != 1 || expiryPage.Events[0].ReasonCode != "ttl_elapsed" || expiryPage.Events[0].ApprovalID != "approval_expire_1" {
+		t.Fatal("publication history filters returned incorrect audit facts", expiryPage)
+	}
+	crossHistory, err := reviewRepo.ListPublicationHistory(ctx, "ws_catalog_other", governanceapp.PublicationHistoryFilter{Limit: 10})
+	must(t, err)
+	if len(crossHistory.Events) != 0 {
+		t.Fatal("publication history crossed Workspace RLS", crossHistory.Events)
+	}
 }

@@ -132,4 +132,58 @@ func (r *PublicationReviewRepository) decide(ctx context.Context, workspace, id,
 	return a, nil
 }
 
+const auditCols = `sequence,workspace_id,coalesce(approval_id,''),target_kind,target_id,target_revision,observed_revision,event_kind,coalesce(actor_user_id,''),occurred_at,reason_code,note`
+
+func scanAudit(row pgx.Row) (application.PublicationAuditEvent, error) {
+	var event application.PublicationAuditEvent
+	var observed *int64
+	err := row.Scan(&event.Sequence, &event.WorkspaceID, &event.ApprovalID, &event.TargetKind, &event.TargetID,
+		&event.TargetRevision, &observed, &event.EventKind, &event.ActorUserID, &event.OccurredAt, &event.ReasonCode, &event.Note)
+	if observed != nil {
+		event.ObservedRevision = *observed
+	}
+	return event, mapErr(err)
+}
+
+func (r *PublicationReviewRepository) ListPublicationHistory(ctx context.Context, workspace string, filter application.PublicationHistoryFilter) (application.PublicationHistoryPage, error) {
+	tx, err := r.begin(ctx, workspace)
+	if err != nil {
+		return application.PublicationHistoryPage{}, err
+	}
+	defer rollback(tx)
+	rows, err := tx.Query(ctx, `SELECT `+auditCols+` FROM governance.catalog_publication_audit_events
+	 WHERE workspace_id=$1
+	   AND ($2='' OR target_kind=$2)
+	   AND ($3='' OR target_id=$3)
+	   AND ($4='' OR approval_id=$4)
+	   AND ($5='' OR event_kind=$5)
+	   AND ($6::bigint=0 OR sequence<$6)
+	 ORDER BY sequence DESC LIMIT $7`, workspace, filter.TargetKind, filter.TargetID, filter.ApprovalID, filter.EventKind, filter.BeforeSequence, filter.Limit+1)
+	if err != nil {
+		return application.PublicationHistoryPage{}, mapErr(err)
+	}
+	defer rows.Close()
+	items := make([]application.PublicationAuditEvent, 0, filter.Limit+1)
+	for rows.Next() {
+		event, e := scanAudit(rows)
+		if e != nil {
+			return application.PublicationHistoryPage{}, e
+		}
+		items = append(items, event)
+	}
+	if rows.Err() != nil {
+		return application.PublicationHistoryPage{}, application.ErrUnavailable
+	}
+	page := application.PublicationHistoryPage{Events: items}
+	if len(items) > filter.Limit {
+		page.Events = items[:filter.Limit]
+		page.NextBeforeSequence = page.Events[len(page.Events)-1].Sequence
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return application.PublicationHistoryPage{}, application.ErrUnavailable
+	}
+	return page, nil
+}
+
 var _ application.Repository = (*PublicationReviewRepository)(nil)
+var _ application.HistoryRepository = (*PublicationReviewRepository)(nil)

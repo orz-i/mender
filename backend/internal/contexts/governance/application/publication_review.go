@@ -139,5 +139,12 @@ func (s *Service) decide(ctx context.Context, actor Actor, workspace, id, note s
 	if item.WorkspaceID != workspace || item.ID != id || !asDomain(item).Valid() {
 		return PublicationApproval{}, ErrUnavailable
 	}
+	expected := string(domain.ApprovalRejected)
+	if approve {
+		expected = string(domain.ApprovalApproved)
+	}
+	if item.State != expected {
+		return PublicationApproval{}, ErrConflict
+	}
 	return item, nil
 }
