@@ -5,6 +5,7 @@ package integration_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,12 +14,21 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/orz-i/mender/backend/internal/bootstrap"
+	objectfs "github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/objectfs"
 	runpg "github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/postgres"
+	executionapp "github.com/orz-i/mender/backend/internal/contexts/execution/application"
 	"github.com/orz-i/mender/backend/internal/contexts/execution/application/ports"
+	executiondomain "github.com/orz-i/mender/backend/internal/contexts/execution/domain"
 	"github.com/orz-i/mender/backend/internal/contexts/identity/adapters/outbound/keycodec"
 	identitypg "github.com/orz-i/mender/backend/internal/contexts/identity/adapters/outbound/postgres"
 	identitydomain "github.com/orz-i/mender/backend/internal/contexts/identity/domain"
+	database "github.com/orz-i/mender/backend/internal/platform/postgres"
+	"github.com/orz-i/mender/backend/migrations"
 )
+
+type artifactObjectClock struct{ at time.Time }
+
+func (c artifactObjectClock) Now() time.Time { return c.at }
 
 func exerciseArtifacts(t *testing.T, ctx context.Context, owner, runtime *pgxpool.Pool, runtimeDSN, otherWorkspaceKey string) {
 	t.Helper()
@@ -123,4 +133,81 @@ func exerciseArtifacts(t *testing.T, ctx context.Context, owner, runtime *pgxpoo
 	if count != 1 {
 		t.Fatal("terminal Provider replay duplicated Artifact", count)
 	}
+
+	t.Run("large Artifact materializes through restricted object role", func(t *testing.T) {
+		materializerDB, _ := openTemporaryRole(t, ctx, owner, runtimeDSN, "mender_artifact_materializer_", migrations.GrantArtifactMaterializer)
+		must(t, database.ArtifactMaterializerRole(ctx, materializerDB))
+		if database.ArtifactMaterializerRole(ctx, owner) == nil || database.ArtifactMaterializerRole(ctx, runtime) == nil {
+			t.Fatal("owner/runtime role accepted as artifact materializer")
+		}
+
+		largeContent := `{"answer":42,"padding":"` + strings.Repeat("x", (256<<10)+1024) + `"}`
+		if len(largeContent) <= int(executionapp.ArtifactObjectThresholdBytes) || len(largeContent) > 1<<20 {
+			t.Fatal("large Artifact fixture is outside materialization bounds", len(largeContent))
+		}
+		tx, err := owner.Begin(ctx)
+		must(t, err)
+		defer func() { _ = tx.Rollback(context.Background()) }()
+		_, err = tx.Exec(ctx, `SELECT set_config('mender.workspace_id','ws_result',true)`)
+		must(t, err)
+		_, err = tx.Exec(ctx, `UPDATE execution.provider_observations SET result_json=$1::jsonb WHERE workspace_id='ws_result' AND run_id='run_result_success' AND state='succeeded'`, largeContent)
+		must(t, err)
+		_, err = tx.Exec(ctx, `UPDATE execution.artifacts SET content_json=$1::jsonb WHERE workspace_id='ws_result' AND run_id='run_result_success' AND id='art_run_result_success'`, largeContent)
+		must(t, err)
+		must(t, tx.Commit(ctx))
+
+		store, err := objectfs.New(t.TempDir())
+		must(t, err)
+		materializerRepo := runpg.New(materializerDB)
+		candidate, found, err := materializerRepo.NextArtifactObjectCandidate(ctx, "ws_result")
+		if err != nil || !found {
+			t.Fatal("artifact object candidate unavailable", found, err)
+		}
+		if !candidate.Valid() || candidate.ArtifactID != "art_run_result_success" {
+			t.Fatal("artifact object candidate drift", candidate.ArtifactID, len(candidate.ContentJSON), candidate.MediaType)
+		}
+		storedPreview, err := store.PutArtifactObject(ctx, candidate)
+		if err != nil {
+			t.Fatal("filesystem object write failed", err)
+		}
+		if storedPreview.SizeBytes != int64(len(candidate.ContentJSON)) {
+			t.Fatal("filesystem object size drift", storedPreview.SizeBytes, len(candidate.ContentJSON))
+		}
+		materializedAt := createdAt.Add(time.Minute)
+		materializer, err := executionapp.NewArtifactObjectMaterializer(materializerRepo, store, artifactObjectClock{at: materializedAt}, 24*time.Hour)
+		must(t, err)
+		object, err := materializer.MaterializeOne(ctx, executiondomain.WorkspaceID("ws_result"))
+		must(t, err)
+		if object.Validate() != nil || object.ArtifactID != "art_run_result_success" || object.SizeBytes != storedPreview.SizeBytes || object.ContentSHA256 != storedPreview.ContentSHA256 || object.ObjectKey != storedPreview.ObjectKey || object.State != executiondomain.ArtifactObjectAvailable || !object.ExpiresAt.Equal(materializedAt.Add(24*time.Hour)) {
+			t.Fatal("materialized object metadata drift", object)
+		}
+		if _, err = materializer.MaterializeOne(ctx, "ws_result"); !errors.Is(err, executionapp.ErrNoArtifactObjectCandidate) {
+			t.Fatal("materializer replay did not converge to no candidate", err)
+		}
+
+		var storedKey, storedSHA, storedState string
+		var storedSize int64
+		must(t, owner.QueryRow(ctx, `SELECT object_key,content_sha256,size_bytes,state FROM execution.artifact_objects WHERE workspace_id='ws_result' AND artifact_id='art_run_result_success'`).Scan(&storedKey, &storedSHA, &storedSize, &storedState))
+		if storedKey != object.ObjectKey || storedSHA != object.ContentSHA256 || storedSize != object.SizeBytes || storedState != "available" {
+			t.Fatal("durable artifact object metadata drift", storedKey, storedSHA, storedSize, storedState)
+		}
+
+		roleTx, err := materializerDB.Begin(ctx)
+		must(t, err)
+		defer func() { _ = roleTx.Rollback(context.Background()) }()
+		_, err = roleTx.Exec(ctx, `SELECT set_config('mender.workspace_id','ws_result',true)`)
+		must(t, err)
+		if err = roleTx.QueryRow(ctx, `SELECT object_key FROM execution.artifact_objects WHERE workspace_id='ws_result' AND artifact_id='art_run_result_success'`).Scan(&storedKey); err != nil {
+			t.Fatal("materializer cannot inspect its object metadata", err)
+		}
+		if err = roleTx.QueryRow(ctx, `SELECT source_observation_id FROM execution.artifacts WHERE workspace_id='ws_result' AND id='art_run_result_success'`).Scan(&storedKey); err == nil {
+			t.Fatal("materializer can read source observation linkage")
+		}
+		if err = roleTx.QueryRow(ctx, `SELECT observation_id FROM execution.provider_observations WHERE workspace_id='ws_result' LIMIT 1`).Scan(&storedKey); err == nil {
+			t.Fatal("materializer can read provider observations")
+		}
+		if err = roleTx.QueryRow(ctx, `SELECT id FROM identity.workspaces LIMIT 1`).Scan(&storedKey); err == nil {
+			t.Fatal("materializer can reach identity schema")
+		}
+	})
 }
