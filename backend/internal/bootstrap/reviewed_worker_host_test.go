@@ -10,6 +10,34 @@ func hostEnv(values map[string]string) func(string) string {
 	return func(key string) string { return values[key] }
 }
 
+func TestReviewedWorkerServicesRejectsAgentDispatchWithoutWorkerDispatchBeforeOpeningResources(t *testing.T) {
+	worker := WorkerConfig{ControlEnabled: true, DatabaseURL: "postgres://not-opened", WorkerID: "worker_a"}
+	cfg := ReviewedWorkerHostConfig{Enabled: true, AgentDispatchEnabled: true, ProviderControlEnabled: true, SecretRoot: t.TempDir(), ExecutorDatabaseURL: "postgres://not-opened", ReconcilerDatabaseURL: "postgres://also-not-opened", ProviderIDs: []string{"agent_provider"}, AllowedHosts: []string{"agent.example"}}
+	if services, closeIt, err := BuildReviewedWorkerServicesFromConfig(context.Background(), worker, cfg); err == nil || services != nil || closeIt != nil || !strings.Contains(err.Error(), "enabled together") {
+		t.Fatal("Agent dispatch mismatch reached resource composition", services != nil, closeIt != nil, err)
+	}
+}
+
+func TestReviewedWorkerHostConfigRequiresProviderControlForRemoteAgent(t *testing.T) {
+	base := map[string]string{
+		"MENDER_REVIEWED_WORKER_RUNTIME_ENABLED": "true",
+		"MENDER_REVIEWED_AGENT_DISPATCH_ENABLED": "true",
+		"MENDER_REVIEWED_SECRET_ROOT":            `C:\mounted-secrets`,
+		"MENDER_EXECUTOR_DATABASE_URL":           "postgres://executor:pw@127.0.0.1:5432/mender?sslmode=disable",
+		"MENDER_REVIEWED_EGRESS_ALLOWED_HOSTS":   "agent.example",
+	}
+	if _, err := LoadReviewedWorkerHostConfig(hostEnv(base)); err == nil || !strings.Contains(err.Error(), "provider control") {
+		t.Fatal("remote Agent dispatch without control did not fail closed", err)
+	}
+	base["MENDER_REVIEWED_PROVIDER_CONTROL_ENABLED"] = "true"
+	base["MENDER_RECONCILER_DATABASE_URL"] = "postgres://reconciler:pw@127.0.0.1:5432/mender?sslmode=disable"
+	base["MENDER_REVIEWED_PROVIDER_IDS"] = "agent_provider"
+	cfg, err := LoadReviewedWorkerHostConfig(hostEnv(base))
+	if err != nil || !cfg.AgentDispatchEnabled || !cfg.ProviderControlEnabled || cfg.HTTPDispatchEnabled {
+		t.Fatal("valid reviewed Agent host config rejected", cfg, err)
+	}
+}
+
 func TestReviewedWorkerHostConfigIsDisabledByDefaultAndRequiresMasterSwitch(t *testing.T) {
 	cfg, err := LoadReviewedWorkerHostConfig(hostEnv(nil))
 	if err != nil || cfg.Enabled {
@@ -20,6 +48,9 @@ func TestReviewedWorkerHostConfigIsDisabledByDefaultAndRequiresMasterSwitch(t *t
 	}
 	if _, err = LoadReviewedWorkerHostConfig(hostEnv(map[string]string{"MENDER_REVIEWED_WORKER_RUNTIME_ENABLED": "yes"})); err == nil {
 		t.Fatal("non-strict reviewed worker flag was accepted")
+	}
+	if _, err = LoadReviewedWorkerHostConfig(hostEnv(map[string]string{"MENDER_REVIEWED_AGENT_DISPATCH_ENABLED": "true"})); err == nil {
+		t.Fatal("Agent dispatch was accepted without reviewed master switch")
 	}
 }
 

@@ -141,4 +141,11 @@ func TestSupplierHTTPRuntimeRejectsUnsafeDatabaseRoleCompositionBeforeConnecting
 	if executor, closeIt, err := BuildSupplierHTTPExecutor(context.Background(), base, nil); err == nil || executor != nil || closeIt != nil {
 		t.Fatal("nil secret provider was accepted", executor != nil, closeIt != nil, err)
 	}
+	for _, transports := range [][]string{{"unknown"}, {"agent_http", "agent_http"}, {"mcp_streamable_http"}} {
+		candidate := base
+		candidate.TransportKinds = transports
+		if executor, closeIt, err := BuildSupplierHTTPExecutor(context.Background(), candidate, bootstrapSecretProvider{}); err == nil || executor != nil || closeIt != nil {
+			t.Fatal("invalid reviewed HTTP/Agent transport set reached database composition", transports, executor != nil, closeIt != nil, err)
+		}
+	}
 }

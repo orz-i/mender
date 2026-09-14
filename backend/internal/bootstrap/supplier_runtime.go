@@ -31,6 +31,7 @@ type SupplierHTTPRuntimeConfig struct {
 	WorkerDatabaseURL   string
 	ExecutorDatabaseURL string
 	AllowedHosts        []string
+	TransportKinds      []string
 	AllowHTTP           bool
 	AllowLoopback       bool
 }
@@ -80,8 +81,28 @@ type ProviderHTTPControlRuntimeConfig struct {
 	ReconcilerDatabaseURL string
 	ProviderIDs           []string
 	AllowedHosts          []string
+	TransportKinds        []string
 	AllowHTTP             bool
 	AllowLoopback         bool
+}
+
+func reviewedHTTPTransportKinds(values []string) ([]string, error) {
+	if len(values) == 0 {
+		return []string{supplydomain.TransportHTTP}, nil
+	}
+	if len(values) > 2 {
+		return nil, errors.New("supplier HTTP runtime contains too many transport kinds")
+	}
+	seen := map[string]bool{}
+	result := make([]string, 0, len(values))
+	for _, kind := range values {
+		if kind != supplydomain.TransportHTTP && kind != supplydomain.TransportAgentHTTP || seen[kind] {
+			return nil, errors.New("supplier HTTP runtime contains invalid or duplicate transport kind")
+		}
+		seen[kind] = true
+		result = append(result, kind)
+	}
+	return result, nil
 }
 
 func sameDatabaseDistinctRoles(firstURL, secondURL string) error {
@@ -115,6 +136,10 @@ func sameDatabaseDistinctRoles(firstURL, secondURL string) error {
 func BuildSupplierHTTPExecutor(ctx context.Context, c SupplierHTTPRuntimeConfig, secrets supplyapp.SecretProvider) (execapp.Executor, func(), error) {
 	if secrets == nil || c.WorkerDatabaseURL == "" || c.ExecutorDatabaseURL == "" {
 		return nil, nil, errors.New("supplier HTTP runtime is not safely configured")
+	}
+	transports, err := reviewedHTTPTransportKinds(c.TransportKinds)
+	if err != nil {
+		return nil, nil, err
 	}
 	if err := sameDatabaseDistinctRoles(c.WorkerDatabaseURL, c.ExecutorDatabaseURL); err != nil {
 		return nil, nil, errors.New("executor runtime requires the same database with a distinct restricted role")
@@ -150,11 +175,11 @@ func BuildSupplierHTTPExecutor(ctx context.Context, c SupplierHTTPRuntimeConfig,
 	if err != nil {
 		return fail(err)
 	}
-	supplier, err := httpexecutor.New(broker, httpexecutor.EgressPolicy{
+	supplier, err := httpexecutor.NewForTransports(broker, httpexecutor.EgressPolicy{
 		AllowedHosts:  c.AllowedHosts,
 		AllowHTTP:     c.AllowHTTP,
 		AllowLoopback: c.AllowLoopback,
-	}, nil, nil, nil)
+	}, transports, nil, nil, nil)
 	if err != nil {
 		return fail(err)
 	}
@@ -317,6 +342,10 @@ func BuildProviderHTTPControlRuntime(ctx context.Context, c ProviderHTTPControlR
 	if len(c.ProviderIDs) == 0 || len(c.ProviderIDs) > 256 {
 		return nil, nil, errors.New("provider control runtime requires reviewed providers")
 	}
+	transports, err := reviewedHTTPTransportKinds(c.TransportKinds)
+	if err != nil {
+		return nil, nil, err
+	}
 	seenProviders := map[string]bool{}
 	for _, providerID := range c.ProviderIDs {
 		probe := execapp.ProviderTarget{WorkspaceID: "ws_probe", RunID: "run_probe", AttemptNo: 1, ProviderID: providerID, ProviderRequestID: "request/probe"}
@@ -376,7 +405,7 @@ func BuildProviderHTTPControlRuntime(ctx context.Context, c ProviderHTTPControlR
 	if err != nil {
 		return nil, nil, err
 	}
-	httpControl, err := httpexecutor.New(broker, httpexecutor.EgressPolicy{AllowedHosts: c.AllowedHosts, AllowHTTP: c.AllowHTTP, AllowLoopback: c.AllowLoopback}, nil, nil, nil)
+	httpControl, err := httpexecutor.NewForTransports(broker, httpexecutor.EgressPolicy{AllowedHosts: c.AllowedHosts, AllowHTTP: c.AllowHTTP, AllowLoopback: c.AllowLoopback}, transports, nil, nil, nil)
 	if err != nil {
 		return nil, nil, err
 	}

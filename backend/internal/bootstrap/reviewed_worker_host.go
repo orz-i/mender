@@ -7,11 +7,13 @@ import (
 	"sync"
 
 	filesecret "github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/filesecret"
+	supplydomain "github.com/orz-i/mender/backend/internal/contexts/supply/domain"
 )
 
 type ReviewedWorkerHostConfig struct {
 	Enabled                bool
 	HTTPDispatchEnabled    bool
+	AgentDispatchEnabled   bool
 	ProviderControlEnabled bool
 	SettlementEnabled      bool
 	SecretRoot             string
@@ -62,6 +64,9 @@ func LoadReviewedWorkerHostConfig(getenv func(string) string) (ReviewedWorkerHos
 	if c.HTTPDispatchEnabled, err = strictBool(getenv, "MENDER_REVIEWED_HTTP_DISPATCH_ENABLED"); err != nil {
 		return ReviewedWorkerHostConfig{}, err
 	}
+	if c.AgentDispatchEnabled, err = strictBool(getenv, "MENDER_REVIEWED_AGENT_DISPATCH_ENABLED"); err != nil {
+		return ReviewedWorkerHostConfig{}, err
+	}
 	if c.ProviderControlEnabled, err = strictBool(getenv, "MENDER_REVIEWED_PROVIDER_CONTROL_ENABLED"); err != nil {
 		return ReviewedWorkerHostConfig{}, err
 	}
@@ -74,7 +79,7 @@ func LoadReviewedWorkerHostConfig(getenv func(string) string) (ReviewedWorkerHos
 	if c.AllowLoopback, err = strictBool(getenv, "MENDER_REVIEWED_EGRESS_ALLOW_LOOPBACK"); err != nil {
 		return ReviewedWorkerHostConfig{}, err
 	}
-	anyService := c.HTTPDispatchEnabled || c.ProviderControlEnabled || c.SettlementEnabled
+	anyService := c.HTTPDispatchEnabled || c.AgentDispatchEnabled || c.ProviderControlEnabled || c.SettlementEnabled
 	if !c.Enabled {
 		if anyService || c.AllowHTTP || c.AllowLoopback {
 			return ReviewedWorkerHostConfig{}, errors.New("reviewed worker capabilities require MENDER_REVIEWED_WORKER_RUNTIME_ENABLED=true")
@@ -84,7 +89,10 @@ func LoadReviewedWorkerHostConfig(getenv func(string) string) (ReviewedWorkerHos
 	if !anyService {
 		return ReviewedWorkerHostConfig{}, errors.New("reviewed worker runtime requires at least one capability")
 	}
-	if c.HTTPDispatchEnabled || c.ProviderControlEnabled {
+	if c.AgentDispatchEnabled && !c.ProviderControlEnabled {
+		return ReviewedWorkerHostConfig{}, errors.New("remote Agent dispatch requires reviewed provider control")
+	}
+	if c.HTTPDispatchEnabled || c.AgentDispatchEnabled || c.ProviderControlEnabled {
 		c.SecretRoot = strings.TrimSpace(getenv("MENDER_REVIEWED_SECRET_ROOT"))
 		c.ExecutorDatabaseURL = strings.TrimSpace(getenv("MENDER_EXECUTOR_DATABASE_URL"))
 		if c.SecretRoot == "" || c.ExecutorDatabaseURL == "" {
@@ -121,8 +129,12 @@ func BuildReviewedWorkerServicesFromConfig(ctx context.Context, worker WorkerCon
 	if !c.Enabled || !worker.ControlEnabled {
 		return nil, nil, errors.New("reviewed worker runtime requires explicit worker control")
 	}
-	if worker.DispatchEnabled != c.HTTPDispatchEnabled {
-		return nil, nil, errors.New("worker dispatch and reviewed HTTP dispatch must be enabled together")
+	dispatchEnabled := c.HTTPDispatchEnabled || c.AgentDispatchEnabled
+	if worker.DispatchEnabled != dispatchEnabled {
+		return nil, nil, errors.New("worker dispatch and reviewed supplier dispatch must be enabled together")
+	}
+	if c.AgentDispatchEnabled && !c.ProviderControlEnabled {
+		return nil, nil, errors.New("remote Agent dispatch requires reviewed provider control")
 	}
 	var closers []func()
 	closeAll := func() {
@@ -137,7 +149,7 @@ func BuildReviewedWorkerServicesFromConfig(ctx context.Context, worker WorkerCon
 
 	var secrets *filesecret.Provider
 	var err error
-	if c.HTTPDispatchEnabled || c.ProviderControlEnabled {
+	if dispatchEnabled || c.ProviderControlEnabled {
 		secrets, err = filesecret.New(c.SecretRoot)
 		if err != nil {
 			return nil, nil, err
@@ -145,10 +157,17 @@ func BuildReviewedWorkerServicesFromConfig(ctx context.Context, worker WorkerCon
 	}
 
 	var dispatch *ReviewedDispatchRuntime
-	if c.HTTPDispatchEnabled {
+	if dispatchEnabled {
+		transports := make([]string, 0, 2)
+		if c.HTTPDispatchEnabled {
+			transports = append(transports, supplydomain.TransportHTTP)
+		}
+		if c.AgentDispatchEnabled {
+			transports = append(transports, supplydomain.TransportAgentHTTP)
+		}
 		executor, closeExecutor, err := BuildSupplierHTTPExecutor(ctx, SupplierHTTPRuntimeConfig{
 			WorkerDatabaseURL: worker.DatabaseURL, ExecutorDatabaseURL: c.ExecutorDatabaseURL,
-			AllowedHosts: c.AllowedHosts, AllowHTTP: c.AllowHTTP, AllowLoopback: c.AllowLoopback,
+			AllowedHosts: c.AllowedHosts, TransportKinds: transports, AllowHTTP: c.AllowHTTP, AllowLoopback: c.AllowLoopback,
 		}, secrets)
 		if err != nil {
 			return fail(err)
@@ -162,10 +181,14 @@ func BuildReviewedWorkerServicesFromConfig(ctx context.Context, worker WorkerCon
 
 	var control *ReviewedProviderControlRuntime
 	if c.ProviderControlEnabled {
+		controlTransports := []string{supplydomain.TransportHTTP}
+		if c.AgentDispatchEnabled {
+			controlTransports = append(controlTransports, supplydomain.TransportAgentHTTP)
+		}
 		var closeControl func()
 		control, closeControl, err = BuildProviderHTTPControlRuntime(ctx, ProviderHTTPControlRuntimeConfig{
 			ExecutorDatabaseURL: c.ExecutorDatabaseURL, ReconcilerDatabaseURL: c.ReconcilerDatabaseURL,
-			ProviderIDs: c.ProviderIDs, AllowedHosts: c.AllowedHosts, AllowHTTP: c.AllowHTTP, AllowLoopback: c.AllowLoopback,
+			ProviderIDs: c.ProviderIDs, AllowedHosts: c.AllowedHosts, TransportKinds: controlTransports, AllowHTTP: c.AllowHTTP, AllowLoopback: c.AllowLoopback,
 		}, secrets)
 		if err != nil {
 			return fail(err)
