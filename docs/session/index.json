@@ -119,9 +119,9 @@
     "ses_f7b8a241864e4340940e54633af38e0c": {
       "path": "docs/session/ses_f7b8a241864e4340940e54633af38e0c.md",
       "title": "OpenAPI Importer Alpha",
-      "status": "active",
+      "status": "completed",
       "created_at": "unix:1789373899",
-      "updated_at": "unix:1789376975",
+      "updated_at": "unix:1789377089",
       "parent_session_id": "ses_3d423882ee9a4eaa8daa05aa4f6ff6c3"
     },
     "ses_f8eacb3ddd604c48bc9d94548d912e9d": {
