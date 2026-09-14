@@ -40,6 +40,8 @@
     "db:grant-callback-ingestor": "node scripts/backend.mjs run ./cmd/operator grant-callback-ingestor",
     "db:grant-callback-observer": "node scripts/backend.mjs run ./cmd/operator grant-callback-observer",
     "db:grant-settlement": "node scripts/backend.mjs run ./cmd/operator grant-settlement",
+    "db:grant-artifact-materializer": "node scripts/backend.mjs run ./cmd/operator grant-artifact-materializer",
+    "db:grant-artifact-object-reader": "node scripts/backend.mjs run ./cmd/operator grant-artifact-object-reader",
     "key:issue": "node scripts/backend.mjs run ./cmd/operator issue-key",
     "key:revoke": "node scripts/backend.mjs run ./cmd/operator revoke-key",
     "human:provision": "node scripts/backend.mjs run ./cmd/operator provision-human",

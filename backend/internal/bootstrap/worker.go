@@ -182,13 +182,21 @@ type ReviewedWorkerServices struct {
 	dispatch        *ReviewedDispatchRuntime
 	providerControl *ReviewedProviderControlRuntime
 	settlement      *ReviewedUsageSettlementRuntime
+	artifactObjects *ReviewedArtifactObjectRuntime
 }
 
-func NewReviewedWorkerServices(dispatch *ReviewedDispatchRuntime, providerControl *ReviewedProviderControlRuntime, settlement *ReviewedUsageSettlementRuntime) (*ReviewedWorkerServices, error) {
-	if dispatch == nil && providerControl == nil && settlement == nil {
+func NewReviewedWorkerServices(dispatch *ReviewedDispatchRuntime, providerControl *ReviewedProviderControlRuntime, settlement *ReviewedUsageSettlementRuntime, artifactObjects ...*ReviewedArtifactObjectRuntime) (*ReviewedWorkerServices, error) {
+	if len(artifactObjects) > 1 {
+		return nil, errors.New("reviewed worker services accept one artifact object runtime")
+	}
+	var objects *ReviewedArtifactObjectRuntime
+	if len(artifactObjects) == 1 {
+		objects = artifactObjects[0]
+	}
+	if dispatch == nil && providerControl == nil && settlement == nil && objects == nil {
 		return nil, errors.New("reviewed worker services require at least one capability")
 	}
-	return &ReviewedWorkerServices{dispatch: dispatch, providerControl: providerControl, settlement: settlement}, nil
+	return &ReviewedWorkerServices{dispatch: dispatch, providerControl: providerControl, settlement: settlement, artifactObjects: objects}, nil
 }
 
 type ReviewedRuntimeCycleResult struct {
@@ -196,6 +204,8 @@ type ReviewedRuntimeCycleResult struct {
 	ProviderCancellationsHandled   int
 	ProviderReconciliationsHandled int
 	SettlementsHandled             int
+	ArtifactObjectsMaterialized    int
+	ArtifactObjectsExpired         int
 }
 
 // RunReviewedRuntimeCycle performs bounded background convergence. For every
@@ -204,7 +214,7 @@ type ReviewedRuntimeCycleResult struct {
 // create goroutines, or loop on its own.
 func RunReviewedRuntimeCycle(ctx context.Context, logger *slog.Logger, workspaces []rundomain.WorkspaceID, services *ReviewedWorkerServices) (ReviewedRuntimeCycleResult, error) {
 	var result ReviewedRuntimeCycleResult
-	if services == nil || (services.providerControl == nil && services.settlement == nil) {
+	if services == nil || (services.providerControl == nil && services.settlement == nil && services.artifactObjects == nil) {
 		return result, nil
 	}
 	if logger == nil || len(workspaces) == 0 || len(workspaces) > 64 {
@@ -246,6 +256,21 @@ func RunReviewedRuntimeCycle(ctx context.Context, logger *slog.Logger, workspace
 				return result, err
 			default:
 				return result, err
+			}
+		}
+		if services.artifactObjects != nil {
+			cycle, err := services.artifactObjects.CycleOne(ctx, workspace)
+			if err != nil {
+				return result, err
+			}
+			if cycle.Materialized {
+				result.ArtifactObjectsMaterialized++
+			}
+			if cycle.Expired {
+				result.ArtifactObjectsExpired++
+			}
+			if cycle.Materialized || cycle.Expired {
+				logger.Info("artifact object cycle handled durable work", "workspace_id", string(workspace), "materialized", cycle.Materialized, "expired", cycle.Expired)
 			}
 		}
 	}

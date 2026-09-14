@@ -5,25 +5,30 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"time"
 
 	filesecret "github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/filesecret"
 	supplydomain "github.com/orz-i/mender/backend/internal/contexts/supply/domain"
 )
 
 type ReviewedWorkerHostConfig struct {
-	Enabled                bool
-	HTTPDispatchEnabled    bool
-	AgentDispatchEnabled   bool
-	ProviderControlEnabled bool
-	SettlementEnabled      bool
-	SecretRoot             string
-	ExecutorDatabaseURL    string
-	ReconcilerDatabaseURL  string
-	SettlementDatabaseURL  string
-	ProviderIDs            []string
-	AllowedHosts           []string
-	AllowHTTP              bool
-	AllowLoopback          bool
+	Enabled                   bool
+	HTTPDispatchEnabled       bool
+	AgentDispatchEnabled      bool
+	ProviderControlEnabled    bool
+	SettlementEnabled         bool
+	ArtifactObjectsEnabled    bool
+	SecretRoot                string
+	ExecutorDatabaseURL       string
+	ReconcilerDatabaseURL     string
+	SettlementDatabaseURL     string
+	ArtifactObjectDatabaseURL string
+	ArtifactObjectRoot        string
+	ArtifactObjectRetention   time.Duration
+	ProviderIDs               []string
+	AllowedHosts              []string
+	AllowHTTP                 bool
+	AllowLoopback             bool
 }
 
 func strictBool(getenv func(string) string, key string) (bool, error) {
@@ -73,13 +78,16 @@ func LoadReviewedWorkerHostConfig(getenv func(string) string) (ReviewedWorkerHos
 	if c.SettlementEnabled, err = strictBool(getenv, "MENDER_REVIEWED_SETTLEMENT_ENABLED"); err != nil {
 		return ReviewedWorkerHostConfig{}, err
 	}
+	if c.ArtifactObjectsEnabled, err = strictBool(getenv, "MENDER_REVIEWED_ARTIFACT_OBJECTS_ENABLED"); err != nil {
+		return ReviewedWorkerHostConfig{}, err
+	}
 	if c.AllowHTTP, err = strictBool(getenv, "MENDER_REVIEWED_EGRESS_ALLOW_HTTP"); err != nil {
 		return ReviewedWorkerHostConfig{}, err
 	}
 	if c.AllowLoopback, err = strictBool(getenv, "MENDER_REVIEWED_EGRESS_ALLOW_LOOPBACK"); err != nil {
 		return ReviewedWorkerHostConfig{}, err
 	}
-	anyService := c.HTTPDispatchEnabled || c.AgentDispatchEnabled || c.ProviderControlEnabled || c.SettlementEnabled
+	anyService := c.HTTPDispatchEnabled || c.AgentDispatchEnabled || c.ProviderControlEnabled || c.SettlementEnabled || c.ArtifactObjectsEnabled
 	if !c.Enabled {
 		if anyService || c.AllowHTTP || c.AllowLoopback {
 			return ReviewedWorkerHostConfig{}, errors.New("reviewed worker capabilities require MENDER_REVIEWED_WORKER_RUNTIME_ENABLED=true")
@@ -117,6 +125,21 @@ func LoadReviewedWorkerHostConfig(getenv func(string) string) (ReviewedWorkerHos
 		c.SettlementDatabaseURL = strings.TrimSpace(getenv("MENDER_SETTLEMENT_DATABASE_URL"))
 		if c.SettlementDatabaseURL == "" {
 			return ReviewedWorkerHostConfig{}, errors.New("usage settlement requires settlement database URL")
+		}
+	}
+	if c.ArtifactObjectsEnabled {
+		c.ArtifactObjectDatabaseURL = strings.TrimSpace(getenv("MENDER_ARTIFACT_MATERIALIZER_DATABASE_URL"))
+		c.ArtifactObjectRoot = strings.TrimSpace(getenv("MENDER_ARTIFACT_OBJECT_ROOT"))
+		c.ArtifactObjectRetention = 24 * time.Hour
+		if raw := strings.TrimSpace(getenv("MENDER_ARTIFACT_OBJECT_RETENTION")); raw != "" {
+			retention, parseErr := time.ParseDuration(raw)
+			if parseErr != nil || retention < time.Hour || retention > 90*24*time.Hour {
+				return ReviewedWorkerHostConfig{}, errors.New("artifact object retention must be between 1h and 2160h")
+			}
+			c.ArtifactObjectRetention = retention
+		}
+		if c.ArtifactObjectDatabaseURL == "" || c.ArtifactObjectRoot == "" {
+			return ReviewedWorkerHostConfig{}, errors.New("artifact object runtime requires materializer database URL and object root")
 		}
 	}
 	return c, nil
@@ -205,7 +228,16 @@ func BuildReviewedWorkerServicesFromConfig(ctx context.Context, worker WorkerCon
 		}
 		closers = append(closers, closeSettlement)
 	}
-	services, err := NewReviewedWorkerServices(dispatch, control, settlement)
+	var artifactObjects *ReviewedArtifactObjectRuntime
+	if c.ArtifactObjectsEnabled {
+		var closeArtifacts func()
+		artifactObjects, closeArtifacts, err = BuildArtifactObjectRuntime(ctx, ArtifactObjectRuntimeConfig{DatabaseURL: c.ArtifactObjectDatabaseURL, Root: c.ArtifactObjectRoot, Retention: c.ArtifactObjectRetention})
+		if err != nil {
+			return fail(err)
+		}
+		closers = append(closers, closeArtifacts)
+	}
+	services, err := NewReviewedWorkerServices(dispatch, control, settlement, artifactObjects)
 	if err != nil {
 		return fail(err)
 	}

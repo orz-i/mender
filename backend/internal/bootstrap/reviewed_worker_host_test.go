@@ -4,10 +4,39 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 )
 
 func hostEnv(values map[string]string) func(string) string {
 	return func(key string) string { return values[key] }
+}
+
+func TestReviewedWorkerHostConfigScopesArtifactObjectRuntime(t *testing.T) {
+	values := map[string]string{
+		"MENDER_REVIEWED_WORKER_RUNTIME_ENABLED":    "true",
+		"MENDER_REVIEWED_ARTIFACT_OBJECTS_ENABLED":  "true",
+		"MENDER_ARTIFACT_MATERIALIZER_DATABASE_URL": "postgres://artifact_materializer:pw@127.0.0.1:5432/mender?sslmode=disable",
+		"MENDER_ARTIFACT_OBJECT_ROOT":               t.TempDir(),
+		"MENDER_ARTIFACT_OBJECT_RETENTION":          "48h",
+	}
+	cfg, err := LoadReviewedWorkerHostConfig(hostEnv(values))
+	if err != nil || !cfg.ArtifactObjectsEnabled || cfg.ArtifactObjectRetention != 48*time.Hour || cfg.HTTPDispatchEnabled || cfg.ProviderControlEnabled || cfg.SettlementEnabled {
+		t.Fatal("valid Artifact-only reviewed runtime config rejected", cfg, err)
+	}
+	for _, key := range []string{"MENDER_ARTIFACT_MATERIALIZER_DATABASE_URL", "MENDER_ARTIFACT_OBJECT_ROOT"} {
+		copy := map[string]string{}
+		for k, v := range values {
+			copy[k] = v
+		}
+		delete(copy, key)
+		if _, err = LoadReviewedWorkerHostConfig(hostEnv(copy)); err == nil {
+			t.Fatal("missing Artifact runtime location accepted", key)
+		}
+	}
+	values["MENDER_ARTIFACT_OBJECT_RETENTION"] = "30m"
+	if _, err = LoadReviewedWorkerHostConfig(hostEnv(values)); err == nil {
+		t.Fatal("too-short Artifact retention accepted")
+	}
 }
 
 func TestReviewedWorkerServicesRejectsAgentDispatchWithoutWorkerDispatchBeforeOpeningResources(t *testing.T) {

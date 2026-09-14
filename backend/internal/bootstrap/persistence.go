@@ -24,9 +24,11 @@ import (
 	connectionapp "github.com/orz-i/mender/backend/internal/contexts/connections/application"
 	runfacade "github.com/orz-i/mender/backend/internal/contexts/execution/adapters/inbound/facade"
 	runhttp "github.com/orz-i/mender/backend/internal/contexts/execution/adapters/inbound/httpapi"
+	runartifactcap "github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/artifactcap"
 	"github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/coordinatedcancel"
 	runcursor "github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/cursor"
 	runidentityaccess "github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/identityaccess"
+	runobjectfs "github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/objectfs"
 	runpg "github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/postgres"
 	runapp "github.com/orz-i/mender/backend/internal/contexts/execution/application"
 	governancehttp "github.com/orz-i/mender/backend/internal/contexts/governance/adapters/inbound/httpapi"
@@ -80,6 +82,11 @@ type APIConfig struct {
 	RunReadAPIEnabled                       bool
 	DatabaseURL                             string
 	CursorSigningKey                        []byte
+	ArtifactObjectReadEnabled               bool
+	ArtifactObjectDatabaseURL               string
+	ArtifactObjectRoot                      string
+	ArtifactObjectSigningKeyFile            string
+	ArtifactObjectCapabilityTTL             time.Duration
 	CoordinatedCancelEnabled                bool
 	ProviderCancelEnabled                   bool
 	CancellationDatabaseURL                 string
@@ -458,6 +465,33 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	default:
 		return c, errors.New("MENDER_RUN_READ_API_ENABLED must be true or false")
 	}
+	switch getenv("MENDER_ARTIFACT_OBJECT_READ_ENABLED") {
+	case "", "false":
+	case "true":
+		c.ArtifactObjectReadEnabled = true
+		c.ArtifactObjectDatabaseURL = strings.TrimSpace(getenv("MENDER_ARTIFACT_OBJECT_READER_DATABASE_URL"))
+		c.ArtifactObjectRoot = strings.TrimSpace(getenv("MENDER_ARTIFACT_OBJECT_ROOT"))
+		c.ArtifactObjectSigningKeyFile = strings.TrimSpace(getenv("MENDER_ARTIFACT_OBJECT_SIGNING_KEY_FILE"))
+		c.ArtifactObjectCapabilityTTL = 2 * time.Minute
+		if raw := strings.TrimSpace(getenv("MENDER_ARTIFACT_OBJECT_CAPABILITY_TTL")); raw != "" {
+			ttl, err := time.ParseDuration(raw)
+			if err != nil || ttl < 30*time.Second || ttl > 5*time.Minute {
+				return APIConfig{}, errors.New("Artifact object capability TTL must be between 30s and 5m")
+			}
+			c.ArtifactObjectCapabilityTTL = ttl
+		}
+		if !c.RunReadAPIEnabled || c.ArtifactObjectDatabaseURL == "" || c.ArtifactObjectRoot == "" || c.ArtifactObjectSigningKeyFile == "" {
+			return APIConfig{}, errors.New("Artifact object reads require Run read API, reader database URL, object root and signing key file")
+		}
+		if _, err := runartifactcap.NewFromFile(c.ArtifactObjectSigningKeyFile); err != nil {
+			return APIConfig{}, err
+		}
+		if _, err := runobjectfs.New(c.ArtifactObjectRoot); err != nil {
+			return APIConfig{}, err
+		}
+	default:
+		return c, errors.New("MENDER_ARTIFACT_OBJECT_READ_ENABLED must be true or false")
+	}
 	switch getenv("MENDER_CONSOLE_RUN_DELEGATION_ENABLED") {
 	case "", "false":
 	case "true":
@@ -497,7 +531,7 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	}
 	switch getenv("MENDER_RUN_API_ENABLED") {
 	case "", "false":
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.ProviderCallbackEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleExecutionRiskEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleCatalogEnabled || c.AdminCatalogReviewEnabled || c.AdminCatalogPolicyEnabled || c.AdminProviderCallbacksEnabled || c.ConsoleConnectionOAuthEnabled {
+		if c.RunReadAPIEnabled || c.ArtifactObjectReadEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.ProviderCallbackEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleExecutionRiskEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleCatalogEnabled || c.AdminCatalogReviewEnabled || c.AdminCatalogPolicyEnabled || c.AdminProviderCallbacksEnabled || c.ConsoleConnectionOAuthEnabled {
 			return APIConfig{}, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return c, nil
@@ -531,7 +565,7 @@ func (systemClock) Now() time.Time { return time.Now().UTC().Truncate(time.Micro
 // BuildAPI never migrates, seeds data or falls back to a test repository.
 func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	if !c.RunAPIEnabled {
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.ProviderCallbackEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleExecutionRiskEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleCatalogEnabled || c.AdminCatalogReviewEnabled || c.AdminCatalogPolicyEnabled || c.AdminProviderCallbacksEnabled || c.ConsoleConnectionOAuthEnabled {
+		if c.RunReadAPIEnabled || c.ArtifactObjectReadEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.ProviderCallbackEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleExecutionRiskEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleCatalogEnabled || c.AdminCatalogReviewEnabled || c.AdminCatalogPolicyEnabled || c.AdminProviderCallbacksEnabled || c.ConsoleConnectionOAuthEnabled {
 			return nil, nil, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return httpserver.NewRouter(), func() {}, nil
@@ -587,6 +621,7 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 		return nil, nil, err
 	}
 	var cancelPool *pgxpool.Pool
+	var artifactObjectPool *pgxpool.Pool
 	var callbackPool *pgxpool.Pool
 	var admissionPool *pgxpool.Pool
 	var browserSessionPool *pgxpool.Pool
@@ -599,6 +634,9 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	var commerceObserverPool *pgxpool.Pool
 	var startDelegationFacade *facade.RunStartDelegations
 	closePools := func() {
+		if artifactObjectPool != nil {
+			artifactObjectPool.Close()
+		}
 		if callbackObserverPool != nil {
 			callbackObserverPool.Close()
 		}
@@ -686,6 +724,46 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 		return failed(err)
 	}
 	registers := []func(*gin.Engine){handler.Register}
+	var artifactObjectRepository *runpg.Repository
+	var artifactObjectStore *runobjectfs.Store
+	var artifactObjectCodec *runartifactcap.Codec
+	if c.ArtifactObjectReadEnabled {
+		artifactObjectPool, err = database.Open(start, c.ArtifactObjectDatabaseURL)
+		if err != nil {
+			return failed(err)
+		}
+		readerCfg, objectCfg := pool.Config().ConnConfig, artifactObjectPool.Config().ConnConfig
+		if readerCfg.Host != objectCfg.Host || readerCfg.Port != objectCfg.Port || readerCfg.Database != objectCfg.Database || readerCfg.User == objectCfg.User {
+			return failed(errors.New("Artifact object reads require the same database with a distinct restricted role"))
+		}
+		if err = migrations.Verify(start, artifactObjectPool); err != nil {
+			return failed(err)
+		}
+		if err = database.ArtifactObjectReaderRole(start, artifactObjectPool); err != nil {
+			return failed(err)
+		}
+		artifactObjectStore, err = runobjectfs.New(c.ArtifactObjectRoot)
+		if err != nil {
+			return failed(err)
+		}
+		artifactObjectCodec, err = runartifactcap.NewFromFile(c.ArtifactObjectSigningKeyFile)
+		if err != nil {
+			return failed(err)
+		}
+		artifactObjectRepository = runpg.New(artifactObjectPool)
+		machineObjectAccess, accessErr := runapp.NewArtifactObjectAccess(artifactObjectRepository, artifactObjectStore, access, artifactObjectCodec, systemClock{}, c.ArtifactObjectCapabilityTTL)
+		if accessErr != nil {
+			return failed(accessErr)
+		}
+		objectHandler, handlerErr := runhttp.NewArtifactObjects(machineObjectAccess, access)
+		if handlerErr != nil {
+			return failed(handlerErr)
+		}
+		registers = append(registers, func(router *gin.Engine) {
+			objectHandler.RegisterProtectedAt(router, "/api/v1")
+			objectHandler.RegisterSigned(router)
+		})
+	}
 	if c.ProviderCallbackEnabled {
 		callbackPool, err = database.Open(start, c.ProviderCallbackDatabaseURL)
 		if err != nil {
@@ -841,6 +919,17 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 			}
 
 			delegatedAccess := runidentityaccess.NewDelegated(delegationFacade)
+			if c.ArtifactObjectReadEnabled {
+				delegatedObjectAccess, objectErr := runapp.NewArtifactObjectAccess(artifactObjectRepository, artifactObjectStore, delegatedAccess, artifactObjectCodec, systemClock{}, c.ArtifactObjectCapabilityTTL)
+				if objectErr != nil {
+					return failed(objectErr)
+				}
+				delegatedObjectHandler, objectErr := runhttp.NewArtifactObjects(delegatedObjectAccess, delegatedAccess)
+				if objectErr != nil {
+					return failed(objectErr)
+				}
+				registers = append(registers, func(router *gin.Engine) { delegatedObjectHandler.RegisterProtectedAt(router, "/api/console/v1") })
+			}
 			delegatedRuns, buildErr := runapp.NewService(repository, delegatedAccess, systemClock{})
 			if buildErr != nil {
 				return failed(buildErr)

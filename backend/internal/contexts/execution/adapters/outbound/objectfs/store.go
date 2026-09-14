@@ -159,3 +159,46 @@ func (s *Store) PutArtifactObject(ctx context.Context, candidate application.Art
 	}
 	return application.StoredArtifactObject{ObjectKey: key, ContentSHA256: contentSHA, SizeBytes: int64(len(content))}, nil
 }
+
+func (s *Store) ReadArtifactObject(ctx context.Context, key, expectedSHA string, expectedSize int64) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if !domain.ValidArtifactObjectKey(key) || !domain.ValidSHA256(expectedSHA) || expectedSize <= application.ArtifactObjectThresholdBytes || expectedSize > 1<<20 {
+		return nil, ErrObjectStoreUnavailable
+	}
+	path, err := s.pathFor(key)
+	if err != nil {
+		return nil, ErrObjectStoreUnavailable
+	}
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Size() != expectedSize {
+		return nil, ErrObjectStoreUnavailable
+	}
+	content, err := os.ReadFile(path)
+	if err != nil || int64(len(content)) != expectedSize || digest(content) != expectedSHA {
+		return nil, ErrObjectStoreUnavailable
+	}
+	return content, nil
+}
+
+func (s *Store) DeleteArtifactObject(ctx context.Context, key string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	path, err := s.pathFor(key)
+	if err != nil {
+		return ErrObjectStoreUnavailable
+	}
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+		return ErrObjectStoreUnavailable
+	}
+	if err = os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return ErrObjectStoreUnavailable
+	}
+	return nil
+}

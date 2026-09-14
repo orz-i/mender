@@ -82,3 +82,84 @@ func (r *Repository) RecordArtifactObject(ctx context.Context, object domain.Art
 	}
 	return stored, nil
 }
+
+func (r *Repository) FindArtifactObject(ctx context.Context, workspace domain.WorkspaceID, runID domain.RunID, artifactID string) (domain.ArtifactObject, error) {
+	if err := ctx.Err(); err != nil {
+		return domain.ArtifactObject{}, err
+	}
+	if !workspace.IsValid() || !runID.IsValid() || !domain.ValidArtifactID(artifactID) {
+		return domain.ArtifactObject{}, application.ErrArtifactObjectNotFound
+	}
+	tx, err := r.scoped(ctx, workspace)
+	if err != nil {
+		return domain.ArtifactObject{}, err
+	}
+	defer rollback(tx)
+	object, err := scanArtifactObject(tx.QueryRow(ctx, `SELECT workspace_id,run_id,artifact_id,object_key,content_sha256,size_bytes,state,materialized_at,expires_at,deleted_at
+	 FROM execution.artifact_objects WHERE workspace_id=$1 AND run_id=$2 AND artifact_id=$3`, string(workspace), string(runID), artifactID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.ArtifactObject{}, application.ErrArtifactObjectNotFound
+	}
+	if err != nil || object.Validate() != nil || object.WorkspaceID != workspace || object.RunID != runID || object.ArtifactID != artifactID {
+		return domain.ArtifactObject{}, application.ErrArtifactObjectUnavailable
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return domain.ArtifactObject{}, application.ErrArtifactObjectUnavailable
+	}
+	return object, nil
+}
+
+func (r *Repository) NextExpiredArtifactObject(ctx context.Context, workspace domain.WorkspaceID, at time.Time) (domain.ArtifactObject, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return domain.ArtifactObject{}, false, err
+	}
+	if !workspace.IsValid() || at.IsZero() {
+		return domain.ArtifactObject{}, false, application.ErrArtifactObjectUnavailable
+	}
+	tx, err := r.scoped(ctx, workspace)
+	if err != nil {
+		return domain.ArtifactObject{}, false, err
+	}
+	defer rollback(tx)
+	object, err := scanArtifactObject(tx.QueryRow(ctx, `SELECT workspace_id,run_id,artifact_id,object_key,content_sha256,size_bytes,state,materialized_at,expires_at,deleted_at
+	 FROM execution.artifact_objects WHERE workspace_id=$1 AND state='available' AND expires_at<=$2
+	 ORDER BY expires_at ASC,artifact_id COLLATE "C" ASC LIMIT 1`, string(workspace), at))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.ArtifactObject{}, false, nil
+	}
+	if err != nil || object.Validate() != nil || object.State != domain.ArtifactObjectAvailable || object.WorkspaceID != workspace || at.Before(object.ExpiresAt) {
+		return domain.ArtifactObject{}, false, application.ErrArtifactObjectUnavailable
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return domain.ArtifactObject{}, false, application.ErrArtifactObjectUnavailable
+	}
+	return object, true, nil
+}
+
+func (r *Repository) ExpireArtifactObject(ctx context.Context, object domain.ArtifactObject, at time.Time) (domain.ArtifactObject, error) {
+	if err := ctx.Err(); err != nil {
+		return domain.ArtifactObject{}, err
+	}
+	if object.Validate() != nil || object.State != domain.ArtifactObjectAvailable || at.IsZero() || at.Before(object.ExpiresAt) {
+		return domain.ArtifactObject{}, application.ErrArtifactObjectConflict
+	}
+	tx, err := r.scoped(ctx, object.WorkspaceID)
+	if err != nil {
+		return domain.ArtifactObject{}, err
+	}
+	defer rollback(tx)
+	_, err = tx.Exec(ctx, `UPDATE execution.artifact_objects SET state='expired',deleted_at=$4
+	 WHERE workspace_id=$1 AND artifact_id=$2 AND object_key=$3 AND state='available' AND expires_at<=$4`, string(object.WorkspaceID), object.ArtifactID, object.ObjectKey, at)
+	if err != nil {
+		return domain.ArtifactObject{}, application.ErrArtifactObjectUnavailable
+	}
+	expired, err := scanArtifactObject(tx.QueryRow(ctx, `SELECT workspace_id,run_id,artifact_id,object_key,content_sha256,size_bytes,state,materialized_at,expires_at,deleted_at
+	 FROM execution.artifact_objects WHERE workspace_id=$1 AND artifact_id=$2`, string(object.WorkspaceID), object.ArtifactID))
+	if err != nil || expired.Validate() != nil || expired.State != domain.ArtifactObjectExpired {
+		return domain.ArtifactObject{}, application.ErrArtifactObjectConflict
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return domain.ArtifactObject{}, application.ErrArtifactObjectUnavailable
+	}
+	return expired, nil
+}
