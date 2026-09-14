@@ -2,6 +2,7 @@ import { MenderApiError } from './runs.ts';
 
 export type ConsoleCatalogState = 'draft' | 'published' | 'retired';
 export type ConsolePublicationApprovalState = 'pending' | 'approved' | 'rejected' | 'consumed' | 'expired';
+export type ConsoleOpenAPIDiagnosticSeverity = 'error' | 'warning';
 
 export interface ConsoleCatalogToolVersion {
   toolVersionId: string;
@@ -23,6 +24,113 @@ export interface ConsoleCatalogToolVersion {
   updatedAt: string;
   publishedAt: string | null;
   retiredAt: string | null;
+}
+
+function openAPIDiagnostic(value: unknown): ConsoleOpenAPIDiagnostic {
+  const raw = object(value);
+  exactKeys(raw, ['code', 'severity', 'operation_id', 'path', 'method', 'message'], 'OpenAPI diagnostic');
+  const severity = string(raw.severity);
+  if (severity !== 'error' && severity !== 'warning') throw new Error('服务返回了无法识别的 OpenAPI diagnostic severity');
+  return {
+    code: string(raw.code), severity, operationId: optionalString(raw.operation_id), path: optionalString(raw.path), method: optionalString(raw.method), message: string(raw.message),
+  };
+}
+
+function nullableSchema(value: unknown) {
+  if (value === null) return null;
+  return schema(value);
+}
+
+function openAPIOperation(value: unknown): ConsoleOpenAPIOperation {
+  const raw = object(value);
+  exactKeys(raw, ['operation_id', 'method', 'path', 'server_url', 'title', 'description', 'input_schema', 'output_schema', 'side_effect', 'idempotency', 'importable', 'diagnostics'], 'OpenAPI operation');
+  if (!Array.isArray(raw.diagnostics)) throw new Error('服务返回了无法识别的 OpenAPI diagnostics');
+  const sideEffect = string(raw.side_effect); const idempotency = string(raw.idempotency); const importable = boolean(raw.importable);
+  if (sideEffect !== 'read_only' && sideEffect !== 'write') throw new Error('服务返回了无法识别的 OpenAPI side effect');
+  if (!['safe_read', 'idempotent', 'unsafe'].includes(idempotency)) throw new Error('服务返回了无法识别的 OpenAPI idempotency');
+  const operation: ConsoleOpenAPIOperation = {
+    operationId: string(raw.operation_id), method: string(raw.method), path: string(raw.path), serverUrl: typeof raw.server_url === 'string' ? raw.server_url : '',
+    title: nullableOrEmptyString(raw.title), description: nullableOrEmptyString(raw.description), inputSchema: nullableSchema(raw.input_schema), outputSchema: nullableSchema(raw.output_schema),
+    sideEffect, idempotency: idempotency as ConsoleOpenAPIOperation['idempotency'], importable, diagnostics: raw.diagnostics.map(openAPIDiagnostic),
+  };
+  if (operation.importable && (operation.method !== 'POST' || !operation.serverUrl.startsWith('https://') || operation.inputSchema === null || operation.outputSchema === null || operation.sideEffect !== 'write' || operation.idempotency !== 'unsafe' || operation.diagnostics.some((item) => item.severity === 'error'))) {
+    throw new Error('服务返回了不一致的 OpenAPI importable contract');
+  }
+  return operation;
+}
+
+function openAPIPreview(value: unknown): ConsoleOpenAPIPreview {
+  const raw = object(value);
+  exactKeys(raw, ['openapi_version', 'title', 'operations', 'diagnostics'], 'OpenAPI preview');
+  if (!Array.isArray(raw.operations) || !Array.isArray(raw.diagnostics)) throw new Error('服务返回了无法识别的 OpenAPI preview');
+  return { openapiVersion: string(raw.openapi_version), title: nullableOrEmptyString(raw.title), operations: raw.operations.map(openAPIOperation), diagnostics: raw.diagnostics.map(openAPIDiagnostic) };
+}
+
+function openAPIImportResult(value: unknown): ConsoleOpenAPIImportResult {
+  const raw = object(value);
+  exactKeys(raw, ['tool_version', 'source_operation'], 'OpenAPI import result');
+  const importedToolRaw = object(raw.tool_version);
+  exactKeys(importedToolRaw, ['tool_version_id', 'tool_id', 'version', 'provider_id', 'price_version_id', 'deployment_revision', 'title', 'description', 'input_schema', 'output_schema', 'side_effect', 'idempotency', 'mcp_publishable', 'revision', 'state', 'created_at', 'updated_at', 'published_at', 'retired_at'], 'OpenAPI imported ToolVersion');
+  const toolVersion = tool(importedToolRaw); const sourceOperation = openAPIOperation(raw.source_operation);
+  if (!sourceOperation.importable || toolVersion.state !== 'draft' || toolVersion.mcpPublishable || toolVersion.sideEffect !== sourceOperation.sideEffect || toolVersion.idempotency !== sourceOperation.idempotency) throw new Error('服务返回了不一致的 OpenAPI import result');
+  return { toolVersion, sourceOperation };
+}
+
+function nullableOrEmptyString(value: unknown) {
+  if (typeof value !== 'string') throw new Error('服务返回了无法识别的 Catalog 响应');
+  return value;
+}
+
+function exactKeys(raw: Record<string, unknown>, expected: string[], label: string) {
+  const actual = Object.keys(raw).sort(); const wanted = [...expected].sort();
+  if (actual.length !== wanted.length || actual.some((key, index) => key !== wanted[index])) throw new Error(`服务返回了无法识别的 ${label}`);
+}
+
+export interface ConsoleOpenAPIDiagnostic {
+  code: string;
+  severity: ConsoleOpenAPIDiagnosticSeverity;
+  operationId: string | null;
+  path: string | null;
+  method: string | null;
+  message: string;
+}
+
+export interface ConsoleOpenAPIOperation {
+  operationId: string;
+  method: string;
+  path: string;
+  serverUrl: string;
+  title: string;
+  description: string;
+  inputSchema: Record<string, unknown> | null;
+  outputSchema: Record<string, unknown> | null;
+  sideEffect: 'read_only' | 'write';
+  idempotency: 'safe_read' | 'idempotent' | 'unsafe';
+  importable: boolean;
+  diagnostics: ConsoleOpenAPIDiagnostic[];
+}
+
+export interface ConsoleOpenAPIPreview {
+  openapiVersion: string;
+  title: string;
+  operations: ConsoleOpenAPIOperation[];
+  diagnostics: ConsoleOpenAPIDiagnostic[];
+}
+
+export interface ConsoleOpenAPIImportInput {
+  document: string;
+  operationId: string;
+  toolVersionId: string;
+  toolId: string;
+  version: string;
+  providerId: string;
+  priceVersionId: string;
+  deploymentRevision: string;
+}
+
+export interface ConsoleOpenAPIImportResult {
+  toolVersion: ConsoleCatalogToolVersion;
+  sourceOperation: ConsoleOpenAPIOperation;
 }
 
 function policyDecision(value: unknown): ConsolePublicationPolicyDecision {
@@ -335,6 +443,23 @@ export function createConsoleCatalogClient(baseUrl = '', fetcher: typeof fetch =
       const response = await request(fetcher, root(workspaceId), { signal }); const raw = object(await response.json()); const data = object(raw.data);
       if (!Array.isArray(data.tool_versions) || !Array.isArray(data.toolsets) || !Array.isArray(data.connections) || !Array.isArray(data.price_versions) || !Array.isArray(data.budget_periods) || !Array.isArray(data.publication_approvals)) throw new Error('服务返回了无法识别的 Catalog snapshot');
       return { toolVersions: data.tool_versions.map(tool), toolsets: data.toolsets.map(toolset), connections: data.connections.map(connection), priceVersions: data.price_versions.map(price), budgetPeriods: data.budget_periods.map(budget), publicationApprovals: data.publication_approvals.map(approval) };
+    },
+    async previewOpenAPI(workspaceId: string, document: string, signal?: AbortSignal): Promise<ConsoleOpenAPIPreview> {
+      if (!workspaceId) throw new Error('Workspace ID is required');
+      if (document.length < 2 || document.length > 1_048_576 || document.includes('\0')) throw new Error('OpenAPI document must be an inline document up to 1 MiB');
+      const response = await request(fetcher, `${root(workspaceId)}/openapi/preview`, { method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ document }) });
+      return openAPIPreview(object(await response.json()).data);
+    },
+    async importOpenAPIOperation(workspaceId: string, input: ConsoleOpenAPIImportInput, csrfToken: string, signal?: AbortSignal): Promise<ConsoleOpenAPIImportResult> {
+      if (!workspaceId) throw new Error('Workspace ID is required');
+      if (input.document.length < 2 || input.document.length > 1_048_576 || input.document.includes('\0')) throw new Error('OpenAPI document must be an inline document up to 1 MiB');
+      const response = await request(fetcher, `${root(workspaceId)}/openapi/import`, {
+        method: 'POST', signal, headers: { ...mutation(csrfToken), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ document: input.document, operation_id: input.operationId, tool_version_id: input.toolVersionId, tool_id: input.toolId, version: input.version, provider_id: input.providerId, price_version_id: input.priceVersionId, deployment_revision: input.deploymentRevision }),
+      });
+      const result = openAPIImportResult(object(await response.json()).data);
+      if (result.sourceOperation.operationId !== input.operationId || result.toolVersion.toolVersionId !== input.toolVersionId || result.toolVersion.toolId !== input.toolId || result.toolVersion.version !== input.version || result.toolVersion.providerId !== input.providerId || result.toolVersion.priceVersionId !== input.priceVersionId || result.toolVersion.deploymentRevision !== input.deploymentRevision) throw new Error('服务返回了与 OpenAPI import 请求不一致的 draft');
+      return result;
     },
     async requestToolsetReview(workspaceId: string, toolsetId: string, csrfToken: string, signal?: AbortSignal) {
       const response = await request(fetcher, `${root(workspaceId)}/toolsets/${encodeURIComponent(toolsetId)}/review-requests`, { method: 'POST', signal, headers: mutation(csrfToken) });

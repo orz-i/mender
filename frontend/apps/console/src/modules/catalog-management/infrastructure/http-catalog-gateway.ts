@@ -31,6 +31,8 @@ export function createCatalogGateway(): CatalogGateway {
       catch (error) { return mapError(error); }
     },
     async snapshot(workspaceId, signal) { try { return await catalog.snapshot(workspaceId, signal); } catch (error) { return mapError(error); } },
+    async previewOpenAPI(workspaceId, source, signal) { try { return await catalog.previewOpenAPI(workspaceId, source, signal); } catch (error) { return mapError(error); } },
+    async importOpenAPIOperation(workspaceId, input, signal) { try { return await catalog.importOpenAPIOperation(workspaceId, { document: input.source, operationId: input.operationId, toolVersionId: input.toolVersionId, toolId: input.toolId, version: input.version, providerId: input.providerId, priceVersionId: input.priceVersionId, deploymentRevision: input.deploymentRevision }, csrf(), signal); } catch (error) { return mapError(error); } },
     async createToolVersion(workspaceId, input, signal) { try { return await catalog.createToolVersion(workspaceId, input, csrf(), signal); } catch (error) { return mapError(error); } },
     async updateToolVersion(workspaceId, input, signal) { try { return await catalog.updateToolVersion(workspaceId, input, csrf(), signal); } catch (error) { return mapError(error); } },
     async toolVersionPreflight(workspaceId, id, signal) { try { return await catalog.toolVersionPreflight(workspaceId, id, csrf(), signal); } catch (error) { return mapError(error); } },

@@ -1,4 +1,4 @@
-import type { CatalogBinding, CatalogBindingInput, CatalogPreflight, CatalogSnapshot, CatalogToolVersion, CatalogToolVersionInput, CatalogToolset, CatalogWorkspace, PublicationPolicyDecision, PublicationSubmission } from '../domain/catalog';
+import type { CatalogBinding, CatalogBindingInput, CatalogPreflight, CatalogSnapshot, CatalogToolVersion, CatalogToolVersionInput, CatalogToolset, CatalogWorkspace, OpenAPIImportInput, OpenAPIImportResult, OpenAPIPreview, PublicationPolicyDecision, PublicationSubmission } from '../domain/catalog';
 
 export class CatalogLoginRequiredError extends Error {}
 export class CatalogPolicyDeniedError extends Error {
@@ -9,6 +9,8 @@ export class CatalogPolicyDeniedError extends Error {
 export interface CatalogGateway {
   workspaces(signal?: AbortSignal): Promise<CatalogWorkspace[]>;
   snapshot(workspaceId: string, signal?: AbortSignal): Promise<CatalogSnapshot>;
+  previewOpenAPI(workspaceId: string, source: string, signal?: AbortSignal): Promise<OpenAPIPreview>;
+  importOpenAPIOperation(workspaceId: string, input: OpenAPIImportInput, signal?: AbortSignal): Promise<OpenAPIImportResult>;
   createToolVersion(workspaceId: string, input: CatalogToolVersionInput, signal?: AbortSignal): Promise<CatalogToolVersion>;
   updateToolVersion(workspaceId: string, input: CatalogToolVersionInput, signal?: AbortSignal): Promise<CatalogToolVersion>;
   toolVersionPreflight(workspaceId: string, toolVersionId: string, signal?: AbortSignal): Promise<CatalogPreflight>;

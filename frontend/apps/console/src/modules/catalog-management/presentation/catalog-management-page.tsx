@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router';
 import { Button } from '@mender/ui';
 import { CatalogLoginRequiredError, CatalogPolicyDeniedError, type CatalogGateway } from '../application/catalog-gateway';
-import { draftToolInput, latestApproval, type CatalogBindingInput, type CatalogPreflight, type CatalogToolVersion, type CatalogToolVersionInput, type PublicationApproval, type PublicationPolicyDecision } from '../domain/catalog';
+import { draftToolInput, latestApproval, type CatalogBindingInput, type CatalogPreflight, type CatalogToolVersion, type CatalogToolVersionInput, type OpenAPIDiagnostic, type OpenAPIImportInput, type OpenAPIOperation, type OpenAPIPreview, type PublicationApproval, type PublicationPolicyDecision } from '../domain/catalog';
 
 function message(error: unknown) { return error instanceof Error ? error.message : 'Catalog 操作失败。'; }
 function formatTime(value: string | null) { if (!value) return '—'; const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(date); }
@@ -17,9 +17,20 @@ const issueLabel: Record<string, string> = {
 const approvalLabel = { pending: '等待审核', approved: '已批准', rejected: '已拒绝', consumed: '已消费', expired: '已过期/失效' } as const;
 
 type ToolForm = Omit<CatalogToolVersionInput, 'inputSchema' | 'outputSchema'> & { inputSchemaText: string; outputSchemaText: string };
+type OpenAPIImportForm = Omit<OpenAPIImportInput, 'source' | 'operationId'>;
+const emptyOpenAPIImportForm: OpenAPIImportForm = { toolVersionId: '', toolId: '', version: '', providerId: '', priceVersionId: '', deploymentRevision: '' };
 function formFromTool(tool?: CatalogToolVersion): ToolForm {
   const input = draftToolInput(tool);
   return { ...input, inputSchemaText: JSON.stringify(input.inputSchema, null, 2), outputSchemaText: JSON.stringify(input.outputSchema, null, 2) };
+}
+
+function OpenAPIDiagnostics({ items }: { items: OpenAPIDiagnostic[] }) {
+  if (items.length === 0) return null;
+  return <div className={items.some((item) => item.severity === 'error') ? 'error-panel' : 'empty-state'} role="status"><strong>Document diagnostics</strong>{items.map((item, index) => <span key={`${item.code}:${item.operationId ?? ''}:${index}`}><span className="mono">{item.severity} · {item.code}</span> · {item.message}</span>)}</div>;
+}
+
+function OpenAPIOperationFacts({ items, selected }: { items: OpenAPIOperation[]; selected: string }) {
+  return <div className="run-table-wrap"><table className="run-table"><thead><tr><th>Operation</th><th>Server facts</th><th>Diagnostics</th></tr></thead><tbody>{items.map((item) => <tr key={`${item.method}:${item.path}:${item.operationId}`}><td><strong className="mono">{item.operationId}</strong><div>{item.method} <span className="mono">{item.path}</span></div><div className="muted-copy mono">{item.serverUrl || 'no reviewed server'}</div></td><td><span className={`state-badge state-${item.importable ? 'published' : 'retired'}`}>{item.importable ? 'importable' : 'blocked'}</span><div className="muted-copy">side effect {item.sideEffect} · idempotency {item.idempotency}</div>{selected === item.operationId && <div className="muted-copy">当前选择</div>}</td><td>{item.diagnostics.length === 0 ? <span className="muted-copy">无 diagnostic</span> : item.diagnostics.map((diagnostic, index) => <div key={`${diagnostic.code}:${index}`}><span className="mono">{diagnostic.severity} · {diagnostic.code}</span><div className="muted-copy">{diagnostic.message}</div></div>)}</td></tr>)}</tbody></table></div>;
 }
 function PolicyDecisionStatus({ value }: { value: PublicationPolicyDecision }) {
   const denied = value.outcome === 'deny';
@@ -41,6 +52,10 @@ export function CatalogManagementPage({ gateway }: { gateway: CatalogGateway }) 
   const workspaceId = selection || workspaces.data?.[0]?.id || '';
   const snapshot = useQuery({ queryKey: ['console-catalog', workspaceId], enabled: workspaceId !== '', queryFn: ({ signal }) => gateway.snapshot(workspaceId, signal), retry: false });
   const [toolForm, setToolForm] = useState<ToolForm>(() => formFromTool());
+  const [openAPIDocument, setOpenAPIDocument] = useState('');
+  const [openAPIPreview, setOpenAPIPreview] = useState<OpenAPIPreview | null>(null);
+  const [openAPIOperationId, setOpenAPIOperationId] = useState('');
+  const [openAPIImportForm, setOpenAPIImportForm] = useState<OpenAPIImportForm>(emptyOpenAPIImportForm);
   const [editingTool, setEditingTool] = useState<string | null>(null);
   const [toolsetId, setToolsetId] = useState('');
   const [bindingToolset, setBindingToolset] = useState('');
@@ -62,6 +77,7 @@ export function CatalogManagementPage({ gateway }: { gateway: CatalogGateway }) 
   const selectedBindingSet = bindingToolset || draftToolsets[0]?.id || '';
   const selectedConnection = bindingConnection || snapshot.data?.connections[0]?.connectionId || '';
   const selectedBudget = bindingBudget || snapshot.data?.budgetPeriods[0]?.budgetId || '';
+  const selectedOpenAPIOperation = openAPIPreview?.operations.find((item) => item.operationId === openAPIOperationId) ?? null;
 
   async function refresh() { await queryClient.invalidateQueries({ queryKey: ['console-catalog', workspaceId] }); }
   async function act(key: string, operation: () => Promise<void>, success: string) {
@@ -78,6 +94,22 @@ export function CatalogManagementPage({ gateway }: { gateway: CatalogGateway }) 
     try { input = toToolInput(toolForm); } catch (error) { setActionError(error); return; }
     const key = `tool:${input.toolVersionId}`;
     await act('save-tool', async () => { if (editingTool) await gateway.updateToolVersion(workspaceId, input); else await gateway.createToolVersion(workspaceId, input); clearPreflight(key); clearPolicyDecision(key); setEditingTool(null); setToolForm(formFromTool()); }, editingTool ? 'ToolVersion 草稿已更新。' : 'ToolVersion 草稿已创建。');
+  };
+  const previewOpenAPI = async () => {
+    setBusy('openapi-preview'); setActionError(null); setNotice(''); setOpenAPIPreview(null); setOpenAPIOperationId('');
+    try { setOpenAPIPreview(await gateway.previewOpenAPI(workspaceId, openAPIDocument)); }
+    catch (error) { setActionError(error); }
+    finally { setBusy(''); }
+  };
+  const importOpenAPI = async () => {
+    if (!selectedOpenAPIOperation?.importable) { setActionError(new Error('请选择服务端标记为 importable 的 operation。')); return; }
+    setBusy('openapi-import'); setActionError(null); setNotice('');
+    try {
+      const result = await gateway.importOpenAPIOperation(workspaceId, { source: openAPIDocument, operationId: selectedOpenAPIOperation.operationId, ...openAPIImportForm });
+      await refresh(); setNotice(`OpenAPI operation ${result.sourceOperation.operationId} 已创建 ToolVersion draft ${result.toolVersion.toolVersionId}；尚未发布。`);
+      setOpenAPIImportForm(emptyOpenAPIImportForm); setOpenAPIOperationId('');
+    } catch (error) { setActionError(error); }
+    finally { setBusy(''); }
   };
   async function requestReview(kind: 'tool' | 'set', id: string) {
     const key = `${kind}:${id}`; setBusy(`review-${kind}:${id}`); setActionError(null); setNotice('');
@@ -121,12 +153,33 @@ export function CatalogManagementPage({ gateway }: { gateway: CatalogGateway }) 
     {workspaces.error && !(workspaces.error instanceof CatalogLoginRequiredError) && <div className="error-panel" role="alert">{message(workspaces.error)}</div>}
     {workspaces.data && workspaces.data.length === 0 && <div className="empty-state"><strong>没有可访问 Workspace</strong></div>}
     {workspaces.data && workspaces.data.length > 0 && <>
-      <section className="run-list-panel" aria-label="Catalog workspace selector"><div className="panel-heading"><div><p className="section-kicker">Workspace</p><h2>管理边界</h2></div><div className="run-controls"><label>Workspace<select value={workspaceId} onChange={(event) => { setSelection(event.target.value); setPreflights({}); setPolicyDecisions({}); setEditingTool(null); setToolForm(formFromTool()); }}>{workspaces.data.map((item) => <option key={item.id} value={item.id}>{item.id} · {item.role}</option>)}</select></label><Button type="button" variant="outline" disabled={snapshot.isFetching} onClick={() => void snapshot.refetch()}>刷新</Button></div></div></section>
+      <section className="run-list-panel" aria-label="Catalog workspace selector"><div className="panel-heading"><div><p className="section-kicker">Workspace</p><h2>管理边界</h2></div><div className="run-controls"><label>Workspace<select value={workspaceId} onChange={(event) => { setSelection(event.target.value); setPreflights({}); setPolicyDecisions({}); setEditingTool(null); setToolForm(formFromTool()); setOpenAPIPreview(null); setOpenAPIOperationId(''); setOpenAPIImportForm(emptyOpenAPIImportForm); }}>{workspaces.data.map((item) => <option key={item.id} value={item.id}>{item.id} · {item.role}</option>)}</select></label><Button type="button" variant="outline" disabled={snapshot.isFetching} onClick={() => void snapshot.refetch()}>刷新</Button></div></div></section>
       {snapshot.isPending && <div className="empty-state"><strong>正在读取 Catalog facts…</strong></div>}
       {snapshot.error && !(snapshot.error instanceof CatalogLoginRequiredError) && <div className="error-panel" role="alert">{message(snapshot.error)}</div>}
       {actionError && <div className="error-panel" role="alert">{message(actionError)}</div>}
       {notice && <div className="success-panel" role="status">{notice}</div>}
       {snapshot.data && <>
+        <section className="launch-panel" aria-labelledby="openapi-import-heading">
+          <div className="panel-heading"><div><p className="section-kicker">API as Tool</p><h2 id="openapi-import-heading">OpenAPI 受控导入</h2><p className="muted-copy">粘贴 inline OpenAPI 3.x JSON/YAML 后先由服务端分析。当前 reviewed HTTP Executor 只将 POST + application/json 子集标记为可导入；remote $ref、其他 method/参数映射等保持 blocking diagnostic，不会静默降级。Preview 不创建草稿，Import 也不会发布或激活路由。</p></div></div>
+          <div className="launch-grid"><div className="launch-request">
+            <label>OpenAPI document（JSON / YAML，≤ 1 MiB）<textarea rows={18} spellCheck={false} value={openAPIDocument} onChange={(event) => { setOpenAPIDocument(event.target.value); setOpenAPIPreview(null); setOpenAPIOperationId(''); }} /></label>
+            <Button type="button" disabled={busy !== '' || openAPIDocument.trim().length < 2} onClick={() => void previewOpenAPI()}>{busy === 'openapi-preview' ? '正在分析…' : '服务端 Preview'}</Button>
+            {openAPIPreview && <><div className="success-panel" role="status"><strong>OpenAPI {openAPIPreview.openapiVersion}{openAPIPreview.title ? ` · ${openAPIPreview.title}` : ''}</strong><span>以下 importable 与 diagnostics 均来自服务端；浏览器不自行计算兼容性或发布资格。</span></div><OpenAPIDiagnostics items={openAPIPreview.diagnostics} /></>}
+          </div><div className="launch-request">
+            {openAPIPreview ? <>
+              <label>Operation<select value={openAPIOperationId} onChange={(event) => setOpenAPIOperationId(event.target.value)}><option value="">显式选择服务端 operation</option>{openAPIPreview.operations.map((item) => <option key={`${item.method}:${item.path}:${item.operationId}`} value={item.operationId} disabled={!item.importable}>{item.method} {item.path} · {item.operationId} · {item.importable ? 'importable' : 'blocked'}</option>)}</select></label>
+              <OpenAPIOperationFacts items={openAPIPreview.operations} selected={openAPIOperationId} />
+              <label>ToolVersion ID<input value={openAPIImportForm.toolVersionId} onChange={(event) => setOpenAPIImportForm({ ...openAPIImportForm, toolVersionId: event.target.value })} /></label>
+              <label>Tool ID<input value={openAPIImportForm.toolId} onChange={(event) => setOpenAPIImportForm({ ...openAPIImportForm, toolId: event.target.value })} /></label>
+              <label>Version<input value={openAPIImportForm.version} onChange={(event) => setOpenAPIImportForm({ ...openAPIImportForm, version: event.target.value })} /></label>
+              <label>Provider ID<input list="openapi-import-providers" value={openAPIImportForm.providerId} onChange={(event) => setOpenAPIImportForm({ ...openAPIImportForm, providerId: event.target.value })} /></label><datalist id="openapi-import-providers">{snapshot.data.connections.map((item) => <option key={`openapi:${item.connectionId}:${item.providerId}`} value={item.providerId} />)}</datalist>
+              <label>PriceVersion<select value={openAPIImportForm.priceVersionId} onChange={(event) => setOpenAPIImportForm({ ...openAPIImportForm, priceVersionId: event.target.value })}><option value="">显式选择 PriceVersion</option>{snapshot.data.priceVersions.map((item) => <option key={`openapi:${item.id}`} value={item.id}>{item.id} · {item.toolVersionId} · {item.currency}</option>)}</select></label>
+              <label>Deployment revision<input value={openAPIImportForm.deploymentRevision} onChange={(event) => setOpenAPIImportForm({ ...openAPIImportForm, deploymentRevision: event.target.value })} /></label>
+              <Button type="button" disabled={busy !== '' || selectedOpenAPIOperation?.importable !== true || Object.values(openAPIImportForm).some((value) => value === '')} onClick={() => void importOpenAPI()}>{busy === 'openapi-import' ? '正在创建 draft…' : '创建 ToolVersion draft'}</Button>
+            </> : <div className="empty-state"><strong>先执行服务端 Preview</strong><span>不支持的 operation 会保留 diagnostic，不会生成部分可运行配置。</span></div>}
+          </div></div>
+        </section>
+
         <section className="launch-panel" aria-labelledby="tool-draft-heading">
           <div className="panel-heading"><div><p className="section-kicker">Catalog</p><h2 id="tool-draft-heading">ToolVersion 草稿</h2></div>{editingTool && <Button type="button" variant="outline" onClick={() => { setEditingTool(null); setToolForm(formFromTool()); }}>取消编辑</Button>}</div>
           <div className="launch-grid"><div className="launch-request">

@@ -2,6 +2,7 @@ export type WorkspaceRole = 'owner' | 'admin' | 'developer' | 'viewer';
 export type CatalogState = 'draft' | 'published' | 'retired';
 export type SideEffect = 'read_only' | 'write';
 export type Idempotency = 'safe_read' | 'idempotent' | 'unsafe';
+export type OpenAPIDiagnosticSeverity = 'error' | 'warning';
 
 export interface CatalogWorkspace { id: string; role: WorkspaceRole }
 export interface CatalogToolVersion {
@@ -31,6 +32,15 @@ export interface PublicationSubmission { approval: PublicationApproval | null; p
 export interface CatalogSnapshot { toolVersions: CatalogToolVersion[]; toolsets: CatalogToolset[]; connections: CatalogConnectionOption[]; priceVersions: CatalogPriceOption[]; budgetPeriods: CatalogBudgetOption[]; publicationApprovals: PublicationApproval[] }
 export interface CatalogIssue { code: string; targetId: string }
 export interface CatalogPreflight { ready: boolean; issues: CatalogIssue[] }
+export interface OpenAPIDiagnostic { code: string; severity: OpenAPIDiagnosticSeverity; operationId: string | null; path: string | null; method: string | null; message: string }
+export interface OpenAPIOperation {
+  operationId: string; method: string; path: string; serverUrl: string; title: string; description: string;
+  inputSchema: Record<string, unknown> | null; outputSchema: Record<string, unknown> | null;
+  sideEffect: SideEffect; idempotency: Idempotency; importable: boolean; diagnostics: OpenAPIDiagnostic[];
+}
+export interface OpenAPIPreview { openapiVersion: string; title: string; operations: OpenAPIOperation[]; diagnostics: OpenAPIDiagnostic[] }
+export interface OpenAPIImportInput { source: string; operationId: string; toolVersionId: string; toolId: string; version: string; providerId: string; priceVersionId: string; deploymentRevision: string }
+export interface OpenAPIImportResult { toolVersion: CatalogToolVersion; sourceOperation: OpenAPIOperation }
 
 export function latestApproval(approvals: PublicationApproval[], kind: PublicationApproval['targetKind'], id: string) {
   return approvals.find((item) => item.targetKind === kind && item.targetId === id) ?? null;

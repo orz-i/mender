@@ -74,3 +74,55 @@ test('Console Catalog refuses settlement fields in PriceVersion options', async 
   const leaked = snapshot(); leaked.data.price_versions[0].charge_micro = '10';
   await assert.rejects(createConsoleCatalogClient('', async () => Response.json(leaked)).snapshot('ws_a'), /settlement/);
 });
+
+const openAPIDiagnostic = (severity = 'warning') => ({ code: severity === 'warning' ? 'security_runtime_owned' : 'http_method_unsupported', severity, operation_id: 'searchCompanies', path: '/search', method: 'POST', message: severity === 'warning' ? 'Runtime credentials remain server-owned.' : 'Unsupported operation.' });
+const openAPIOperation = () => ({
+  operation_id: 'searchCompanies', method: 'POST', path: '/search', server_url: 'https://api.example.test/v1', title: 'Search companies', description: '',
+  input_schema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] }, output_schema: { type: 'object', properties: { items: { type: 'array', items: { type: 'string' } } } },
+  side_effect: 'write', idempotency: 'unsafe', importable: true, diagnostics: [openAPIDiagnostic()],
+});
+const openAPIPreview = () => ({ data: { openapi_version: '3.1.0', title: 'Search API', operations: [openAPIOperation()], diagnostics: [] } });
+
+test('Console Catalog OpenAPI preview sends only inline document and trusts server diagnostics/importability', async () => {
+  const document = '{"openapi":"3.1.0"}';
+  const client = createConsoleCatalogClient('', async (url, init) => {
+    assert.equal(url, '/api/console/v1/workspaces/ws_a/catalog/openapi/preview');
+    assert.equal(init.method, 'POST'); assert.equal(init.credentials, 'same-origin');
+    assert.equal(new Headers(init.headers).get('Authorization'), null); assert.equal(new Headers(init.headers).get('X-Mender-CSRF'), null);
+    assert.deepEqual(JSON.parse(init.body), { document });
+    return Response.json(openAPIPreview());
+  });
+  const preview = await client.previewOpenAPI('ws_a', document);
+  assert.equal(preview.openapiVersion, '3.1.0'); assert.equal(preview.operations[0].importable, true);
+  assert.equal(preview.operations[0].diagnostics[0].code, 'security_runtime_owned');
+  assert.equal(preview.operations[0].sideEffect, 'write'); assert.equal(preview.operations[0].idempotency, 'unsafe');
+});
+
+test('Console Catalog OpenAPI import sends explicit mapping only, requires CSRF, and preserves draft precision', async () => {
+  const document = '{"openapi":"3.1.0"}'; const calls = [];
+  const importedTool = { ...snapshot().data.tool_versions[0], tool_version_id: 'tv_import', tool_id: 'tool_import', version: '2.0.0', provider_id: 'provider_a', price_version_id: 'price_a', deployment_revision: 'deploy_a', title: 'Search companies', input_schema: openAPIOperation().input_schema, output_schema: openAPIOperation().output_schema, side_effect: 'write', idempotency: 'unsafe', mcp_publishable: false, revision: '9007199254740997' };
+  const client = createConsoleCatalogClient('', async (url, init) => {
+    calls.push({ url, init });
+    return Response.json({ data: { tool_version: importedTool, source_operation: openAPIOperation() } }, { status: 201 });
+  });
+  const result = await client.importOpenAPIOperation('ws_a', { document, operationId: 'searchCompanies', toolVersionId: 'tv_import', toolId: 'tool_import', version: '2.0.0', providerId: 'provider_a', priceVersionId: 'price_a', deploymentRevision: 'deploy_a' }, 'csrf_a');
+  assert.equal(calls[0].url, '/api/console/v1/workspaces/ws_a/catalog/openapi/import');
+  assert.equal(new Headers(calls[0].init.headers).get('X-Mender-CSRF'), 'csrf_a'); assert.equal(new Headers(calls[0].init.headers).get('Authorization'), null);
+  assert.deepEqual(JSON.parse(calls[0].init.body), { document, operation_id: 'searchCompanies', tool_version_id: 'tv_import', tool_id: 'tool_import', version: '2.0.0', provider_id: 'provider_a', price_version_id: 'price_a', deployment_revision: 'deploy_a' });
+  assert.equal(result.toolVersion.revision, '9007199254740997'); assert.equal(result.toolVersion.state, 'draft'); assert.equal(result.toolVersion.mcpPublishable, false);
+  assert.equal(result.sourceOperation.importable, true);
+  await assert.rejects(client.importOpenAPIOperation('ws_a', { document, operationId: 'searchCompanies', toolVersionId: 'tv_import', toolId: 'tool_import', version: '2.0.0', providerId: 'provider_a', priceVersionId: 'price_a', deploymentRevision: 'deploy_a' }, ''), /CSRF/);
+});
+
+test('Console Catalog OpenAPI projections fail closed on leaked source, unknown fields, and inconsistent importability', async () => {
+  const leaked = openAPIPreview(); leaked.data.document = 'forbidden source';
+  await assert.rejects(createConsoleCatalogClient('', async () => Response.json(leaked)).previewOpenAPI('ws_a', '{}'), /OpenAPI preview/);
+  const leakedOperation = openAPIPreview(); leakedOperation.data.operations[0].credential_version_ref = 'secret_ref';
+  await assert.rejects(createConsoleCatalogClient('', async () => Response.json(leakedOperation)).previewOpenAPI('ws_a', '{}'), /OpenAPI operation/);
+  const badSeverity = openAPIPreview(); badSeverity.data.operations[0].diagnostics[0].severity = 'info';
+  await assert.rejects(createConsoleCatalogClient('', async () => Response.json(badSeverity)).previewOpenAPI('ws_a', '{}'), /severity/);
+  const inconsistent = openAPIPreview(); inconsistent.data.operations[0].method = 'GET';
+  await assert.rejects(createConsoleCatalogClient('', async () => Response.json(inconsistent)).previewOpenAPI('ws_a', '{}'), /importable contract/);
+  const missingSchema = openAPIPreview(); missingSchema.data.operations[0].input_schema = null;
+  await assert.rejects(createConsoleCatalogClient('', async () => Response.json(missingSchema)).previewOpenAPI('ws_a', '{}'), /importable contract/);
+});
