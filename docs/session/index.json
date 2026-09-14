@@ -66,9 +66,9 @@
     "ses_573cea0c83fc4e65a7c975502b2b1a3e": {
       "path": "docs/session/ses_573cea0c83fc4e65a7c975502b2b1a3e.md",
       "title": "Artifact Object Lifecycle Alpha",
-      "status": "active",
+      "status": "completed",
       "created_at": "unix:1789380436",
-      "updated_at": "unix:1789383292",
+      "updated_at": "unix:1789383404",
       "parent_session_id": "ses_f7b8a241864e4340940e54633af38e0c"
     },
     "ses_62a1ebea37544a1a9eb3d95cec77deaf": {
