@@ -99,3 +99,69 @@ test('Admin Governance policy fails closed on precision drift and sensitive proj
   const leaked = policyDecision(); leaked.arguments = { secret: true };
   await assert.rejects(createAdminGovernanceClient('', async () => Response.json({ data: { revisions: [policyRevision()], decisions: [leaked] } })).policy('ws_a'), /敏感字段/);
 });
+
+const executionPolicyRevision = (state = 'active') => ({
+  id: 'exec_policy_2', revision: '9007199254740993', state, max_unconfirmed_risk_level: 'high', max_machine_risk_level: 'low',
+  deny_unsafe_write: true, confirmation_ttl_seconds: 90, created_by_user_id: 'owner_a', created_at: '2026-09-13T00:00:00Z',
+  activated_by_user_id: state === 'draft' ? null : 'admin_a', activated_at: state === 'draft' ? null : '2026-09-13T00:01:00Z', retired_at: null,
+});
+const executionDecision = () => ({
+  sequence: '9007199254740997', policy_revision_id: 'exec_policy_2', policy_revision: '9007199254740993', subject_kind: 'machine', subject_id: 'sa_a',
+  toolset_version_id: 'set_v1', tool_version_id: 'tool_v1', connection_id: 'conn_a', arguments_hash: 'a'.repeat(64), idempotency_key_hash: 'b'.repeat(64),
+  risk_level: 'high', outcome: 'deny', reason_codes: ['tool_write_idempotent', 'machine_risk_above_ceiling'], evaluated_at: '2026-09-13T00:02:00Z',
+});
+const executionConfirmation = () => ({
+  id: 'confirm_a', user_id: 'user_a', policy_revision_id: 'exec_policy_2', policy_revision: '9007199254740993', toolset_version_id: 'set_v1',
+  tool_version_id: 'tool_v1', connection_id: 'conn_a', arguments_hash: 'c'.repeat(64), idempotency_key_hash: 'd'.repeat(64), risk_level: 'critical',
+  state: 'expired', persisted_state: 'active', created_at: '2026-09-13T00:02:00Z', expires_at: '2026-09-13T00:03:30Z', consumed_at: null, expired_at: null,
+});
+
+test('Admin execution governance preserves exact server facts and sends only server-side filters', async () => {
+  const client = createAdminGovernanceClient('', async (url, init) => {
+    assert.equal(url, '/api/admin/v1/workspaces/ws_a/execution-governance?tool_version_id=tool_v1&subject_kind=machine&risk_level=high&outcome=deny&policy_revision=9007199254740993&confirmation_state=expired&before_decision_sequence=9007199254740998&before_confirmation_created_at=2026-09-13T00%3A04%3A00Z&before_confirmation_id=confirm_z&limit=25');
+    assert.equal(init.credentials, 'same-origin');
+    assert.equal(new Headers(init.headers).get('Authorization'), null);
+    assert.equal(new Headers(init.headers).get('X-Mender-CSRF'), null);
+    return Response.json({ data: {
+      active_policy: executionPolicyRevision(), revisions: [executionPolicyRevision()], decisions: [executionDecision()], confirmations: [executionConfirmation()],
+      next_before_decision_sequence: '9007199254740997', next_confirmation_cursor: { created_at: '2026-09-13T00:02:00Z', id: 'confirm_a' },
+    } });
+  });
+  const snapshot = await client.executionGovernance('ws_a', {
+    toolVersionId: 'tool_v1', subjectKind: 'machine', riskLevel: 'high', outcome: 'deny', policyRevision: '9007199254740993',
+    confirmationState: 'expired', beforeDecisionSequence: '9007199254740998', beforeConfirmationCreatedAt: '2026-09-13T00:04:00Z', beforeConfirmationId: 'confirm_z', limit: 25,
+  });
+  assert.equal(snapshot.activePolicy.revision, '9007199254740993');
+  assert.equal(snapshot.decisions[0].sequence, '9007199254740997');
+  assert.equal(snapshot.decisions[0].argumentsHash, 'a'.repeat(64));
+  assert.equal(snapshot.confirmations[0].state, 'expired');
+  assert.equal(snapshot.confirmations[0].persistedState, 'active');
+  assert.deepEqual(snapshot.nextConfirmationCursor, { createdAt: '2026-09-13T00:02:00Z', id: 'confirm_a' });
+});
+
+test('Admin execution governance fails closed on numeric precision drift, raw arguments, and malformed cursors', async () => {
+  const numeric = executionDecision(); numeric.sequence = Number('9007199254740997');
+  await assert.rejects(createAdminGovernanceClient('', async () => Response.json({ data: { active_policy: executionPolicyRevision(), revisions: [], decisions: [numeric], confirmations: [], next_before_decision_sequence: null, next_confirmation_cursor: null } })).executionGovernance('ws_a'), /exact integer|Governance 响应/);
+  const leaked = executionDecision(); leaked.arguments = { password: 'forbidden' };
+  await assert.rejects(createAdminGovernanceClient('', async () => Response.json({ data: { active_policy: executionPolicyRevision(), revisions: [], decisions: [leaked], confirmations: [], next_before_decision_sequence: null, next_confirmation_cursor: null } })).executionGovernance('ws_a'), /敏感字段/);
+  const client = createAdminGovernanceClient('', async () => Response.json({ data: { active_policy: null, revisions: [], decisions: [], confirmations: [], next_before_decision_sequence: null, next_confirmation_cursor: null } }));
+  await assert.rejects(client.executionGovernance('ws_a', { beforeDecisionSequence: '0' }), /cursor/);
+  await assert.rejects(client.executionGovernance('ws_a', { beforeConfirmationId: 'confirm_a' }), /cursor/);
+  await assert.rejects(client.executionGovernance('ws_a', { limit: 101 }), /limit/);
+});
+
+test('Admin execution governance creates only declarative policy fields and activates with empty body', async () => {
+  const calls = [];
+  const client = createAdminGovernanceClient('', async (url, init) => {
+    calls.push({ url, init });
+    return Response.json({ data: executionPolicyRevision(url.endsWith('/activate') ? 'active' : 'draft') }, { status: url.endsWith('/activate') ? 200 : 201 });
+  });
+  await client.createExecutionPolicy('ws_a', { id: 'exec_policy_2', maxUnconfirmedRiskLevel: 'high', maxMachineRiskLevel: 'low', denyUnsafeWrite: true, confirmationTtlSeconds: 90 }, 'csrf_a');
+  assert.equal(calls[0].url, '/api/admin/v1/workspaces/ws_a/execution-governance/revisions');
+  assert.deepEqual(JSON.parse(calls[0].init.body), { id: 'exec_policy_2', max_unconfirmed_risk_level: 'high', max_machine_risk_level: 'low', deny_unsafe_write: true, confirmation_ttl_seconds: 90 });
+  assert.equal(new Headers(calls[0].init.headers).get('X-Mender-CSRF'), 'csrf_a');
+  assert.equal(new Headers(calls[0].init.headers).get('Authorization'), null);
+  await client.activateExecutionPolicy('ws_a', 'exec_policy_2', 'csrf_a');
+  assert.equal(calls[1].url, '/api/admin/v1/workspaces/ws_a/execution-governance/revisions/exec_policy_2/activate');
+  assert.equal(calls[1].init.body, undefined);
+});

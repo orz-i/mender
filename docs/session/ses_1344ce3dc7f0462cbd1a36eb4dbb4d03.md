@@ -2,7 +2,7 @@
 
 **Session id:** ses_1344ce3dc7f0462cbd1a36eb4dbb4d03
 **Created:** unix:1789351607
-**Updated:** unix:1789352857
+**Updated:** unix:1789353447
 **Status:** active
 **Host session scope:** host-session:f469a465ece78120da5de60df27407ac2fb02c786dfd8fc9bd42ee7a3f475fab
 
@@ -13,35 +13,49 @@
 ## 已确认事实
 
 - 自动阶段检查点：tool=stage_commit, status=completed, success=true
-- 自动阶段检查点：tool=exec_command, status=succeeded, success=true
-- command=pnpm test:integration:docker
 - 自动阶段检查点：tool=apply_patch, status=completed, success=true
-- summary=M backend/tests/integration/execution_risk_governance_test.go
+- summary=A frontend/apps/admin/src/modules/execution-governance/presentation/execution-governance-page.tsx
+M frontend/apps/admin/src/app/router.tsx
+M frontend/apps/admin/src/app/route-pages.tsx
+M frontend/apps/admin/src/app/home-page.tsx
+M frontend/apps/admin/src/modules/README.md
+- 自动阶段检查点：tool=exec_command, status=succeeded, success=true
+- command=pnpm --filter @mender/admin typecheck
+- command=node --test frontend/packages/api-client/src/admin-governance.test.mjs
 - command=pnpm check:architecture
+- command=pnpm --filter @mender/admin build
+- command=pnpm lint
 
 ## 已完成修改
 
-- backend/tests/integration/execution_risk_governance_test.go
+- frontend/apps/admin/src/modules/execution-governance/presentation/execution-governance-page.tsx
+- frontend/apps/admin/src/app/router.tsx
+- frontend/apps/admin/src/app/route-pages.tsx
+- frontend/apps/admin/src/app/home-page.tsx
+- frontend/apps/admin/src/modules/README.md
 
 ## 关键设计决定
 
 
 ## 测试结果
 
+- verification_kind=typecheck, success=true
 - verification_kind=test, success=true
 - verification_kind=architecture, success=true
+- verification_kind=build, success=true
+- verification_kind=lint, success=true
 
 ## 当前运行状态
 
 - task_id=1aba49443e374bc3a2a81ef0d57fad8d
 - task_status=active
 - tool=exec_command
-- session_id="e31561e3-8697-4d38-a368-ce68109d7a6a"
+- session_id="83390744-a937-4dc7-878b-a658fa418bcb"
 - execution_status="succeeded"
 - exit_code=0
-- last_output_at="2026-09-14T02:27:35.993Z"
+- last_output_at="2026-09-14T02:37:20.545Z"
 - branch=main
-- head=a805add49b85f29f1b4d47c69add2cb88c12ff82
+- head=12295f48ab38dcf110633cfa6e219561802245a7
 - baseline_matches=Some(true)
 
 ## 剩余问题
@@ -49,7 +63,6 @@
 
 ## 下一步
 
-- Slice 2: execution policy draft/activate/retire operations + bounded confirmation TTL + integration/unit coverage
 - Slice 3: Admin /execution-governance UI + typed client/tests + route/navigation
 - Run pnpm check, Go race, real PostgreSQL integration, git diff --check
 - Strict complete_work_session; leave working tree clean
@@ -108,16 +121,125 @@
 }
 ```
 
-### auto-exec_command-170c6807e7071e33
+### auto-apply_patch-efd973585208d17f
 
 ```json
 {
-  "turn_id": "auto-exec_command-170c6807e7071e33",
-  "timestamp": "unix:1789352848",
+  "turn_id": "auto-apply_patch-efd973585208d17f",
+  "timestamp": "unix:1789353344",
+  "user_intent": "实现 Execution Governance Admin / Policy Operations Alpha：为已有 ExecutionPolicyRevision/Decision/Confirmation 增加受保护的 Admin 投影与操作 API，声明式 execution policy draft/activate 生命周期，以及 Admin /execution-governance 可观测与管理 UI；保持 fail-closed、FORCE RLS、least-privilege DB roles、Browser Session 不直接获得 DB authority、bigint 使用 decimal string、前端不推断最终风险/权限。每个 slice 独立 commit；最终完整验证；不 push、不 deploy。",
+  "findings": [
+    "自动阶段检查点：tool=apply_patch, status=completed, success=true",
+    "summary=A frontend/apps/admin/src/modules/execution-governance/presentation/execution-governance-page.tsx\nM frontend/apps/admin/src/app/router.tsx\nM frontend/apps/admin/src/app/route-pages.tsx\nM frontend/apps/admin/src/app/home-page.tsx\nM frontend/apps/admin/src/modules/README.md"
+  ],
+  "decisions": [],
+  "files_changed": [
+    "frontend/apps/admin/src/modules/execution-governance/presentation/execution-governance-page.tsx",
+    "frontend/apps/admin/src/app/router.tsx",
+    "frontend/apps/admin/src/app/route-pages.tsx",
+    "frontend/apps/admin/src/app/home-page.tsx",
+    "frontend/apps/admin/src/modules/README.md"
+  ],
+  "tests": [],
+  "runtime_state": [
+    "task_id=1aba49443e374bc3a2a81ef0d57fad8d",
+    "task_status=active",
+    "tool=apply_patch",
+    "branch=main",
+    "head=12295f48ab38dcf110633cfa6e219561802245a7",
+    "baseline_matches=Some(true)"
+  ],
+  "remaining_issues": [],
+  "next_actions": [
+    "Slice 3: Admin /execution-governance UI + typed client/tests + route/navigation",
+    "Run pnpm check, Go race, real PostgreSQL integration, git diff --check",
+    "Strict complete_work_session; leave working tree clean"
+  ],
+  "notes": "Anchor 自动保存的结构化阶段检查点；相同阶段身份会幂等更新。"
+}
+```
+
+### auto-stage_commit-860ea2e8beae6166
+
+```json
+{
+  "turn_id": "auto-stage_commit-860ea2e8beae6166",
+  "timestamp": "unix:1789352996",
+  "user_intent": "实现 Execution Governance Admin / Policy Operations Alpha：为已有 ExecutionPolicyRevision/Decision/Confirmation 增加受保护的 Admin 投影与操作 API，声明式 execution policy draft/activate 生命周期，以及 Admin /execution-governance 可观测与管理 UI；保持 fail-closed、FORCE RLS、least-privilege DB roles、Browser Session 不直接获得 DB authority、bigint 使用 decimal string、前端不推断最终风险/权限。每个 slice 独立 commit；最终完整验证；不 push、不 deploy。",
+  "findings": [
+    "自动阶段检查点：tool=stage_commit, status=completed, success=true"
+  ],
+  "decisions": [],
+  "files_changed": [],
+  "tests": [],
+  "runtime_state": [
+    "task_id=1aba49443e374bc3a2a81ef0d57fad8d",
+    "task_status=active",
+    "tool=stage_commit",
+    "commit_sha=\"12295f48ab38dcf110633cfa6e219561802245a7\"",
+    "branch=main",
+    "head=12295f48ab38dcf110633cfa6e219561802245a7",
+    "baseline_matches=Some(true)"
+  ],
+  "remaining_issues": [],
+  "next_actions": [
+    "Slice 2: execution policy draft/activate/retire operations + bounded confirmation TTL + integration/unit coverage",
+    "Slice 3: Admin /execution-governance UI + typed client/tests + route/navigation",
+    "Run pnpm check, Go race, real PostgreSQL integration, git diff --check",
+    "Strict complete_work_session; leave working tree clean"
+  ],
+  "notes": "Anchor 自动保存的结构化阶段检查点；相同阶段身份会幂等更新。"
+}
+```
+
+### auto-exec_command-a64ac260eb02e3a5
+
+```json
+{
+  "turn_id": "auto-exec_command-a64ac260eb02e3a5",
+  "timestamp": "unix:1789353376",
   "user_intent": "实现 Execution Governance Admin / Policy Operations Alpha：为已有 ExecutionPolicyRevision/Decision/Confirmation 增加受保护的 Admin 投影与操作 API，声明式 execution policy draft/activate 生命周期，以及 Admin /execution-governance 可观测与管理 UI；保持 fail-closed、FORCE RLS、least-privilege DB roles、Browser Session 不直接获得 DB authority、bigint 使用 decimal string、前端不推断最终风险/权限。每个 slice 独立 commit；最终完整验证；不 push、不 deploy。",
   "findings": [
     "自动阶段检查点：tool=exec_command, status=succeeded, success=true",
-    "command=pnpm test:integration:docker"
+    "command=pnpm --filter @mender/admin typecheck"
+  ],
+  "decisions": [],
+  "files_changed": [],
+  "tests": [
+    "verification_kind=typecheck, success=true"
+  ],
+  "runtime_state": [
+    "task_id=1aba49443e374bc3a2a81ef0d57fad8d",
+    "task_status=active",
+    "tool=exec_command",
+    "session_id=\"041163d4-4db9-4d42-96ed-822c449005f6\"",
+    "execution_status=\"succeeded\"",
+    "exit_code=0",
+    "last_output_at=\"2026-09-14T02:36:11.315Z\"",
+    "branch=main",
+    "head=12295f48ab38dcf110633cfa6e219561802245a7",
+    "baseline_matches=Some(true)"
+  ],
+  "remaining_issues": [],
+  "next_actions": [
+    "Slice 3: Admin /execution-governance UI + typed client/tests + route/navigation",
+    "Run pnpm check, Go race, real PostgreSQL integration, git diff --check",
+    "Strict complete_work_session; leave working tree clean"
+  ],
+  "notes": "Anchor 自动保存的结构化阶段检查点；相同阶段身份会幂等更新。"
+}
+```
+
+### auto-exec_command-6405327f2f242f36
+
+```json
+{
+  "turn_id": "auto-exec_command-6405327f2f242f36",
+  "timestamp": "unix:1789353394",
+  "user_intent": "实现 Execution Governance Admin / Policy Operations Alpha：为已有 ExecutionPolicyRevision/Decision/Confirmation 增加受保护的 Admin 投影与操作 API，声明式 execution policy draft/activate 生命周期，以及 Admin /execution-governance 可观测与管理 UI；保持 fail-closed、FORCE RLS、least-privilege DB roles、Browser Session 不直接获得 DB authority、bigint 使用 decimal string、前端不推断最终风险/权限。每个 slice 独立 commit；最终完整验证；不 push、不 deploy。",
+  "findings": [
+    "自动阶段检查点：tool=exec_command, status=succeeded, success=true",
+    "command=node --test frontend/packages/api-client/src/admin-governance.test.mjs"
   ],
   "decisions": [],
   "files_changed": [],
@@ -128,17 +250,16 @@
     "task_id=1aba49443e374bc3a2a81ef0d57fad8d",
     "task_status=active",
     "tool=exec_command",
-    "session_id=\"23f8c540-1d02-429e-9875-87c62409187d\"",
+    "session_id=\"ec3e7df3-8c90-40ab-8d1c-94fd72bdd711\"",
     "execution_status=\"succeeded\"",
     "exit_code=0",
-    "last_output_at=\"2026-09-14T02:27:26.607Z\"",
+    "last_output_at=\"2026-09-14T02:36:33.134Z\"",
     "branch=main",
-    "head=a805add49b85f29f1b4d47c69add2cb88c12ff82",
+    "head=12295f48ab38dcf110633cfa6e219561802245a7",
     "baseline_matches=Some(true)"
   ],
   "remaining_issues": [],
   "next_actions": [
-    "Slice 2: execution policy draft/activate/retire operations + bounded confirmation TTL + integration/unit coverage",
     "Slice 3: Admin /execution-governance UI + typed client/tests + route/navigation",
     "Run pnpm check, Go race, real PostgreSQL integration, git diff --check",
     "Strict complete_work_session; leave working tree clean"
@@ -147,47 +268,12 @@
 }
 ```
 
-### auto-apply_patch-efd973585208d17f
+### auto-exec_command-1fdfc3555155e896
 
 ```json
 {
-  "turn_id": "auto-apply_patch-efd973585208d17f",
-  "timestamp": "unix:1789352808",
-  "user_intent": "实现 Execution Governance Admin / Policy Operations Alpha：为已有 ExecutionPolicyRevision/Decision/Confirmation 增加受保护的 Admin 投影与操作 API，声明式 execution policy draft/activate 生命周期，以及 Admin /execution-governance 可观测与管理 UI；保持 fail-closed、FORCE RLS、least-privilege DB roles、Browser Session 不直接获得 DB authority、bigint 使用 decimal string、前端不推断最终风险/权限。每个 slice 独立 commit；最终完整验证；不 push、不 deploy。",
-  "findings": [
-    "自动阶段检查点：tool=apply_patch, status=completed, success=true",
-    "summary=M backend/tests/integration/execution_risk_governance_test.go"
-  ],
-  "decisions": [],
-  "files_changed": [
-    "backend/tests/integration/execution_risk_governance_test.go"
-  ],
-  "tests": [],
-  "runtime_state": [
-    "task_id=1aba49443e374bc3a2a81ef0d57fad8d",
-    "task_status=active",
-    "tool=apply_patch",
-    "branch=main",
-    "head=a805add49b85f29f1b4d47c69add2cb88c12ff82",
-    "baseline_matches=Some(true)"
-  ],
-  "remaining_issues": [],
-  "next_actions": [
-    "Slice 2: execution policy draft/activate/retire operations + bounded confirmation TTL + integration/unit coverage",
-    "Slice 3: Admin /execution-governance UI + typed client/tests + route/navigation",
-    "Run pnpm check, Go race, real PostgreSQL integration, git diff --check",
-    "Strict complete_work_session; leave working tree clean"
-  ],
-  "notes": "Anchor 自动保存的结构化阶段检查点；相同阶段身份会幂等更新。"
-}
-```
-
-### auto-exec_command-797d35a96fe2ad88
-
-```json
-{
-  "turn_id": "auto-exec_command-797d35a96fe2ad88",
-  "timestamp": "unix:1789352857",
+  "turn_id": "auto-exec_command-1fdfc3555155e896",
+  "timestamp": "unix:1789353406",
   "user_intent": "实现 Execution Governance Admin / Policy Operations Alpha：为已有 ExecutionPolicyRevision/Decision/Confirmation 增加受保护的 Admin 投影与操作 API，声明式 execution policy draft/activate 生命周期，以及 Admin /execution-governance 可观测与管理 UI；保持 fail-closed、FORCE RLS、least-privilege DB roles、Browser Session 不直接获得 DB authority、bigint 使用 decimal string、前端不推断最终风险/权限。每个 slice 独立 commit；最终完整验证；不 push、不 deploy。",
   "findings": [
     "自动阶段检查点：tool=exec_command, status=succeeded, success=true",
@@ -202,17 +288,92 @@
     "task_id=1aba49443e374bc3a2a81ef0d57fad8d",
     "task_status=active",
     "tool=exec_command",
-    "session_id=\"e31561e3-8697-4d38-a368-ce68109d7a6a\"",
+    "session_id=\"c6ddb16b-f88c-452b-8d87-dabfc0ab0244\"",
     "execution_status=\"succeeded\"",
     "exit_code=0",
-    "last_output_at=\"2026-09-14T02:27:35.993Z\"",
+    "last_output_at=\"2026-09-14T02:36:44.767Z\"",
     "branch=main",
-    "head=a805add49b85f29f1b4d47c69add2cb88c12ff82",
+    "head=12295f48ab38dcf110633cfa6e219561802245a7",
     "baseline_matches=Some(true)"
   ],
   "remaining_issues": [],
   "next_actions": [
-    "Slice 2: execution policy draft/activate/retire operations + bounded confirmation TTL + integration/unit coverage",
+    "Slice 3: Admin /execution-governance UI + typed client/tests + route/navigation",
+    "Run pnpm check, Go race, real PostgreSQL integration, git diff --check",
+    "Strict complete_work_session; leave working tree clean"
+  ],
+  "notes": "Anchor 自动保存的结构化阶段检查点；相同阶段身份会幂等更新。"
+}
+```
+
+### auto-exec_command-d02832c010bad3b9
+
+```json
+{
+  "turn_id": "auto-exec_command-d02832c010bad3b9",
+  "timestamp": "unix:1789353420",
+  "user_intent": "实现 Execution Governance Admin / Policy Operations Alpha：为已有 ExecutionPolicyRevision/Decision/Confirmation 增加受保护的 Admin 投影与操作 API，声明式 execution policy draft/activate 生命周期，以及 Admin /execution-governance 可观测与管理 UI；保持 fail-closed、FORCE RLS、least-privilege DB roles、Browser Session 不直接获得 DB authority、bigint 使用 decimal string、前端不推断最终风险/权限。每个 slice 独立 commit；最终完整验证；不 push、不 deploy。",
+  "findings": [
+    "自动阶段检查点：tool=exec_command, status=succeeded, success=true",
+    "command=pnpm --filter @mender/admin build"
+  ],
+  "decisions": [],
+  "files_changed": [],
+  "tests": [
+    "verification_kind=build, success=true"
+  ],
+  "runtime_state": [
+    "task_id=1aba49443e374bc3a2a81ef0d57fad8d",
+    "task_status=active",
+    "tool=exec_command",
+    "session_id=\"642afc53-0dc8-4d1c-b7ed-034d055d41db\"",
+    "execution_status=\"succeeded\"",
+    "exit_code=0",
+    "last_output_at=\"2026-09-14T02:36:58.982Z\"",
+    "branch=main",
+    "head=12295f48ab38dcf110633cfa6e219561802245a7",
+    "baseline_matches=Some(true)"
+  ],
+  "remaining_issues": [],
+  "next_actions": [
+    "Slice 3: Admin /execution-governance UI + typed client/tests + route/navigation",
+    "Run pnpm check, Go race, real PostgreSQL integration, git diff --check",
+    "Strict complete_work_session; leave working tree clean"
+  ],
+  "notes": "Anchor 自动保存的结构化阶段检查点；相同阶段身份会幂等更新。"
+}
+```
+
+### auto-exec_command-b969927592ab6887
+
+```json
+{
+  "turn_id": "auto-exec_command-b969927592ab6887",
+  "timestamp": "unix:1789353447",
+  "user_intent": "实现 Execution Governance Admin / Policy Operations Alpha：为已有 ExecutionPolicyRevision/Decision/Confirmation 增加受保护的 Admin 投影与操作 API，声明式 execution policy draft/activate 生命周期，以及 Admin /execution-governance 可观测与管理 UI；保持 fail-closed、FORCE RLS、least-privilege DB roles、Browser Session 不直接获得 DB authority、bigint 使用 decimal string、前端不推断最终风险/权限。每个 slice 独立 commit；最终完整验证；不 push、不 deploy。",
+  "findings": [
+    "自动阶段检查点：tool=exec_command, status=succeeded, success=true",
+    "command=pnpm lint"
+  ],
+  "decisions": [],
+  "files_changed": [],
+  "tests": [
+    "verification_kind=lint, success=true"
+  ],
+  "runtime_state": [
+    "task_id=1aba49443e374bc3a2a81ef0d57fad8d",
+    "task_status=active",
+    "tool=exec_command",
+    "session_id=\"83390744-a937-4dc7-878b-a658fa418bcb\"",
+    "execution_status=\"succeeded\"",
+    "exit_code=0",
+    "last_output_at=\"2026-09-14T02:37:20.545Z\"",
+    "branch=main",
+    "head=12295f48ab38dcf110633cfa6e219561802245a7",
+    "baseline_matches=Some(true)"
+  ],
+  "remaining_issues": [],
+  "next_actions": [
     "Slice 3: Admin /execution-governance UI + typed client/tests + route/navigation",
     "Run pnpm check, Go race, real PostgreSQL integration, git diff --check",
     "Strict complete_work_session; leave working tree clean"

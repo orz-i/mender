@@ -7,6 +7,7 @@ export function Layout() {
     <NavLink className="nav-link" to="/publication-reviews">发布审核</NavLink>
     <NavLink className="nav-link" to="/publication-history">审计历史</NavLink>
     <NavLink className="nav-link" to="/publication-policy">发布策略</NavLink>
+    <NavLink className="nav-link" to="/execution-governance">执行治理</NavLink>
     <NavLink className="nav-link" to="/status">服务状态</NavLink>
   </>}><Outlet /></Shell>;
 }

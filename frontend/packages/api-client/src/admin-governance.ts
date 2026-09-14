@@ -15,6 +15,47 @@ export interface AdminPublicationApproval {
   decisionNote: string;
   consumedAt: string | null;
 }
+function executionRisk(value: unknown): AdminExecutionRiskLevel {
+  const risk = string(value); if (!['low', 'medium', 'high', 'critical'].includes(risk)) throw new Error('服务返回了无法识别的 execution risk'); return risk as AdminExecutionRiskLevel;
+}
+function executionState(value: unknown): AdminExecutionConfirmationState {
+  const state = string(value); if (!['active', 'consumed', 'expired'].includes(state)) throw new Error('服务返回了无法识别的 confirmation state'); return state as AdminExecutionConfirmationState;
+}
+function executionHash(value: unknown) { const raw = string(value); if (!/^[a-f0-9]{64}$/.test(raw)) throw new Error('服务返回了无法识别的 execution hash'); return raw; }
+function boundedTtl(value: unknown) { if (!Number.isInteger(value) || (value as number) < 30 || (value as number) > 600) throw new Error('服务返回了无法识别的 confirmation TTL'); return value as number; }
+function executionPolicyRevision(value: unknown): AdminExecutionPolicyRevision {
+  const raw = object(value); safeProjection(raw);
+  const state = string(raw.state); if (!['draft', 'active', 'retired'].includes(state)) throw new Error('服务返回了无法识别的 execution policy state');
+  return {
+    id: string(raw.id), revision: exactPositiveIntegerString(raw.revision), state: state as AdminExecutionPolicyRevision['state'],
+    maxUnconfirmedRiskLevel: executionRisk(raw.max_unconfirmed_risk_level), maxMachineRiskLevel: executionRisk(raw.max_machine_risk_level),
+    denyUnsafeWrite: bool(raw.deny_unsafe_write), confirmationTtlSeconds: boundedTtl(raw.confirmation_ttl_seconds),
+    createdByUserId: optionalString(raw.created_by_user_id), createdAt: string(raw.created_at), activatedByUserId: optionalString(raw.activated_by_user_id),
+    activatedAt: optionalString(raw.activated_at), retiredAt: optionalString(raw.retired_at),
+  };
+}
+function executionPolicyDecision(value: unknown): AdminExecutionPolicyDecision {
+  const raw = object(value); safeProjection(raw);
+  const subject = string(raw.subject_kind); if (subject !== 'human' && subject !== 'machine') throw new Error('服务返回了无法识别的 execution subject');
+  const outcome = string(raw.outcome); if (!['allow', 'confirmation_required', 'deny'].includes(outcome)) throw new Error('服务返回了无法识别的 execution outcome');
+  if (!Array.isArray(raw.reason_codes) || raw.reason_codes.length === 0 || raw.reason_codes.some((item) => typeof item !== 'string' || item.length === 0)) throw new Error('服务返回了无法识别的 execution reasons');
+  return {
+    sequence: exactPositiveIntegerString(raw.sequence), policyRevisionId: string(raw.policy_revision_id), policyRevision: exactPositiveIntegerString(raw.policy_revision),
+    subjectKind: subject, subjectId: string(raw.subject_id), toolsetVersionId: string(raw.toolset_version_id), toolVersionId: string(raw.tool_version_id), connectionId: string(raw.connection_id),
+    argumentsHash: executionHash(raw.arguments_hash), idempotencyKeyHash: executionHash(raw.idempotency_key_hash), riskLevel: executionRisk(raw.risk_level),
+    outcome: outcome as AdminExecutionPolicyOutcome, reasonCodes: raw.reason_codes as string[], evaluatedAt: string(raw.evaluated_at),
+  };
+}
+function executionConfirmation(value: unknown): AdminExecutionConfirmation {
+  const raw = object(value); safeProjection(raw);
+  return {
+    id: string(raw.id), userId: string(raw.user_id), policyRevisionId: string(raw.policy_revision_id), policyRevision: exactPositiveIntegerString(raw.policy_revision),
+    toolsetVersionId: string(raw.toolset_version_id), toolVersionId: string(raw.tool_version_id), connectionId: string(raw.connection_id),
+    argumentsHash: executionHash(raw.arguments_hash), idempotencyKeyHash: executionHash(raw.idempotency_key_hash), riskLevel: executionRisk(raw.risk_level),
+    state: executionState(raw.state), persistedState: executionState(raw.persisted_state), createdAt: string(raw.created_at), expiresAt: string(raw.expires_at),
+    consumedAt: optionalString(raw.consumed_at), expiredAt: optionalString(raw.expired_at),
+  };
+}
 function bool(value: unknown) { if (typeof value !== 'boolean') throw new Error('服务返回了无法识别的 Governance policy'); return value; }
 function policyRevision(value: unknown): AdminPublicationPolicyRevision {
   const raw = object(value); safeProjection(raw);
@@ -43,6 +84,39 @@ export interface AdminPublicationPolicyDecision {
 }
 export interface AdminPublicationPolicySnapshot { revisions: AdminPublicationPolicyRevision[]; decisions: AdminPublicationPolicyDecision[] }
 export interface AdminPublicationPolicyInput { id: string; maxRiskLevel: AdminPublicationRiskLevel; denyUnsafeWrite: boolean; denyMcpUnsafeWrite: boolean }
+
+export type AdminExecutionRiskLevel = 'low' | 'medium' | 'high' | 'critical';
+export type AdminExecutionPolicyOutcome = 'allow' | 'confirmation_required' | 'deny';
+export type AdminExecutionConfirmationState = 'active' | 'consumed' | 'expired';
+export interface AdminExecutionPolicyRevision {
+  id: string; revision: string; state: 'draft' | 'active' | 'retired';
+  maxUnconfirmedRiskLevel: AdminExecutionRiskLevel; maxMachineRiskLevel: AdminExecutionRiskLevel;
+  denyUnsafeWrite: boolean; confirmationTtlSeconds: number;
+  createdByUserId: string | null; createdAt: string; activatedByUserId: string | null; activatedAt: string | null; retiredAt: string | null;
+}
+export interface AdminExecutionPolicyDecision {
+  sequence: string; policyRevisionId: string; policyRevision: string; subjectKind: 'human' | 'machine'; subjectId: string;
+  toolsetVersionId: string; toolVersionId: string; connectionId: string; argumentsHash: string; idempotencyKeyHash: string;
+  riskLevel: AdminExecutionRiskLevel; outcome: AdminExecutionPolicyOutcome; reasonCodes: string[]; evaluatedAt: string;
+}
+export interface AdminExecutionConfirmation {
+  id: string; userId: string; policyRevisionId: string; policyRevision: string; toolsetVersionId: string; toolVersionId: string; connectionId: string;
+  argumentsHash: string; idempotencyKeyHash: string; riskLevel: AdminExecutionRiskLevel; state: AdminExecutionConfirmationState;
+  persistedState: AdminExecutionConfirmationState; createdAt: string; expiresAt: string; consumedAt: string | null; expiredAt: string | null;
+}
+export interface AdminExecutionConfirmationCursor { createdAt: string; id: string }
+export interface AdminExecutionGovernanceSnapshot {
+  activePolicy: AdminExecutionPolicyRevision | null; revisions: AdminExecutionPolicyRevision[]; decisions: AdminExecutionPolicyDecision[];
+  confirmations: AdminExecutionConfirmation[]; nextBeforeDecisionSequence: string | null; nextConfirmationCursor: AdminExecutionConfirmationCursor | null;
+}
+export interface AdminExecutionGovernanceFilter {
+  toolVersionId?: string; subjectKind?: 'human' | 'machine'; riskLevel?: AdminExecutionRiskLevel; outcome?: AdminExecutionPolicyOutcome;
+  policyRevision?: string; confirmationState?: AdminExecutionConfirmationState; beforeDecisionSequence?: string;
+  beforeConfirmationCreatedAt?: string; beforeConfirmationId?: string; limit?: number;
+}
+export interface AdminExecutionPolicyInput {
+  id: string; maxUnconfirmedRiskLevel: AdminExecutionRiskLevel; maxMachineRiskLevel: AdminExecutionRiskLevel; denyUnsafeWrite: boolean; confirmationTtlSeconds: number;
+}
 
 export type AdminPublicationAuditEventKind =
   | 'audit_baseline'
@@ -132,6 +206,7 @@ export function createAdminGovernanceClient(baseUrl = '', fetcher: typeof fetch 
   const root = (workspaceId: string) => `${base}/api/admin/v1/workspaces/${encodeURIComponent(workspaceId)}/publication-approvals`;
   const historyRoot = (workspaceId: string) => `${base}/api/admin/v1/workspaces/${encodeURIComponent(workspaceId)}/publication-history`;
   const policyRoot = (workspaceId: string) => `${base}/api/admin/v1/workspaces/${encodeURIComponent(workspaceId)}/publication-policy`;
+  const executionRoot = (workspaceId: string) => `${base}/api/admin/v1/workspaces/${encodeURIComponent(workspaceId)}/execution-governance`;
   return {
     async list(workspaceId: string, signal?: AbortSignal): Promise<AdminPublicationApproval[]> {
       if (!workspaceId) throw new Error('Workspace ID is required');
@@ -175,6 +250,45 @@ export function createAdminGovernanceClient(baseUrl = '', fetcher: typeof fetch 
     async activatePolicy(workspaceId: string, policyId: string, csrfToken: string, signal?: AbortSignal) {
       const response = await request(fetcher, `${policyRoot(workspaceId)}/revisions/${encodeURIComponent(policyId)}/activate`, { method: 'POST', signal, headers: { 'X-Mender-CSRF': csrf(csrfToken) } });
       return policyRevision(object(await response.json()).data);
+    },
+    async executionGovernance(workspaceId: string, filter: AdminExecutionGovernanceFilter = {}, signal?: AbortSignal): Promise<AdminExecutionGovernanceSnapshot> {
+      if (!workspaceId) throw new Error('Workspace ID is required');
+      if (filter.limit !== undefined && (!Number.isInteger(filter.limit) || filter.limit < 1 || filter.limit > 100)) throw new Error('Execution governance limit must be an integer between 1 and 100');
+      if (filter.policyRevision !== undefined && !/^[1-9][0-9]*$/.test(filter.policyRevision)) throw new Error('Execution policy revision must be a positive decimal string');
+      if (filter.beforeDecisionSequence !== undefined && !/^[1-9][0-9]*$/.test(filter.beforeDecisionSequence)) throw new Error('Execution decision cursor must be a positive decimal string');
+      if ((filter.beforeConfirmationCreatedAt === undefined) !== (filter.beforeConfirmationId === undefined)) throw new Error('Execution confirmation cursor must include createdAt and id');
+      const params = new URLSearchParams();
+      if (filter.toolVersionId) params.set('tool_version_id', filter.toolVersionId);
+      if (filter.subjectKind) params.set('subject_kind', filter.subjectKind);
+      if (filter.riskLevel) params.set('risk_level', filter.riskLevel);
+      if (filter.outcome) params.set('outcome', filter.outcome);
+      if (filter.policyRevision) params.set('policy_revision', filter.policyRevision);
+      if (filter.confirmationState) params.set('confirmation_state', filter.confirmationState);
+      if (filter.beforeDecisionSequence) params.set('before_decision_sequence', filter.beforeDecisionSequence);
+      if (filter.beforeConfirmationCreatedAt && filter.beforeConfirmationId) {
+        params.set('before_confirmation_created_at', filter.beforeConfirmationCreatedAt); params.set('before_confirmation_id', filter.beforeConfirmationId);
+      }
+      if (filter.limit !== undefined) params.set('limit', String(filter.limit));
+      const suffix = params.size > 0 ? `?${params.toString()}` : '';
+      const response = await request(fetcher, `${executionRoot(workspaceId)}${suffix}`, { signal });
+      const raw = object(await response.json()); const data = object(raw.data);
+      if (!Array.isArray(data.revisions) || !Array.isArray(data.decisions) || !Array.isArray(data.confirmations)) throw new Error('服务返回了无法识别的 execution governance snapshot');
+      const nextDecision = data.next_before_decision_sequence === null ? null : exactPositiveIntegerString(data.next_before_decision_sequence);
+      let nextConfirmation: AdminExecutionConfirmationCursor | null = null;
+      if (data.next_confirmation_cursor !== null) { const cursor = object(data.next_confirmation_cursor); nextConfirmation = { createdAt: string(cursor.created_at), id: string(cursor.id) }; }
+      return {
+        activePolicy: data.active_policy === null ? null : executionPolicyRevision(data.active_policy), revisions: data.revisions.map(executionPolicyRevision),
+        decisions: data.decisions.map(executionPolicyDecision), confirmations: data.confirmations.map(executionConfirmation),
+        nextBeforeDecisionSequence: nextDecision, nextConfirmationCursor: nextConfirmation,
+      };
+    },
+    async createExecutionPolicy(workspaceId: string, input: AdminExecutionPolicyInput, csrfToken: string, signal?: AbortSignal) {
+      const response = await request(fetcher, `${executionRoot(workspaceId)}/revisions`, { method: 'POST', signal, headers: { 'X-Mender-CSRF': csrf(csrfToken), 'Content-Type': 'application/json' }, body: JSON.stringify({ id: input.id, max_unconfirmed_risk_level: input.maxUnconfirmedRiskLevel, max_machine_risk_level: input.maxMachineRiskLevel, deny_unsafe_write: input.denyUnsafeWrite, confirmation_ttl_seconds: input.confirmationTtlSeconds }) });
+      return executionPolicyRevision(object(await response.json()).data);
+    },
+    async activateExecutionPolicy(workspaceId: string, policyId: string, csrfToken: string, signal?: AbortSignal) {
+      const response = await request(fetcher, `${executionRoot(workspaceId)}/revisions/${encodeURIComponent(policyId)}/activate`, { method: 'POST', signal, headers: { 'X-Mender-CSRF': csrf(csrfToken) } });
+      return executionPolicyRevision(object(await response.json()).data);
     },
   };
 }
