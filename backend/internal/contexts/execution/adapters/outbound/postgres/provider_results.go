@@ -145,15 +145,10 @@ func insertProviderObservation(ctx context.Context, tx pgx.Tx, o domain.Provider
 	return nil
 }
 
-func (r *ProviderResults) RecordProviderObservation(ctx context.Context, observation domain.ProviderObservation) (application.ProviderResultRecord, error) {
-	if observation.Validate() != nil {
+func recordProviderObservationTx(ctx context.Context, tx pgx.Tx, observation domain.ProviderObservation) (application.ProviderResultRecord, error) {
+	if tx == nil || observation.Validate() != nil {
 		return application.ProviderResultRecord{}, domain.ErrInvalidProviderObservation
 	}
-	tx, err := r.scoped(ctx, observation.WorkspaceID)
-	if err != nil {
-		return application.ProviderResultRecord{}, err
-	}
-	defer rollback(tx)
 	if existing, found, e := loadProviderObservation(ctx, tx, observation); e != nil {
 		return application.ProviderResultRecord{}, e
 	} else if found {
@@ -164,9 +159,6 @@ func (r *ProviderResults) RecordProviderObservation(ctx context.Context, observa
 		job, e := loadJobForUpdate(ctx, tx, observation.WorkspaceID, observation.RunID)
 		if e != nil {
 			return application.ProviderResultRecord{}, e
-		}
-		if e = tx.Commit(ctx); e != nil {
-			return application.ProviderResultRecord{}, application.ErrProviderResultUnavailable
 		}
 		return application.ProviderResultRecord{Run: run.Snapshot(), Job: job, Observation: existing}, nil
 	}
@@ -213,9 +205,6 @@ func (r *ProviderResults) RecordProviderObservation(ctx context.Context, observa
 		if err = insertProviderObservation(ctx, tx, observation); err != nil {
 			return application.ProviderResultRecord{}, err
 		}
-		if err = tx.Commit(ctx); err != nil {
-			return application.ProviderResultRecord{}, application.ErrProviderResultUnavailable
-		}
 		return application.ProviderResultRecord{Run: beforeRun, Job: beforeJob, Observation: observation}, nil
 	}
 	job, _ := domain.RestoreJob(beforeJob)
@@ -254,10 +243,26 @@ func (r *ProviderResults) RecordProviderObservation(ctx context.Context, observa
 	if err = saveProviderRun(ctx, tx, beforeRun, run, fmt.Sprintf("provider result %s", observation.State)); err != nil {
 		return application.ProviderResultRecord{}, err
 	}
+	return application.ProviderResultRecord{Run: run.Snapshot(), Job: afterJob, Observation: observation}, nil
+}
+
+func (r *ProviderResults) RecordProviderObservation(ctx context.Context, observation domain.ProviderObservation) (application.ProviderResultRecord, error) {
+	if observation.Validate() != nil {
+		return application.ProviderResultRecord{}, domain.ErrInvalidProviderObservation
+	}
+	tx, err := r.scoped(ctx, observation.WorkspaceID)
+	if err != nil {
+		return application.ProviderResultRecord{}, err
+	}
+	defer rollback(tx)
+	record, err := recordProviderObservationTx(ctx, tx, observation)
+	if err != nil {
+		return application.ProviderResultRecord{}, err
+	}
 	if err = tx.Commit(ctx); err != nil {
 		return application.ProviderResultRecord{}, application.ErrProviderResultUnavailable
 	}
-	return application.ProviderResultRecord{Run: run.Snapshot(), Job: afterJob, Observation: observation}, nil
+	return record, nil
 }
 
 var _ application.ProviderResultRepository = (*ProviderResults)(nil)

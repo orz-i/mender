@@ -65,6 +65,11 @@ import (
 	mcpexecution "github.com/orz-i/mender/backend/internal/processes/mcpbridge/adapters/outbound/executionaccess"
 	mcpidentity "github.com/orz-i/mender/backend/internal/processes/mcpbridge/adapters/outbound/identityaccess"
 	mcpapp "github.com/orz-i/mender/backend/internal/processes/mcpbridge/application"
+	callbackhttp "github.com/orz-i/mender/backend/internal/processes/providercallback/adapters/inbound/httpapi"
+	callbackexecution "github.com/orz-i/mender/backend/internal/processes/providercallback/adapters/outbound/executionaccess"
+	callbackfilesecret "github.com/orz-i/mender/backend/internal/processes/providercallback/adapters/outbound/filesecret"
+	callbackverify "github.com/orz-i/mender/backend/internal/processes/providercallback/adapters/outbound/hmacverify"
+	callbackapp "github.com/orz-i/mender/backend/internal/processes/providercallback/application"
 	"github.com/orz-i/mender/backend/migrations"
 )
 
@@ -76,6 +81,10 @@ type APIConfig struct {
 	CoordinatedCancelEnabled                bool
 	ProviderCancelEnabled                   bool
 	CancellationDatabaseURL                 string
+	ProviderCallbackEnabled                 bool
+	ProviderCallbackDatabaseURL             string
+	ProviderCallbackSecretRoot              string
+	ProviderCallbackReviewedKeys            map[string][]string
 	StartRunAPIEnabled                      bool
 	AdmissionDatabaseURL                    string
 	MCPGatewayEnabled                       bool
@@ -149,6 +158,49 @@ func loadConsoleSecrets(clientSecretFile, signingKeyFile string) (string, []byte
 		return "", nil, errors.New("OIDC flow signing key must be 32-byte unpadded base64url")
 	}
 	return clientSecret, key, nil
+}
+
+func parseReviewedCallbackKeys(raw string) (map[string][]string, error) {
+	parts := strings.Split(raw, ",")
+	if len(parts) < 1 || len(parts) > 256 {
+		return nil, errors.New("provider callback keys require 1-256 reviewed provider entries")
+	}
+	result := make(map[string][]string, len(parts))
+	validID := func(value string) bool {
+		if len(value) < 1 || len(value) > 128 {
+			return false
+		}
+		for _, ch := range value {
+			if !(ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9' || ch == '_' || ch == '-') {
+				return false
+			}
+		}
+		return true
+	}
+	for _, part := range parts {
+		pair := strings.Split(strings.TrimSpace(part), "=")
+		if len(pair) != 2 || !validID(pair[0]) {
+			return nil, errors.New("provider callback keys must use provider=key_id[|key_id] entries")
+		}
+		if _, duplicate := result[pair[0]]; duplicate {
+			return nil, errors.New("provider callback keys contain duplicate provider")
+		}
+		keys := strings.Split(pair[1], "|")
+		if len(keys) < 1 || len(keys) > 2 {
+			return nil, errors.New("provider callback keys allow one or two reviewed key IDs per provider")
+		}
+		seen := map[string]bool{}
+		for i, key := range keys {
+			key = strings.TrimSpace(key)
+			if !validID(key) || seen[key] {
+				return nil, errors.New("provider callback keys contain invalid or duplicate key ID")
+			}
+			seen[key] = true
+			keys[i] = key
+		}
+		result[pair[0]] = keys
+	}
+	return result, nil
 }
 
 func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
@@ -364,6 +416,23 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 			return APIConfig{}, errors.New("coordinated cancellation requires a separate cancellation database role")
 		}
 	}
+	switch getenv("MENDER_PROVIDER_CALLBACK_ENABLED") {
+	case "", "false":
+	case "true":
+		c.ProviderCallbackEnabled = true
+		c.ProviderCallbackDatabaseURL = strings.TrimSpace(getenv("MENDER_CALLBACK_INGESTOR_DATABASE_URL"))
+		c.ProviderCallbackSecretRoot = strings.TrimSpace(getenv("MENDER_PROVIDER_CALLBACK_SECRET_ROOT"))
+		if c.ProviderCallbackDatabaseURL == "" || c.ProviderCallbackSecretRoot == "" {
+			return APIConfig{}, errors.New("provider callbacks require callback-ingestor database URL and mounted secret root")
+		}
+		keys, err := parseReviewedCallbackKeys(strings.TrimSpace(getenv("MENDER_PROVIDER_CALLBACK_KEYS")))
+		if err != nil {
+			return APIConfig{}, err
+		}
+		c.ProviderCallbackReviewedKeys = keys
+	default:
+		return c, errors.New("MENDER_PROVIDER_CALLBACK_ENABLED must be true or false")
+	}
 	switch getenv("MENDER_RUN_READ_API_ENABLED") {
 	case "", "false":
 	case "true":
@@ -410,7 +479,7 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	}
 	switch getenv("MENDER_RUN_API_ENABLED") {
 	case "", "false":
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleExecutionRiskEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleCatalogEnabled || c.AdminCatalogReviewEnabled || c.AdminCatalogPolicyEnabled || c.ConsoleConnectionOAuthEnabled {
+		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.ProviderCallbackEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleExecutionRiskEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleCatalogEnabled || c.AdminCatalogReviewEnabled || c.AdminCatalogPolicyEnabled || c.ConsoleConnectionOAuthEnabled {
 			return APIConfig{}, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return c, nil
@@ -444,7 +513,7 @@ func (systemClock) Now() time.Time { return time.Now().UTC().Truncate(time.Micro
 // BuildAPI never migrates, seeds data or falls back to a test repository.
 func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	if !c.RunAPIEnabled {
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleExecutionRiskEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleCatalogEnabled || c.AdminCatalogReviewEnabled || c.AdminCatalogPolicyEnabled || c.ConsoleConnectionOAuthEnabled {
+		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.ProviderCallbackEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleExecutionRiskEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleCatalogEnabled || c.AdminCatalogReviewEnabled || c.AdminCatalogPolicyEnabled || c.ConsoleConnectionOAuthEnabled {
 			return nil, nil, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return httpserver.NewRouter(), func() {}, nil
@@ -500,6 +569,7 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 		return nil, nil, err
 	}
 	var cancelPool *pgxpool.Pool
+	var callbackPool *pgxpool.Pool
 	var admissionPool *pgxpool.Pool
 	var browserSessionPool *pgxpool.Pool
 	var connectionManagerPool *pgxpool.Pool
@@ -510,6 +580,9 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	var commerceObserverPool *pgxpool.Pool
 	var startDelegationFacade *facade.RunStartDelegations
 	closePools := func() {
+		if callbackPool != nil {
+			callbackPool.Close()
+		}
 		if governanceExecutionConfirmerPool != nil {
 			governanceExecutionConfirmerPool.Close()
 		}
@@ -591,6 +664,44 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 		return failed(err)
 	}
 	registers := []func(*gin.Engine){handler.Register}
+	if c.ProviderCallbackEnabled {
+		callbackPool, err = database.Open(start, c.ProviderCallbackDatabaseURL)
+		if err != nil {
+			return failed(err)
+		}
+		readerCfg, callbackCfg := pool.Config().ConnConfig, callbackPool.Config().ConnConfig
+		if readerCfg.Host != callbackCfg.Host || readerCfg.Port != callbackCfg.Port || readerCfg.Database != callbackCfg.Database || readerCfg.User == callbackCfg.User || (cancelPool != nil && callbackCfg.User == cancelPool.Config().ConnConfig.User) {
+			return failed(errors.New("provider callbacks require the same database with a distinct restricted role"))
+		}
+		if err = migrations.Verify(start, callbackPool); err != nil {
+			return failed(err)
+		}
+		if err = database.CallbackIngestorRole(start, callbackPool); err != nil {
+			return failed(err)
+		}
+		callbackSecrets, buildErr := callbackfilesecret.New(c.ProviderCallbackSecretRoot, c.ProviderCallbackReviewedKeys)
+		if buildErr != nil {
+			return failed(buildErr)
+		}
+		callbackVerifier, buildErr := callbackverify.New(callbackSecrets)
+		if buildErr != nil {
+			return failed(buildErr)
+		}
+		callbackCore, buildErr := runapp.NewProviderCallbackService(runpg.NewProviderCallbacks(callbackPool))
+		if buildErr != nil {
+			return failed(buildErr)
+		}
+		callbackReceiver := callbackexecution.New(runfacade.NewProviderCallbacks(callbackCore))
+		callbackService, buildErr := callbackapp.New(callbackReceiver, callbackVerifier, systemClock{})
+		if buildErr != nil {
+			return failed(buildErr)
+		}
+		callbackHandler, buildErr := callbackhttp.New(callbackService)
+		if buildErr != nil {
+			return failed(buildErr)
+		}
+		registers = append(registers, callbackHandler.Register)
+	}
 	if c.ConsoleOIDCEnabled {
 		browserSessionPool, err = database.Open(start, c.BrowserSessionDatabaseURL)
 		if err != nil {
@@ -1034,6 +1145,14 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 				return err
 			}
 			if err := database.CancellationRole(ctx, cancelPool); err != nil {
+				return err
+			}
+		}
+		if callbackPool != nil {
+			if err := migrations.Verify(ctx, callbackPool); err != nil {
+				return err
+			}
+			if err := database.CallbackIngestorRole(ctx, callbackPool); err != nil {
 				return err
 			}
 		}

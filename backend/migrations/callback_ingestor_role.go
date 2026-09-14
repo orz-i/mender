@@ -35,6 +35,7 @@ func GrantCallbackIngestor(ctx context.Context, pool *pgxpool.Pool, role string)
 		"GRANT UPDATE (state,version,updated_at) ON execution.runs TO " + id,
 		"GRANT UPDATE (state,blocked_reason,updated_at,stopped_at) ON execution.jobs TO " + id,
 		"GRANT UPDATE (state,sending_at,resolved_at,outcome_observation_id,unknown_reason) ON execution.provider_cancel_intents TO " + id,
+		"GRANT EXECUTE ON FUNCTION pg_catalog.pg_advisory_xact_lock(bigint) TO " + id,
 	} {
 		if _, err = tx.Exec(ctx, sql); err != nil {
 			return errors.New("callback-ingestor grant failed")

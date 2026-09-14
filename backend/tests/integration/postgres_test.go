@@ -243,6 +243,9 @@ func TestPostgresRuntimeContract(t *testing.T) {
 	t.Run("reviewed remote Agent runtime", func(t *testing.T) {
 		exerciseRemoteAgentRuntime(t, ctx, owner, runtimeURL.String())
 	})
+	t.Run("trusted Provider callback Inbox convergence", func(t *testing.T) {
+		exerciseProviderCallbackRuntime(t, ctx, owner, runtimeURL.String())
+	})
 	t.Run("usage settlement and quota convergence", func(t *testing.T) {
 		exerciseUsageSettlement(t, ctx, owner, runtime, runtimeURL.String())
 	})
