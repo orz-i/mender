@@ -108,6 +108,7 @@ func TestPostgresRuntimeContract(t *testing.T) {
 	keyReadOnlyA, _ := issue("ws_a", "sa_read", []string{"run:read"})
 	keyB, _ := issue("ws_b", "sa_b", []string{"run:read"})
 	keyUpstreamMCP, _ := issue("ws_upstream_mcp", "sa_upstream_mcp", []string{"run:read", "run:cancel", "run:create"})
+	keyG3Matrix, _ := issue("ws_g3_matrix", "sa_g3_matrix", []string{"run:read", "run:cancel", "run:create"})
 	seed := func(workspace, id string) {
 		_, e := owner.Exec(ctx, "INSERT INTO execution.runs(workspace_id,id,state,version,created_at,updated_at) VALUES($1,$2,'queued',1,$3,$3)", workspace, id, at)
 		must(t, e)
@@ -260,6 +261,9 @@ func TestPostgresRuntimeContract(t *testing.T) {
 	})
 	t.Run("upstream MCP client discovery call and result convergence", func(t *testing.T) {
 		exerciseUpstreamMCPRuntime(t, ctx, owner, runtime, runtimeURL.String(), keyUpstreamMCP)
+	})
+	t.Run("G3 same-subject three-source Entry Run Artifact convergence matrix", func(t *testing.T) {
+		exerciseG3EntryMatrix(t, ctx, owner, runtimeURL.String(), keyG3Matrix, keyB)
 	})
 	t.Run("human OIDC browser sessions and workspace authorization", func(t *testing.T) {
 		exerciseHumanBrowserSessions(t, ctx, owner, runtimeURL.String())
