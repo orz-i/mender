@@ -1,6 +1,6 @@
-import { createConsoleIdentityClient, createConsoleLaunchClient, createConsoleStartRunClient, MenderApiError } from '@mender/api-client';
+import { createConsoleExecutionRiskClient, createConsoleIdentityClient, createConsoleLaunchClient, createConsoleStartRunClient, MenderApiError } from '@mender/api-client';
 import { LaunchLoginRequiredError, type LaunchGateway } from '../application/launch-gateway';
-import type { LaunchOption } from '../domain/launch';
+import type { ExecutionRiskDecision, LaunchOption } from '../domain/launch';
 
 function readCSRFCookie() {
   const prefix = 'mender_csrf=';
@@ -9,6 +9,14 @@ function readCSRFCookie() {
     if (value.startsWith(prefix)) return decodeURIComponent(value.slice(prefix.length));
   }
   return '';
+}
+
+function riskDecision(value: Awaited<ReturnType<ReturnType<typeof createConsoleExecutionRiskClient>['preview']>>): ExecutionRiskDecision {
+  return {
+    sequence: value.sequence, policyRevisionId: value.policyRevisionId, policyRevision: value.policyRevision,
+    toolsetVersionId: value.toolsetVersionId, toolVersionId: value.toolVersionId, connectionId: value.connectionId, argumentsHash: value.argumentsHash,
+    riskLevel: value.riskLevel, outcome: value.outcome, reasonCodes: value.reasonCodes, evaluatedAt: value.evaluatedAt,
+  };
 }
 
 function mapError(error: unknown): never {
@@ -33,6 +41,7 @@ export function createLaunchGateway(): LaunchGateway {
   const identity = createConsoleIdentityClient();
   const catalog = createConsoleLaunchClient();
   const starter = createConsoleStartRunClient();
+  const executionRisk = createConsoleExecutionRiskClient();
   return {
     async workspaces(signal) {
       try {
@@ -43,16 +52,32 @@ export function createLaunchGateway(): LaunchGateway {
       try { return (await catalog.list(workspaceId, signal)).map(option); }
       catch (error) { return mapError(error); }
     },
-    async prepare(workspaceId, selected, maxChargeMicro, signal) {
+    async preview(workspaceId, selected, argumentsValue, signal) {
       const csrf = readCSRFCookie();
       if (!csrf) throw new Error('CSRF token unavailable');
       const key = idempotencyKey();
       try {
+        const value = await executionRisk.preview(workspaceId, { toolsetVersionId: selected.toolsetVersionId, toolVersionId: selected.toolVersionId, connectionId: selected.connectionId, idempotencyKey: key, arguments: argumentsValue }, csrf, signal);
+        return { idempotencyKey: key, decision: riskDecision(value), confirmationId: null, confirmationExpiresAt: null };
+      } catch (error) { return mapError(error); }
+    },
+    async confirm(workspaceId, selected, argumentsValue, key, signal) {
+      const csrf = readCSRFCookie();
+      if (!csrf) throw new Error('CSRF token unavailable');
+      try {
+        const value = await executionRisk.confirm(workspaceId, { toolsetVersionId: selected.toolsetVersionId, toolVersionId: selected.toolVersionId, connectionId: selected.connectionId, idempotencyKey: key, arguments: argumentsValue }, csrf, signal);
+        return { idempotencyKey: key, decision: riskDecision(value.decision), confirmationId: value.confirmationId, confirmationExpiresAt: value.expiresAt };
+      } catch (error) { return mapError(error); }
+    },
+    async prepare(workspaceId, selected, maxChargeMicro, argumentsHash, key, signal) {
+      const csrf = readCSRFCookie();
+      if (!csrf) throw new Error('CSRF token unavailable');
+      try {
         const issued = await starter.issueDelegation(workspaceId, {
           toolsetVersionId: selected.toolsetVersionId, toolId: selected.toolId, toolVersion: selected.toolVersion, toolVersionId: selected.toolVersionId,
-          connectionId: selected.connectionId, currency: selected.currency, maxChargeMicro, idempotencyKey: key,
+          connectionId: selected.connectionId, currency: selected.currency, maxChargeMicro, idempotencyKey: key, argumentsHash,
         }, csrf, signal);
-        return { delegationId: issued.delegationId, workspaceId, token: issued.token, idempotencyKey: key, expiresAt: issued.expiresAt, option: selected, maxChargeMicro };
+        return { delegationId: issued.delegationId, workspaceId, token: issued.token, idempotencyKey: key, expiresAt: issued.expiresAt, option: selected, maxChargeMicro, argumentsHash };
       } catch (error) { return mapError(error); }
     },
     async submit(prepared, argumentsValue, signal) {
@@ -60,7 +85,7 @@ export function createLaunchGateway(): LaunchGateway {
         return await starter.startRun(prepared.workspaceId, {
           delegationId: prepared.delegationId, workspaceId: prepared.workspaceId, token: prepared.token, expiresAt: prepared.expiresAt,
           toolsetVersionId: prepared.option.toolsetVersionId, toolId: prepared.option.toolId, toolVersion: prepared.option.toolVersion, toolVersionId: prepared.option.toolVersionId,
-          connectionId: prepared.option.connectionId, currency: prepared.option.currency, maxChargeMicro: prepared.maxChargeMicro, idempotencyKey: prepared.idempotencyKey,
+          connectionId: prepared.option.connectionId, currency: prepared.option.currency, maxChargeMicro: prepared.maxChargeMicro, idempotencyKey: prepared.idempotencyKey, argumentsHash: prepared.argumentsHash,
         }, argumentsValue, signal);
       } catch (error) { return mapError(error); }
     },

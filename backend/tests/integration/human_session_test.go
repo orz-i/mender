@@ -4,6 +4,8 @@ package integration_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"strings"
 	"testing"
@@ -28,13 +30,13 @@ import (
 	identitydomain "github.com/orz-i/mender/backend/internal/contexts/identity/domain"
 	"github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/filesecret"
 	supplyapp "github.com/orz-i/mender/backend/internal/contexts/supply/application"
-	"github.com/orz-i/mender/backend/internal/platform/canonicaljson"
 	database "github.com/orz-i/mender/backend/internal/platform/postgres"
 	admissionidentitystart "github.com/orz-i/mender/backend/internal/processes/admission/adapters/outbound/identitystart"
 	admissionapp "github.com/orz-i/mender/backend/internal/processes/admission/application"
 	launchidentity "github.com/orz-i/mender/backend/internal/processes/consolelaunch/adapters/outbound/identityaccess"
 	launchpg "github.com/orz-i/mender/backend/internal/processes/consolelaunch/adapters/outbound/postgres"
 	launchapp "github.com/orz-i/mender/backend/internal/processes/consolelaunch/application"
+	"github.com/orz-i/mender/backend/internal/sharedkernel/canonicaljson"
 	"github.com/orz-i/mender/backend/migrations"
 )
 
@@ -156,7 +158,8 @@ func exerciseHumanBrowserSessions(t *testing.T, ctx context.Context, owner *pgxp
 	startArguments := []byte(`{"query":"hello"}`)
 	canonicalStartArguments, err := canonicaljson.Object(startArguments, 65536)
 	must(t, err)
-	startArgumentsHash := canonicaljson.SHA256(canonicalStartArguments)
+	startArgumentsSum := sha256.Sum256(canonicalStartArguments)
+	startArgumentsHash := hex.EncodeToString(startArgumentsSum[:])
 	startDelegation, err := startDelegationService.Issue(ctx, principal, "ws_human_alpha", identityapp.RunStartConstraint{
 		ToolsetVersionID: "set_human_launch_v1", ToolID: "tool_human_launch", ToolVersion: "1.0.0", ToolVersionID: "tool_human_launch_v1",
 		ConnectionID: "conn_human_alpha", Currency: "USD", MaxChargeMicro: 75, IdempotencyKey: "human-start-alpha-0001", ArgumentsHash: startArgumentsHash,

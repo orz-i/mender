@@ -4,7 +4,7 @@ import { createConsoleStartRunClient } from './console-start-run.ts';
 
 const constraint = {
   toolsetVersionId: 'set_alpha_v1', toolId: 'tool_alpha', toolVersion: '1.0.0', toolVersionId: 'tool_alpha_v1', connectionId: 'conn_alpha',
-  currency: 'USD', maxChargeMicro: '75', idempotencyKey: 'human-start-alpha-0001',
+  currency: 'USD', maxChargeMicro: '75', idempotencyKey: 'human-start-alpha-0001', argumentsHash: 'a'.repeat(64),
 };
 
 test('mints exact StartRun delegation with browser session + CSRF only', async () => {
@@ -15,10 +15,11 @@ test('mints exact StartRun delegation with browser session + CSRF only', async (
     assert.equal(init.headers['X-Mender-CSRF'], 'csrf-alpha');
     const body = JSON.parse(init.body);
     assert.equal(body.idempotency_key, constraint.idempotencyKey);
+    assert.equal(body.arguments_hash, constraint.argumentsHash);
     return Response.json({ data: {
       delegation_id: 'rsd_alpha', workspace_id: 'ws_alpha', token: 'x'.repeat(43), expires_at: new Date(Date.now() + 60_000).toISOString(),
       toolset_version_id: constraint.toolsetVersionId, tool_id: constraint.toolId, tool_version: constraint.toolVersion, tool_version_id: constraint.toolVersionId,
-      connection_id: constraint.connectionId, currency: constraint.currency, max_charge_micro: constraint.maxChargeMicro, idempotency_key: constraint.idempotencyKey,
+      connection_id: constraint.connectionId, currency: constraint.currency, max_charge_micro: constraint.maxChargeMicro, idempotency_key: constraint.idempotencyKey, arguments_hash: constraint.argumentsHash,
     } }, { status: 201 });
   });
   const issued = await client.issueDelegation('ws_alpha', constraint, 'csrf-alpha');
@@ -45,7 +46,7 @@ test('delegation response fails closed on constraint drift', async () => {
   const client = createConsoleStartRunClient('', async () => Response.json({ data: {
     delegation_id: 'rsd_alpha', workspace_id: 'ws_alpha', token: 'x'.repeat(43), expires_at: new Date().toISOString(),
     toolset_version_id: constraint.toolsetVersionId, tool_id: constraint.toolId, tool_version: constraint.toolVersion, tool_version_id: constraint.toolVersionId,
-    connection_id: 'conn_other', currency: constraint.currency, max_charge_micro: constraint.maxChargeMicro, idempotency_key: constraint.idempotencyKey,
+    connection_id: 'conn_other', currency: constraint.currency, max_charge_micro: constraint.maxChargeMicro, idempotency_key: constraint.idempotencyKey, arguments_hash: constraint.argumentsHash,
   } }, { status: 201 }));
   await assert.rejects(client.issueDelegation('ws_alpha', constraint, 'csrf-alpha'), /错误的启动委托范围/);
 });

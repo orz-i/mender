@@ -2,11 +2,8 @@ package canonicaljson
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"io"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -114,6 +111,10 @@ func decode(d *json.Decoder, depth int) (any, error) {
 	return token, nil
 }
 
+// Object is the shared stable identity rule for exact Human confirmation and
+// Admission. It canonicalizes only a bounded top-level JSON object and rejects
+// duplicate keys, invalid Unicode and excessive depth. Hashing stays in the
+// calling adapter so this Shared Kernel remains pure and business-agnostic.
 func Object(raw []byte, maxBytes int) ([]byte, error) {
 	if maxBytes < 2 || len(raw) == 0 || len(raw) > maxBytes || !utf8.Valid(raw) || !validUnicodeEscapes(raw) || strings.ContainsRune(string(raw), 0) {
 		return nil, ErrInvalid
@@ -127,7 +128,7 @@ func Object(raw []byte, maxBytes int) ([]byte, error) {
 	if _, ok := value.(map[string]any); !ok {
 		return nil, ErrInvalid
 	}
-	if _, err = decoder.Token(); err != io.EOF {
+	if remainder := bytes.TrimSpace(raw[decoder.InputOffset():]); len(remainder) != 0 {
 		return nil, ErrInvalid
 	}
 	canonical, err := json.Marshal(value)
@@ -135,9 +136,4 @@ func Object(raw []byte, maxBytes int) ([]byte, error) {
 		return nil, ErrInvalid
 	}
 	return canonical, nil
-}
-
-func SHA256(value []byte) string {
-	sum := sha256.Sum256(value)
-	return hex.EncodeToString(sum[:])
 }

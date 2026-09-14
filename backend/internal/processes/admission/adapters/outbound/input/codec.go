@@ -5,8 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"github.com/orz-i/mender/backend/internal/platform/canonicaljson"
 	"github.com/orz-i/mender/backend/internal/processes/admission/application"
+	"github.com/orz-i/mender/backend/internal/sharedkernel/canonicaljson"
 )
 
 type Codec struct{}
@@ -26,9 +26,11 @@ func (Codec) Prepare(q application.Request) (application.Prepared, error) {
 		return application.Prepared{}, application.ErrInvalid
 	}
 	sum := sha256.Sum256(content)
+	argumentsSum := sha256.Sum256(canonical)
+	idempotencySum := sha256.Sum256([]byte(q.IdempotencyKey))
 	return application.Prepared{
 		CanonicalArguments: string(canonical), RequestHash: hex.EncodeToString(sum[:]),
-		ArgumentsHash: canonicaljson.SHA256(canonical), IdempotencyKeyHash: canonicaljson.SHA256([]byte(q.IdempotencyKey)),
+		ArgumentsHash: hex.EncodeToString(argumentsSum[:]), IdempotencyKeyHash: hex.EncodeToString(idempotencySum[:]),
 	}, nil
 }
 

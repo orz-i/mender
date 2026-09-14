@@ -9,6 +9,7 @@ export interface ConsoleStartConstraint {
   currency: string;
   maxChargeMicro: string;
   idempotencyKey: string;
+  argumentsHash: string;
 }
 
 export interface ConsoleStartDelegation extends ConsoleStartConstraint {
@@ -28,6 +29,7 @@ const idPattern = /^[A-Za-z0-9_-]{1,128}$/;
 const versionPattern = /^[A-Za-z0-9][A-Za-z0-9._:+-]{0,127}$/;
 const moneyPattern = /^(0|[1-9][0-9]{0,18})$/;
 const idemPattern = /^[!-~]{8,128}$/;
+const hashPattern = /^[a-f0-9]{64}$/;
 
 function object(value: unknown, message = '服务返回了无法识别的启动响应'): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(message);
@@ -43,7 +45,7 @@ function requireConstraint(value: ConsoleStartConstraint) {
   if (!idPattern.test(value.toolsetVersionId) || !idPattern.test(value.toolId) || !versionPattern.test(value.toolVersion) || !idPattern.test(value.toolVersionId) || !idPattern.test(value.connectionId)) {
     throw new Error('启动目标格式无效');
   }
-  if (!/^[A-Z]{3}$/.test(value.currency) || !moneyPattern.test(value.maxChargeMicro) || !idemPattern.test(value.idempotencyKey)) {
+  if (!/^[A-Z]{3}$/.test(value.currency) || !moneyPattern.test(value.maxChargeMicro) || !idemPattern.test(value.idempotencyKey) || !hashPattern.test(value.argumentsHash)) {
     throw new Error('启动费用或幂等标识无效');
   }
 }
@@ -84,7 +86,7 @@ export function createConsoleStartRunClient(baseUrl = '', fetcher: typeof fetch 
         headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Mender-CSRF': csrf },
         body: JSON.stringify({
           toolset_version_id: constraint.toolsetVersionId, tool_id: constraint.toolId, tool_version: constraint.toolVersion, tool_version_id: constraint.toolVersionId,
-          connection_id: constraint.connectionId, currency: constraint.currency, max_charge_micro: constraint.maxChargeMicro, idempotency_key: constraint.idempotencyKey,
+          connection_id: constraint.connectionId, currency: constraint.currency, max_charge_micro: constraint.maxChargeMicro, idempotency_key: constraint.idempotencyKey, arguments_hash: constraint.argumentsHash,
         }),
       });
       if (!response.ok) throw await errorFrom(response);
@@ -94,9 +96,10 @@ export function createConsoleStartRunClient(baseUrl = '', fetcher: typeof fetch 
         delegationId: string(data.delegation_id), workspaceId: string(data.workspace_id), token: string(data.token), expiresAt: string(data.expires_at),
         toolsetVersionId: string(data.toolset_version_id), toolId: string(data.tool_id), toolVersion: string(data.tool_version), toolVersionId: string(data.tool_version_id),
         connectionId: string(data.connection_id), currency: string(data.currency), maxChargeMicro: string(data.max_charge_micro), idempotencyKey: string(data.idempotency_key),
+        argumentsHash: string(data.arguments_hash),
       };
       if (!idPattern.test(result.delegationId) || result.workspaceId !== workspaceId || result.token.length < 32 || result.token.length > 240 || /\s/.test(result.token)) throw new Error('服务返回了无法识别的启动委托');
-      for (const key of ['toolsetVersionId', 'toolId', 'toolVersion', 'toolVersionId', 'connectionId', 'currency', 'maxChargeMicro', 'idempotencyKey'] as const) {
+      for (const key of ['toolsetVersionId', 'toolId', 'toolVersion', 'toolVersionId', 'connectionId', 'currency', 'maxChargeMicro', 'idempotencyKey', 'argumentsHash'] as const) {
         if (result[key] !== constraint[key]) throw new Error('服务返回了错误的启动委托范围');
       }
       return result;

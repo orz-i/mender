@@ -2,6 +2,8 @@ package httpapi
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -11,7 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/orz-i/mender/backend/internal/contexts/governance/application"
-	"github.com/orz-i/mender/backend/internal/platform/canonicaljson"
+	"github.com/orz-i/mender/backend/internal/sharedkernel/canonicaljson"
 )
 
 type ExecutionRiskHandler struct {
@@ -73,9 +75,11 @@ func target(input executionRiskInput) (application.ExecutionRiskTarget, error) {
 	if err != nil {
 		return application.ExecutionRiskTarget{}, application.ErrInvalid
 	}
+	argumentsSum := sha256.Sum256(canonical)
+	idempotencySum := sha256.Sum256([]byte(input.IdempotencyKey))
 	return application.ExecutionRiskTarget{
 		ToolsetVersionID: input.ToolsetVersionID, ToolVersionID: input.ToolVersionID, ConnectionID: input.ConnectionID,
-		ArgumentsHash: canonicaljson.SHA256(canonical), IdempotencyKeyHash: canonicaljson.SHA256([]byte(input.IdempotencyKey)),
+		ArgumentsHash: hex.EncodeToString(argumentsSum[:]), IdempotencyKeyHash: hex.EncodeToString(idempotencySum[:]),
 	}, nil
 }
 

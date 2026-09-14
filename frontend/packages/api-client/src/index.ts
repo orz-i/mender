@@ -8,6 +8,8 @@ export { createConsoleLaunchClient } from './console-launch.ts';
 export type { ConsoleLaunchOption } from './console-launch.ts';
 export { createConsoleStartRunClient } from './console-start-run.ts';
 export type { ConsoleStartConstraint, ConsoleStartDelegation, ConsoleStartResult } from './console-start-run.ts';
+export { createConsoleExecutionRiskClient } from './console-execution-risk.ts';
+export type { ConsoleExecutionRiskConfirmation, ConsoleExecutionRiskDecision, ConsoleExecutionRiskInput, ConsoleExecutionRiskLevel, ConsoleExecutionRiskOutcome } from './console-execution-risk.ts';
 export { createConsoleRunDelegationClient } from './console-run-delegation.ts';
 export type { ConsoleRunDelegation, RunDelegationScope } from './console-run-delegation.ts';
 export { createConsoleUsageClient } from './console-usage.ts';

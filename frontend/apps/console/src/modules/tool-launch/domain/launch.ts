@@ -18,8 +18,21 @@ export interface LaunchOption {
   reserveMicro: string;
 }
 
-export function canStartRuns(role: LaunchWorkspaceRole) {
-  return role === 'owner' || role === 'admin' || role === 'developer';
+export type ExecutionRiskLevel = 'low' | 'medium' | 'high' | 'critical';
+export type ExecutionRiskOutcome = 'allow' | 'confirmation_required' | 'deny';
+
+export interface ExecutionRiskDecision {
+  sequence: string;
+  policyRevisionId: string;
+  policyRevision: string;
+  toolsetVersionId: string;
+  toolVersionId: string;
+  connectionId: string;
+  argumentsHash: string;
+  riskLevel: ExecutionRiskLevel;
+  outcome: ExecutionRiskOutcome;
+  reasonCodes: string[];
+  evaluatedAt: string;
 }
 
 export function launchOptionKey(option: LaunchOption) {
