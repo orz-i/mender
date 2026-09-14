@@ -2,7 +2,9 @@ package oauth
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -147,7 +149,69 @@ func (c *Client) Exchange(ctx context.Context, code, verifier string) (applicati
 	if err != nil || token.AccessToken == "" || !strings.EqualFold(token.TokenType, "Bearer") || token.Expiry.IsZero() {
 		return application.OAuthAccessToken{}, errors.New("OAuth code exchange failed")
 	}
-	return application.OAuthAccessToken{Value: []byte(token.AccessToken), ExpiresAt: token.Expiry}, nil
+	var scopes []string
+	if raw, ok := token.Extra("scope").(string); ok && strings.TrimSpace(raw) != "" {
+		scopes = strings.Fields(raw)
+	}
+	return application.OAuthAccessToken{Value: []byte(token.AccessToken), RefreshValue: []byte(token.RefreshToken), ExpiresAt: token.Expiry, Scopes: scopes}, nil
+}
+
+type refreshResponse struct {
+	AccessToken  string      `json:"access_token"`
+	TokenType    string      `json:"token_type"`
+	ExpiresIn    json.Number `json:"expires_in"`
+	RefreshToken string      `json:"refresh_token"`
+	Scope        string      `json:"scope"`
+	Error        string      `json:"error"`
+}
+
+func (c *Client) Refresh(ctx context.Context, refresh []byte) (application.OAuthAccessToken, error) {
+	if c == nil || len(refresh) < 1 || len(refresh) > 16<<10 {
+		return application.OAuthAccessToken{}, errors.New("OAuth refresh is invalid")
+	}
+	values := url.Values{"grant_type": {"refresh_token"}, "refresh_token": {string(refresh)}}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.config.Endpoint.TokenURL, strings.NewReader(values.Encode()))
+	if err != nil {
+		return application.OAuthAccessToken{}, errors.New("OAuth refresh request failed")
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+	req.SetBasicAuth(c.config.ClientID, c.config.ClientSecret)
+	response, err := c.http.Do(req)
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return application.OAuthAccessToken{}, err
+		}
+		return application.OAuthAccessToken{}, errors.New("OAuth refresh request unavailable")
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(response.Body, 64<<10+1))
+	if err != nil || len(body) > 64<<10 {
+		return application.OAuthAccessToken{}, errors.New("OAuth refresh response unavailable")
+	}
+	decoder := json.NewDecoder(strings.NewReader(string(body)))
+	decoder.UseNumber()
+	var payload refreshResponse
+	if err = decoder.Decode(&payload); err != nil {
+		return application.OAuthAccessToken{}, errors.New("OAuth refresh response invalid")
+	}
+	if response.StatusCode < 200 || response.StatusCode >= 300 || payload.Error != "" {
+		if payload.Error == "invalid_grant" {
+			return application.OAuthAccessToken{}, application.ErrOAuthRefreshRejected
+		}
+		return application.OAuthAccessToken{}, errors.New("OAuth refresh rejected or unavailable")
+	}
+	seconds, err := payload.ExpiresIn.Int64()
+	if err != nil || seconds < 1 || seconds > int64((24*time.Hour)/time.Second) || payload.AccessToken == "" || !strings.EqualFold(payload.TokenType, "Bearer") {
+		return application.OAuthAccessToken{}, errors.New("OAuth refresh token response invalid")
+	}
+	expires := time.Now().UTC().Add(time.Duration(seconds) * time.Second)
+	var scopes []string
+	if strings.TrimSpace(payload.Scope) != "" {
+		scopes = strings.Fields(payload.Scope)
+	}
+	return application.OAuthAccessToken{Value: []byte(payload.AccessToken), RefreshValue: []byte(payload.RefreshToken), ExpiresAt: expires, Scopes: scopes}, nil
 }
 
 var _ application.OAuthProvider = (*Client)(nil)
+var _ application.OAuthRefreshProvider = (*Client)(nil)

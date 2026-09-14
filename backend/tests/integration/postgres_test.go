@@ -268,6 +268,9 @@ func TestPostgresRuntimeContract(t *testing.T) {
 	t.Run("human OIDC browser sessions and workspace authorization", func(t *testing.T) {
 		exerciseHumanBrowserSessions(t, ctx, owner, runtimeURL.String())
 	})
+	t.Run("reviewed OAuth refresh CAS and token isolation", func(t *testing.T) {
+		exerciseOAuthRefreshRuntime(t, ctx, owner, runtimeURL.String())
+	})
 	t.Run("Catalog Toolset management role RLS and immutable publication facts", func(t *testing.T) {
 		exerciseCatalogManagementFoundation(t, ctx, owner, runtime, runtimeURL.String())
 	})
