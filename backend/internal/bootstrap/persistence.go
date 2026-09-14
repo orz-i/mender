@@ -890,6 +890,15 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 				return failed(handlerErr)
 			}
 			registers = append(registers, policyHandler.Register)
+			executionGovernanceService, serviceErr := governanceapp.NewExecutionGovernance(governancepg.NewExecutionGovernance(governancePolicyManagerPool), policyAccess)
+			if serviceErr != nil {
+				return failed(serviceErr)
+			}
+			executionGovernanceHandler, handlerErr := governancehttp.NewExecutionGovernance(executionGovernanceService, policyAccess)
+			if handlerErr != nil {
+				return failed(handlerErr)
+			}
+			registers = append(registers, executionGovernanceHandler.Register)
 		}
 		if c.ConsoleExecutionRiskEnabled {
 			governanceExecutionConfirmerPool, buildErr = database.Open(start, c.GovernanceExecutionConfirmerDatabaseURL)

@@ -9,6 +9,13 @@
       "updated_at": "unix:1789132399",
       "parent_session_id": "ses_62a1ebea37544a1a9eb3d95cec77deaf"
     },
+    "ses_1344ce3dc7f0462cbd1a36eb4dbb4d03": {
+      "path": "docs/session/ses_1344ce3dc7f0462cbd1a36eb4dbb4d03.md",
+      "title": "Execution Governance Admin Alpha",
+      "status": "active",
+      "created_at": "unix:1789351607",
+      "updated_at": "unix:1789352104"
+    },
     "ses_157ff4de793941e59da1cd925b5484b5": {
       "path": "docs/session/ses_157ff4de793941e59da1cd925b5484b5.md",
       "title": "Continue next Mender development phase",
@@ -114,6 +121,7 @@
     "host-session:5d530fd57ba79b8268af02d30478bff4dce88969f5bf7445b588a5903cdd379a": "ses_157ff4de793941e59da1cd925b5484b5",
     "host-session:be22f26ebb1fb1dcd7490beb19b7d96a9c0380da14161fce6912b89779e7b9d6": "ses_ecbf2ba5ef77446a97478cb1f13a4c51",
     "host-session:c53bc646420f50ff80a09d952e02f152a0df5b2ff8de8ca08ba0290a7c708939": "ses_8e2a42283ec744f5940c1dc762d2e187",
-    "host-session:f0dc32257f053fdad6fcdd105ee0cbd89e45535e508e8f6b9baa3068c6ba38ce": "ses_2f17c97012894567b7429bfba5d52c62"
+    "host-session:f0dc32257f053fdad6fcdd105ee0cbd89e45535e508e8f6b9baa3068c6ba38ce": "ses_2f17c97012894567b7429bfba5d52c62",
+    "host-session:f469a465ece78120da5de60df27407ac2fb02c786dfd8fc9bd42ee7a3f475fab": "ses_1344ce3dc7f0462cbd1a36eb4dbb4d03"
   }
 }

@@ -31,12 +31,15 @@ func TestCatalogWorkspaceAuthorization(t *testing.T) {
 		if got := membership.Allows("catalog:policy"); got != tc.canReview {
 			t.Fatal("unexpected Catalog policy authorization", tc.role, got)
 		}
+		if got := membership.Allows("execution:governance"); got != tc.canReview {
+			t.Fatal("unexpected execution governance authorization", tc.role, got)
+		}
 		if got := membership.Allows("catalog:audit"); got != tc.canReview {
 			t.Fatal("unexpected Catalog audit authorization", tc.role, got)
 		}
 	}
 	disabled := WorkspaceMembership{WorkspaceID: "ws_catalog", UserID: "user_catalog", Role: RoleOwner, Disabled: true, CreatedAt: createdAt}
-	if disabled.Allows("catalog:read") || disabled.Allows("catalog:manage") || disabled.Allows("catalog:review") || disabled.Allows("catalog:audit") || disabled.Allows("catalog:policy") {
+	if disabled.Allows("catalog:read") || disabled.Allows("catalog:manage") || disabled.Allows("catalog:review") || disabled.Allows("catalog:audit") || disabled.Allows("catalog:policy") || disabled.Allows("execution:governance") {
 		t.Fatal("disabled membership retained Catalog authority")
 	}
 }

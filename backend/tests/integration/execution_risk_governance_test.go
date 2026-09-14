@@ -206,8 +206,12 @@ func exerciseExecutionRiskGovernance(t *testing.T, ctx context.Context, owner *p
 	must(t, err)
 	_, err = policyTx.Exec(ctx, `SELECT set_config('mender.workspace_id','ws_exec_policy',true)`)
 	must(t, err)
-	if _, err = policyTx.Exec(ctx, `SELECT id FROM governance.execution_confirmations LIMIT 1`); err == nil {
-		t.Fatal("governance policy manager obtained execution confirmation read authority")
+	var observedConfirmation string
+	if err = policyTx.QueryRow(ctx, `SELECT id FROM governance.execution_confirmations WHERE workspace_id='ws_exec_policy' ORDER BY created_at LIMIT 1`).Scan(&observedConfirmation); err != nil || observedConfirmation == "" {
+		t.Fatal("governance policy manager could not read execution confirmation projection", err)
+	}
+	if _, err = policyTx.Exec(ctx, `UPDATE governance.execution_confirmations SET state='expired',expired_at=$1 WHERE workspace_id='ws_exec_policy'`, at.Add(20*time.Second)); err == nil {
+		t.Fatal("governance policy manager obtained execution confirmation mutation authority")
 	}
 	_ = policyTx.Rollback(ctx)
 }
