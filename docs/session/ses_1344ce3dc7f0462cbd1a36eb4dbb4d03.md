@@ -2,7 +2,7 @@
 
 **Session id:** ses_1344ce3dc7f0462cbd1a36eb4dbb4d03
 **Created:** unix:1789351607
-**Updated:** unix:1789353447
+**Updated:** unix:1789353734
 **Status:** active
 **Host session scope:** host-session:f469a465ece78120da5de60df27407ac2fb02c786dfd8fc9bd42ee7a3f475fab
 
@@ -21,10 +21,11 @@ M frontend/apps/admin/src/app/home-page.tsx
 M frontend/apps/admin/src/modules/README.md
 - 自动阶段检查点：tool=exec_command, status=succeeded, success=true
 - command=pnpm --filter @mender/admin typecheck
-- command=node --test frontend/packages/api-client/src/admin-governance.test.mjs
 - command=pnpm check:architecture
 - command=pnpm --filter @mender/admin build
 - command=pnpm lint
+- command=pnpm test:integration:docker
+- command=git diff --check 318ab7cd0f95aafc4c34fb11cc5e3915726ee214..HEAD -- . :(exclude)docs/session/*
 
 ## 已完成修改
 
@@ -40,22 +41,23 @@ M frontend/apps/admin/src/modules/README.md
 ## 测试结果
 
 - verification_kind=typecheck, success=true
-- verification_kind=test, success=true
 - verification_kind=architecture, success=true
 - verification_kind=build, success=true
 - verification_kind=lint, success=true
+- verification_kind=test, success=true
+- verification_kind=check, success=true
 
 ## 当前运行状态
 
 - task_id=1aba49443e374bc3a2a81ef0d57fad8d
 - task_status=active
 - tool=exec_command
-- session_id="83390744-a937-4dc7-878b-a658fa418bcb"
+- session_id="a667a4bf-24c5-40a7-bccc-172824cd61c7"
 - execution_status="succeeded"
 - exit_code=0
-- last_output_at="2026-09-14T02:37:20.545Z"
+- last_output_at="2026-09-14T02:42:13.072Z"
 - branch=main
-- head=12295f48ab38dcf110633cfa6e219561802245a7
+- head=2ca416f57dae2b384400a53fc979b58cc7471dd0
 - baseline_matches=Some(true)
 
 ## 剩余问题
@@ -63,7 +65,6 @@ M frontend/apps/admin/src/modules/README.md
 
 ## 下一步
 
-- Slice 3: Admin /execution-governance UI + typed client/tests + route/navigation
 - Run pnpm check, Go race, real PostgreSQL integration, git diff --check
 - Strict complete_work_session; leave working tree clean
 
@@ -230,44 +231,6 @@ M frontend/apps/admin/src/modules/README.md
 }
 ```
 
-### auto-exec_command-6405327f2f242f36
-
-```json
-{
-  "turn_id": "auto-exec_command-6405327f2f242f36",
-  "timestamp": "unix:1789353394",
-  "user_intent": "实现 Execution Governance Admin / Policy Operations Alpha：为已有 ExecutionPolicyRevision/Decision/Confirmation 增加受保护的 Admin 投影与操作 API，声明式 execution policy draft/activate 生命周期，以及 Admin /execution-governance 可观测与管理 UI；保持 fail-closed、FORCE RLS、least-privilege DB roles、Browser Session 不直接获得 DB authority、bigint 使用 decimal string、前端不推断最终风险/权限。每个 slice 独立 commit；最终完整验证；不 push、不 deploy。",
-  "findings": [
-    "自动阶段检查点：tool=exec_command, status=succeeded, success=true",
-    "command=node --test frontend/packages/api-client/src/admin-governance.test.mjs"
-  ],
-  "decisions": [],
-  "files_changed": [],
-  "tests": [
-    "verification_kind=test, success=true"
-  ],
-  "runtime_state": [
-    "task_id=1aba49443e374bc3a2a81ef0d57fad8d",
-    "task_status=active",
-    "tool=exec_command",
-    "session_id=\"ec3e7df3-8c90-40ab-8d1c-94fd72bdd711\"",
-    "execution_status=\"succeeded\"",
-    "exit_code=0",
-    "last_output_at=\"2026-09-14T02:36:33.134Z\"",
-    "branch=main",
-    "head=12295f48ab38dcf110633cfa6e219561802245a7",
-    "baseline_matches=Some(true)"
-  ],
-  "remaining_issues": [],
-  "next_actions": [
-    "Slice 3: Admin /execution-governance UI + typed client/tests + route/navigation",
-    "Run pnpm check, Go race, real PostgreSQL integration, git diff --check",
-    "Strict complete_work_session; leave working tree clean"
-  ],
-  "notes": "Anchor 自动保存的结构化阶段检查点；相同阶段身份会幂等更新。"
-}
-```
-
 ### auto-exec_command-1fdfc3555155e896
 
 ```json
@@ -375,6 +338,112 @@ M frontend/apps/admin/src/modules/README.md
   "remaining_issues": [],
   "next_actions": [
     "Slice 3: Admin /execution-governance UI + typed client/tests + route/navigation",
+    "Run pnpm check, Go race, real PostgreSQL integration, git diff --check",
+    "Strict complete_work_session; leave working tree clean"
+  ],
+  "notes": "Anchor 自动保存的结构化阶段检查点；相同阶段身份会幂等更新。"
+}
+```
+
+### auto-stage_commit-e133d155ec5d8792
+
+```json
+{
+  "turn_id": "auto-stage_commit-e133d155ec5d8792",
+  "timestamp": "unix:1789353524",
+  "user_intent": "实现 Execution Governance Admin / Policy Operations Alpha：为已有 ExecutionPolicyRevision/Decision/Confirmation 增加受保护的 Admin 投影与操作 API，声明式 execution policy draft/activate 生命周期，以及 Admin /execution-governance 可观测与管理 UI；保持 fail-closed、FORCE RLS、least-privilege DB roles、Browser Session 不直接获得 DB authority、bigint 使用 decimal string、前端不推断最终风险/权限。每个 slice 独立 commit；最终完整验证；不 push、不 deploy。",
+  "findings": [
+    "自动阶段检查点：tool=stage_commit, status=completed, success=true"
+  ],
+  "decisions": [],
+  "files_changed": [],
+  "tests": [],
+  "runtime_state": [
+    "task_id=1aba49443e374bc3a2a81ef0d57fad8d",
+    "task_status=active",
+    "tool=stage_commit",
+    "commit_sha=\"2ca416f57dae2b384400a53fc979b58cc7471dd0\"",
+    "branch=main",
+    "head=2ca416f57dae2b384400a53fc979b58cc7471dd0",
+    "baseline_matches=Some(true)"
+  ],
+  "remaining_issues": [],
+  "next_actions": [
+    "Slice 3: Admin /execution-governance UI + typed client/tests + route/navigation",
+    "Run pnpm check, Go race, real PostgreSQL integration, git diff --check",
+    "Strict complete_work_session; leave working tree clean"
+  ],
+  "notes": "Anchor 自动保存的结构化阶段检查点；相同阶段身份会幂等更新。"
+}
+```
+
+### auto-exec_command-c3169e69218665c4
+
+```json
+{
+  "turn_id": "auto-exec_command-c3169e69218665c4",
+  "timestamp": "unix:1789353675",
+  "user_intent": "实现 Execution Governance Admin / Policy Operations Alpha：为已有 ExecutionPolicyRevision/Decision/Confirmation 增加受保护的 Admin 投影与操作 API，声明式 execution policy draft/activate 生命周期，以及 Admin /execution-governance 可观测与管理 UI；保持 fail-closed、FORCE RLS、least-privilege DB roles、Browser Session 不直接获得 DB authority、bigint 使用 decimal string、前端不推断最终风险/权限。每个 slice 独立 commit；最终完整验证；不 push、不 deploy。",
+  "findings": [
+    "自动阶段检查点：tool=exec_command, status=succeeded, success=true",
+    "command=pnpm test:integration:docker"
+  ],
+  "decisions": [],
+  "files_changed": [],
+  "tests": [
+    "verification_kind=test, success=true"
+  ],
+  "runtime_state": [
+    "task_id=1aba49443e374bc3a2a81ef0d57fad8d",
+    "task_status=active",
+    "tool=exec_command",
+    "session_id=\"62ec2217-c7d5-42cd-acde-42dcb5bac2ce\"",
+    "execution_status=\"succeeded\"",
+    "exit_code=0",
+    "last_output_at=\"2026-09-14T02:41:13.510Z\"",
+    "branch=main",
+    "head=2ca416f57dae2b384400a53fc979b58cc7471dd0",
+    "baseline_matches=Some(true)"
+  ],
+  "remaining_issues": [],
+  "next_actions": [
+    "Run pnpm check, Go race, real PostgreSQL integration, git diff --check",
+    "Strict complete_work_session; leave working tree clean"
+  ],
+  "notes": "Anchor 自动保存的结构化阶段检查点；相同阶段身份会幂等更新。"
+}
+```
+
+### auto-exec_command-cdd3a1fd63567ead
+
+```json
+{
+  "turn_id": "auto-exec_command-cdd3a1fd63567ead",
+  "timestamp": "unix:1789353734",
+  "user_intent": "实现 Execution Governance Admin / Policy Operations Alpha：为已有 ExecutionPolicyRevision/Decision/Confirmation 增加受保护的 Admin 投影与操作 API，声明式 execution policy draft/activate 生命周期，以及 Admin /execution-governance 可观测与管理 UI；保持 fail-closed、FORCE RLS、least-privilege DB roles、Browser Session 不直接获得 DB authority、bigint 使用 decimal string、前端不推断最终风险/权限。每个 slice 独立 commit；最终完整验证；不 push、不 deploy。",
+  "findings": [
+    "自动阶段检查点：tool=exec_command, status=succeeded, success=true",
+    "command=git diff --check 318ab7cd0f95aafc4c34fb11cc5e3915726ee214..HEAD -- . :(exclude)docs/session/*"
+  ],
+  "decisions": [],
+  "files_changed": [],
+  "tests": [
+    "verification_kind=check, success=true"
+  ],
+  "runtime_state": [
+    "task_id=1aba49443e374bc3a2a81ef0d57fad8d",
+    "task_status=active",
+    "tool=exec_command",
+    "session_id=\"a667a4bf-24c5-40a7-bccc-172824cd61c7\"",
+    "execution_status=\"succeeded\"",
+    "exit_code=0",
+    "last_output_at=\"2026-09-14T02:42:13.072Z\"",
+    "branch=main",
+    "head=2ca416f57dae2b384400a53fc979b58cc7471dd0",
+    "baseline_matches=Some(true)"
+  ],
+  "remaining_issues": [],
+  "next_actions": [
     "Run pnpm check, Go race, real PostgreSQL integration, git diff --check",
     "Strict complete_work_session; leave working tree clean"
   ],
