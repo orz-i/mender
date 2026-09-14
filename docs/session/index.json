@@ -50,9 +50,9 @@
     "ses_2ff604d30e7b40b0bc4220d7837fb59e": {
       "path": "docs/session/ses_2ff604d30e7b40b0bc4220d7837fb59e.md",
       "title": "Remote Agent as Tool Alpha",
-      "status": "active",
+      "status": "completed",
       "created_at": "unix:1789355815",
-      "updated_at": "unix:1789357758",
+      "updated_at": "unix:1789357841",
       "parent_session_id": "ses_1344ce3dc7f0462cbd1a36eb4dbb4d03"
     },
     "ses_62a1ebea37544a1a9eb3d95cec77deaf": {
