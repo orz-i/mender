@@ -110,6 +110,7 @@ func publicStartConstraint(value application.RunStartConstraint) identity.RunSta
 		Currency:         value.Currency,
 		MaxChargeMicro:   value.MaxChargeMicro,
 		IdempotencyKey:   value.IdempotencyKey,
+		ArgumentsHash:    value.ArgumentsHash,
 	}
 }
 
@@ -123,6 +124,7 @@ func applicationStartConstraint(value identity.RunStartConstraint) application.R
 		Currency:         value.Currency,
 		MaxChargeMicro:   value.MaxChargeMicro,
 		IdempotencyKey:   value.IdempotencyKey,
+		ArgumentsHash:    value.ArgumentsHash,
 	}
 }
 

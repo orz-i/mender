@@ -28,6 +28,7 @@ import (
 	identitydomain "github.com/orz-i/mender/backend/internal/contexts/identity/domain"
 	"github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/filesecret"
 	supplyapp "github.com/orz-i/mender/backend/internal/contexts/supply/application"
+	"github.com/orz-i/mender/backend/internal/platform/canonicaljson"
 	database "github.com/orz-i/mender/backend/internal/platform/postgres"
 	admissionidentitystart "github.com/orz-i/mender/backend/internal/processes/admission/adapters/outbound/identitystart"
 	admissionapp "github.com/orz-i/mender/backend/internal/processes/admission/application"
@@ -95,6 +96,7 @@ func exerciseHumanBrowserSessions(t *testing.T, ctx context.Context, owner *pgxp
 	provision := identitypg.HumanProvision{UserID: "user_human_alpha", DisplayName: "Alpha User", Issuer: "https://issuer.example", Subject: "subject-human-alpha", WorkspaceID: "ws_human_alpha", Role: identitydomain.RoleAdmin, CreatedAt: base}
 	must(t, identitypg.New(owner).ProvisionHuman(ctx, provision))
 	must(t, identitypg.New(owner).ProvisionHuman(ctx, provision))
+	ensurePermissiveExecutionPolicy(t, ctx, owner, "ws_human_alpha", base)
 	conflict := provision
 	conflict.UserID = "user_human_other"
 	if err := identitypg.New(owner).ProvisionHuman(ctx, conflict); !errors.Is(err, identityapp.ErrForbidden) {
@@ -151,9 +153,13 @@ func exerciseHumanBrowserSessions(t *testing.T, ctx context.Context, owner *pgxp
 	}
 	startDelegationService, err := identityapp.NewRunStartDelegationService(identitypg.NewRunStartDelegations(sessionsPool, sessionsPool), service, sessioncodec.Codec{}, clock, 5*time.Minute)
 	must(t, err)
+	startArguments := []byte(`{"query":"hello"}`)
+	canonicalStartArguments, err := canonicaljson.Object(startArguments, 65536)
+	must(t, err)
+	startArgumentsHash := canonicaljson.SHA256(canonicalStartArguments)
 	startDelegation, err := startDelegationService.Issue(ctx, principal, "ws_human_alpha", identityapp.RunStartConstraint{
 		ToolsetVersionID: "set_human_launch_v1", ToolID: "tool_human_launch", ToolVersion: "1.0.0", ToolVersionID: "tool_human_launch_v1",
-		ConnectionID: "conn_human_alpha", Currency: "USD", MaxChargeMicro: 75, IdempotencyKey: "human-start-alpha-0001",
+		ConnectionID: "conn_human_alpha", Currency: "USD", MaxChargeMicro: 75, IdempotencyKey: "human-start-alpha-0001", ArgumentsHash: startArgumentsHash,
 	})
 	must(t, err)
 	if startDelegation.Token == "" || startDelegation.DelegationID == "" {
@@ -176,7 +182,7 @@ func exerciseHumanBrowserSessions(t *testing.T, ctx context.Context, owner *pgxp
 	must(t, err)
 	receipt, err := humanAdmission.Admit(ctx, startCaller, admissionapp.Request{
 		IdempotencyKey: "human-start-alpha-0001", ToolID: "tool_human_launch", ToolVersion: "1.0.0", ToolsetVersionID: "set_human_launch_v1",
-		ConnectionID: "conn_human_alpha", Arguments: []byte(`{"query":"hello"}`), Currency: "USD", MaxChargeMicro: "75",
+		ConnectionID: "conn_human_alpha", Arguments: startArguments, Currency: "USD", MaxChargeMicro: "75",
 	})
 	must(t, err)
 	if receipt.RunID == "" || receipt.Replayed {

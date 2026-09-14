@@ -12,6 +12,25 @@ import (
 	"github.com/orz-i/mender/backend/migrations"
 )
 
+func ensurePermissiveExecutionPolicy(t *testing.T, ctx context.Context, owner *pgxpool.Pool, workspace string, at time.Time) {
+	t.Helper()
+	tx, err := owner.Begin(ctx)
+	must(t, err)
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	_, err = tx.Exec(ctx, `SELECT set_config('mender.workspace_id',$1,true)`, workspace)
+	must(t, err)
+	var active int
+	must(t, tx.QueryRow(ctx, `SELECT count(*) FROM governance.execution_policy_revisions WHERE workspace_id=$1 AND state='active'`, workspace).Scan(&active))
+	if active == 0 {
+		id := "integration_execution_policy_v1"
+		_, err = tx.Exec(ctx, `SELECT governance.create_execution_policy($1,$2,'integration_admin','critical',false,$3)`, workspace, id, at)
+		must(t, err)
+		_, err = tx.Exec(ctx, `SELECT governance.activate_execution_policy($1,$2,'integration_admin',$3)`, workspace, id, at)
+		must(t, err)
+	}
+	must(t, tx.Commit(ctx))
+}
+
 func exerciseExecutionRiskGovernance(t *testing.T, ctx context.Context, owner *pgxpool.Pool, runtimeDSN string) {
 	t.Helper()
 	policyManager, _ := openTemporaryRole(t, ctx, owner, runtimeDSN, "mender_exec_policy_", migrations.GrantGovernancePolicyManager)

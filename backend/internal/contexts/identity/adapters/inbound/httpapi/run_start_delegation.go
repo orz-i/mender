@@ -40,6 +40,7 @@ type runStartDelegationRequest struct {
 	Currency         string `json:"currency"`
 	MaxChargeMicro   string `json:"max_charge_micro"`
 	IdempotencyKey   string `json:"idempotency_key"`
+	ArgumentsHash    string `json:"arguments_hash"`
 }
 
 func decodeRunStartDelegation(body io.Reader) (runStartDelegationRequest, error) {
@@ -125,6 +126,7 @@ func (h *RunStartDelegationHandler) issue(c *gin.Context) {
 		Currency:         request.Currency,
 		MaxChargeMicro:   maxCharge,
 		IdempotencyKey:   request.IdempotencyKey,
+		ArgumentsHash:    request.ArgumentsHash,
 	})
 	if err != nil {
 		delegationFailure(c, err)
@@ -142,6 +144,7 @@ func (h *RunStartDelegationHandler) issue(c *gin.Context) {
 		"currency":           issued.Constraint.Currency,
 		"max_charge_micro":   strconv.FormatInt(issued.Constraint.MaxChargeMicro, 10),
 		"idempotency_key":    issued.Constraint.IdempotencyKey,
+		"arguments_hash":     issued.Constraint.ArgumentsHash,
 		"expires_at":         issued.ExpiresAt,
 	}})
 }

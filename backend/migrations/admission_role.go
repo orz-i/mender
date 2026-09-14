@@ -25,8 +25,9 @@ func GrantAdmission(ctx context.Context, pool *pgxpool.Pool, role string) error 
 	}
 	defer rollback(tx)
 	for _, sql := range []string{
-		"GRANT USAGE ON SCHEMA execution,commerce,mender_meta TO " + id,
-		"GRANT SELECT ON mender_meta.schema_migrations,commerce.budget_periods,commerce.reservations,execution.run_admissions TO " + id,
+		"GRANT USAGE ON SCHEMA execution,commerce,governance,mender_meta TO " + id,
+		"GRANT SELECT ON mender_meta.schema_migrations,commerce.budget_periods,commerce.reservations,execution.run_admissions,governance.execution_policy_decisions TO " + id,
+		"GRANT EXECUTE ON FUNCTION governance.evaluate_execution_policy(text,text,text,text,text,text,text,text,timestamptz),governance.consume_execution_confirmation(text,text,text,text,text,text,text,timestamptz) TO " + id,
 		"GRANT UPDATE (reserved_micro,revision) ON commerce.budget_periods TO " + id,
 		// Tighten roles provisioned before worker columns existed. A table-level INSERT
 		// would implicitly include future lease/fencing columns added by 0007.

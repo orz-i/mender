@@ -23,7 +23,19 @@ var (
 type StartConstraint struct {
 	ToolsetVersionID, ToolID, ToolVersion, ToolVersionID, ConnectionID, Currency string
 	MaxChargeMicro                                                               int64
-	IdempotencyKey                                                               string
+	IdempotencyKey, ArgumentsHash                                                string
+}
+
+func validSHA256(s string) bool {
+	if len(s) != 64 {
+		return false
+	}
+	for _, c := range s {
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 type Caller struct {
@@ -58,7 +70,17 @@ type Plan struct {
 	ReserveMicro                                                                                           int64
 	ValidUntil                                                                                             time.Time
 }
-type Prepared struct{ CanonicalArguments, RequestHash string }
+type Prepared struct{ CanonicalArguments, RequestHash, ArgumentsHash, IdempotencyKeyHash string }
+type RiskRequest struct {
+	WorkspaceID, SubjectKind, SubjectID           string
+	ToolsetVersionID, ToolVersionID, ConnectionID string
+	ArgumentsHash, IdempotencyKeyHash             string
+	At                                            time.Time
+}
+type RiskDecision struct{ Outcome string }
+type RiskEvaluator interface {
+	Evaluate(context.Context, RiskRequest) (RiskDecision, error)
+}
 type Record struct {
 	WorkspaceID, SubjectID, CredentialID, IdempotencyKey, RequestHash, RunID, ReservationID string
 	ToolVersionID, ToolsetVersionID, ConnectionID, PriceVersionID, DeploymentRevision       string
@@ -87,6 +109,7 @@ type IDs interface{ NewRunID() (string, error) }
 type Clock interface{ Now() time.Time }
 type Scope interface {
 	FindReplay(context.Context, string, string) (Record, bool, error)
+	EnforceExecutionRisk(context.Context, RiskRequest) error
 	Reserve(context.Context, Record) error
 	CreateRun(context.Context, Record) error
 	CreateJob(context.Context, Record) error
@@ -101,14 +124,15 @@ type Service struct {
 	codec    Codec
 	ids      IDs
 	clock    Clock
+	risk     RiskEvaluator
 	uow      UnitOfWork
 }
 
-func New(auth Authorizer, resolver Resolver, codec Codec, ids IDs, clock Clock, uow UnitOfWork) (*Service, error) {
-	if auth == nil || resolver == nil || codec == nil || ids == nil || clock == nil || uow == nil {
+func New(auth Authorizer, resolver Resolver, codec Codec, ids IDs, clock Clock, risk RiskEvaluator, uow UnitOfWork) (*Service, error) {
+	if auth == nil || resolver == nil || codec == nil || ids == nil || clock == nil || risk == nil || uow == nil {
 		return nil, ErrUnavailable
 	}
-	return &Service{auth, resolver, codec, ids, clock, uow}, nil
+	return &Service{auth, resolver, codec, ids, clock, risk, uow}, nil
 }
 func ValidID(s string) bool {
 	if len(s) < 1 || len(s) > 128 {
@@ -164,7 +188,7 @@ func (s *Service) Admit(ctx context.Context, c Caller, q Request) (Receipt, erro
 		return Receipt{}, ErrInvalid
 	}
 	if c.Start != nil {
-		if !ValidID(c.Start.ToolsetVersionID) || !ValidID(c.Start.ToolID) || !validVersion(c.Start.ToolVersion) || !ValidID(c.Start.ToolVersionID) || !ValidID(c.Start.ConnectionID) || len(c.Start.Currency) != 3 || strings.Trim(c.Start.Currency, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") != "" || c.Start.MaxChargeMicro < 0 || !validKey(c.Start.IdempotencyKey) {
+		if !ValidID(c.Start.ToolsetVersionID) || !ValidID(c.Start.ToolID) || !validVersion(c.Start.ToolVersion) || !ValidID(c.Start.ToolVersionID) || !ValidID(c.Start.ConnectionID) || len(c.Start.Currency) != 3 || strings.Trim(c.Start.Currency, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") != "" || c.Start.MaxChargeMicro < 0 || !validKey(c.Start.IdempotencyKey) || !validSHA256(c.Start.ArgumentsHash) {
 			return Receipt{}, ErrInvalid
 		}
 	}
@@ -179,6 +203,12 @@ func (s *Service) Admit(ctx context.Context, c Caller, q Request) (Receipt, erro
 	if len(p.RequestHash) != 64 || len(p.CanonicalArguments) == 0 || len(p.CanonicalArguments) > 65536 {
 		return Receipt{}, ErrInvalid
 	}
+	if !validSHA256(p.ArgumentsHash) || !validSHA256(p.IdempotencyKeyHash) {
+		return Receipt{}, ErrInvalid
+	}
+	if c.Start != nil && c.Start.ArgumentsHash != p.ArgumentsHash {
+		return Receipt{}, ErrForbidden
+	}
 	plan, err := s.resolver.Resolve(ctx, c, q, p.CanonicalArguments)
 	if err != nil {
 		return Receipt{}, err
@@ -189,6 +219,24 @@ func (s *Service) Admit(ctx context.Context, c Caller, q Request) (Receipt, erro
 	now := s.clock.Now().UTC().Truncate(time.Microsecond)
 	if now.IsZero() || now.Year() < 1 || now.Year() > 9999 || !now.Before(plan.ValidUntil) {
 		return Receipt{}, ErrInvalid
+	}
+	subjectKind := "machine"
+	if c.Start != nil {
+		subjectKind = "human"
+	}
+	riskRequest := RiskRequest{WorkspaceID: c.WorkspaceID, SubjectKind: subjectKind, SubjectID: c.SubjectID, ToolsetVersionID: plan.ToolsetVersionID, ToolVersionID: plan.ToolVersionID, ConnectionID: plan.ConnectionID, ArgumentsHash: p.ArgumentsHash, IdempotencyKeyHash: p.IdempotencyKeyHash, At: now}
+	decision, err := s.risk.Evaluate(ctx, riskRequest)
+	if err != nil {
+		return Receipt{}, err
+	}
+	if decision.Outcome == "deny" {
+		return Receipt{}, ErrForbidden
+	}
+	if decision.Outcome != "allow" && decision.Outcome != "confirmation_required" {
+		return Receipt{}, ErrUnavailable
+	}
+	if decision.Outcome == "confirmation_required" && subjectKind != "human" {
+		return Receipt{}, ErrForbidden
 	}
 	runID, err := s.ids.NewRunID()
 	if err != nil {
@@ -221,6 +269,10 @@ func (s *Service) Admit(ctx context.Context, c Caller, q Request) (Receipt, erro
 		r.CreatedAt = s.clock.Now().UTC().Truncate(time.Microsecond)
 		if r.CreatedAt.Before(now) || !r.CreatedAt.Before(plan.ValidUntil) {
 			return ErrInvalid
+		}
+		riskRequest.At = r.CreatedAt
+		if e = tx.EnforceExecutionRisk(ctx, riskRequest); e != nil {
+			return e
 		}
 		if e = tx.Reserve(ctx, r); e != nil {
 			return e

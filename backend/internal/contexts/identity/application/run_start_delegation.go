@@ -31,7 +31,7 @@ type RunStartConstraint struct {
 	ToolsetVersionID, ToolID, ToolVersion, ToolVersionID string
 	ConnectionID, Currency                               string
 	MaxChargeMicro                                       int64
-	IdempotencyKey                                       string
+	IdempotencyKey, ArgumentsHash                        string
 }
 
 type IssuedRunStartDelegation struct {
@@ -63,8 +63,20 @@ func NewRunStartDelegationService(repository RunStartDelegationRepository, sessi
 	return &RunStartDelegationService{repository: repository, sessions: sessions, codec: codec, clock: clock, ttl: ttl}, nil
 }
 
+func validStartArgumentsHash(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for _, ch := range value {
+		if !(ch >= '0' && ch <= '9' || ch >= 'a' && ch <= 'f') {
+			return false
+		}
+	}
+	return true
+}
+
 func validStartConstraint(c RunStartConstraint) bool {
-	if !domain.ValidID(c.ToolsetVersionID) || !domain.ValidID(c.ToolID) || !validRunVersion(c.ToolVersion) || !domain.ValidID(c.ToolVersionID) || !domain.ValidID(c.ConnectionID) || len(c.Currency) != 3 || c.MaxChargeMicro < 0 || !validStartIdempotencyKey(c.IdempotencyKey) {
+	if !domain.ValidID(c.ToolsetVersionID) || !domain.ValidID(c.ToolID) || !validRunVersion(c.ToolVersion) || !domain.ValidID(c.ToolVersionID) || !domain.ValidID(c.ConnectionID) || len(c.Currency) != 3 || c.MaxChargeMicro < 0 || !validStartIdempotencyKey(c.IdempotencyKey) || !validStartArgumentsHash(c.ArgumentsHash) {
 		return false
 	}
 	for _, ch := range c.Currency {
@@ -98,7 +110,7 @@ func startDelegationID(digest string) (string, error) {
 }
 
 func constraintFromDomain(d domain.RunStartDelegation) RunStartConstraint {
-	return RunStartConstraint{ToolsetVersionID: d.ToolsetVersionID, ToolID: d.ToolID, ToolVersion: d.ToolVersion, ToolVersionID: d.ToolVersionID, ConnectionID: d.ConnectionID, Currency: d.Currency, MaxChargeMicro: d.MaxChargeMicro, IdempotencyKey: d.IdempotencyKey}
+	return RunStartConstraint{ToolsetVersionID: d.ToolsetVersionID, ToolID: d.ToolID, ToolVersion: d.ToolVersion, ToolVersionID: d.ToolVersionID, ConnectionID: d.ConnectionID, Currency: d.Currency, MaxChargeMicro: d.MaxChargeMicro, IdempotencyKey: d.IdempotencyKey, ArgumentsHash: d.ArgumentsHash}
 }
 
 func (s *RunStartDelegationService) Issue(ctx context.Context, principal HumanPrincipal, workspace string, constraint RunStartConstraint) (IssuedRunStartDelegation, error) {
@@ -120,7 +132,7 @@ func (s *RunStartDelegationService) Issue(ctx context.Context, principal HumanPr
 		return IssuedRunStartDelegation{}, err
 	}
 	at := s.clock.Now().UTC().Truncate(time.Microsecond)
-	d := domain.RunStartDelegation{ID: id, Digest: digest, WorkspaceID: workspace, UserID: principal.UserID, ToolsetVersionID: constraint.ToolsetVersionID, ToolID: constraint.ToolID, ToolVersion: constraint.ToolVersion, ToolVersionID: constraint.ToolVersionID, ConnectionID: constraint.ConnectionID, Currency: constraint.Currency, MaxChargeMicro: constraint.MaxChargeMicro, IdempotencyKey: constraint.IdempotencyKey, CreatedAt: at, ExpiresAt: at.Add(s.ttl)}
+	d := domain.RunStartDelegation{ID: id, Digest: digest, WorkspaceID: workspace, UserID: principal.UserID, ToolsetVersionID: constraint.ToolsetVersionID, ToolID: constraint.ToolID, ToolVersion: constraint.ToolVersion, ToolVersionID: constraint.ToolVersionID, ConnectionID: constraint.ConnectionID, Currency: constraint.Currency, MaxChargeMicro: constraint.MaxChargeMicro, IdempotencyKey: constraint.IdempotencyKey, ArgumentsHash: constraint.ArgumentsHash, CreatedAt: at, ExpiresAt: at.Add(s.ttl)}
 	if !d.Validate() {
 		return IssuedRunStartDelegation{}, ErrUnavailable
 	}
@@ -160,7 +172,7 @@ func (s *RunStartDelegationService) Authorize(ctx context.Context, principal Run
 	if d.ID != principal.DelegationID || d.UserID != principal.UserID || d.WorkspaceID != workspace || !d.AllowsCreate(s.clock.Now()) || stored != principal.Constraint {
 		return ErrForbidden
 	}
-	if request.ToolsetVersionID != stored.ToolsetVersionID || request.ToolID != stored.ToolID || request.ToolVersion != stored.ToolVersion || request.ToolVersionID != stored.ToolVersionID || request.ConnectionID != stored.ConnectionID || request.Currency != stored.Currency || request.IdempotencyKey != stored.IdempotencyKey || request.MaxChargeMicro > stored.MaxChargeMicro {
+	if request.ToolsetVersionID != stored.ToolsetVersionID || request.ToolID != stored.ToolID || request.ToolVersion != stored.ToolVersion || request.ToolVersionID != stored.ToolVersionID || request.ConnectionID != stored.ConnectionID || request.Currency != stored.Currency || request.IdempotencyKey != stored.IdempotencyKey || request.ArgumentsHash != stored.ArgumentsHash || request.MaxChargeMicro > stored.MaxChargeMicro {
 		return ErrForbidden
 	}
 	return nil

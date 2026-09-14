@@ -10,8 +10,12 @@ import (
 	efacade "github.com/orz-i/mender/backend/internal/contexts/execution/adapters/inbound/admission"
 	epg "github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/postgres"
 	eapp "github.com/orz-i/mender/backend/internal/contexts/execution/application"
+	governanceadmission "github.com/orz-i/mender/backend/internal/contexts/governance/adapters/inbound/admission"
+	governancepg "github.com/orz-i/mender/backend/internal/contexts/governance/adapters/outbound/postgres"
+	governanceapp "github.com/orz-i/mender/backend/internal/contexts/governance/application"
 	database "github.com/orz-i/mender/backend/internal/platform/postgres"
 	"github.com/orz-i/mender/backend/internal/processes/admission/adapters/outbound/capabilities"
+	"github.com/orz-i/mender/backend/internal/processes/admission/adapters/outbound/governanceaccess"
 	"github.com/orz-i/mender/backend/internal/processes/admission/adapters/outbound/input"
 	upg "github.com/orz-i/mender/backend/internal/processes/admission/adapters/outbound/postgres"
 	"github.com/orz-i/mender/backend/internal/processes/admission/application"
@@ -39,7 +43,16 @@ func BuildAdmission(ctx context.Context, pool *pgxpool.Pool, auth application.Au
 		if e != nil {
 			return nil, e
 		}
-		return capabilities.New(w, cfacade.New(c), efacade.New(r)), nil
+		governanceCore, e := governanceapp.NewExecutionRiskCore(governancepg.NewExecutionRiskTx(tx))
+		if e != nil {
+			return nil, e
+		}
+		return capabilities.New(w, cfacade.New(c), efacade.New(r), governanceadmission.NewExecutionRisk(governanceCore)), nil
 	}
-	return application.New(auth, resolver, input.Codec{}, input.IDs{}, systemClock{}, upg.New(pool, factory))
+	governanceCore, err := governanceapp.NewExecutionRiskCore(governancepg.NewExecutionRiskPool(pool))
+	if err != nil {
+		return nil, err
+	}
+	risk := governanceaccess.New(governanceadmission.NewExecutionRisk(governanceCore))
+	return application.New(auth, resolver, input.Codec{}, input.IDs{}, systemClock{}, risk, upg.New(pool, factory))
 }

@@ -32,7 +32,7 @@ func GrantBrowserSession(ctx context.Context, pool *pgxpool.Pool, role string) e
 		"GRANT UPDATE (revoked_at) ON identity.browser_sessions TO " + id,
 		"GRANT INSERT (id,digest,workspace_id,user_id,scopes,created_at,expires_at,revoked_at) ON identity.run_delegations TO " + id,
 		"GRANT UPDATE (revoked_at) ON identity.run_delegations TO " + id,
-		"GRANT INSERT (id,digest,workspace_id,user_id,toolset_version_id,tool_id,tool_version,tool_version_id,connection_id,currency,max_charge_micro,idempotency_key,created_at,expires_at,revoked_at) ON identity.run_start_delegations TO " + id,
+		"GRANT INSERT (id,digest,workspace_id,user_id,toolset_version_id,tool_id,tool_version,tool_version_id,connection_id,currency,max_charge_micro,idempotency_key,arguments_hash,created_at,expires_at,revoked_at) ON identity.run_start_delegations TO " + id,
 		"GRANT UPDATE (revoked_at) ON identity.run_start_delegations TO " + id,
 	} {
 		if _, err = tx.Exec(ctx, sql); err != nil {

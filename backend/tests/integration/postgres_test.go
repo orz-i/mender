@@ -101,6 +101,7 @@ func TestPostgresRuntimeContract(t *testing.T) {
 		raw, id, digest, e := (keycodec.Codec{}).Generate()
 		must(t, e)
 		must(t, ids.Provision(ctx, identitydomain.Credential{ID: id, WorkspaceID: workspace, SubjectID: subject, Digest: digest, Scopes: scopes, CreatedAt: at, ExpiresAt: at.Add(time.Hour)}))
+		ensurePermissiveExecutionPolicy(t, ctx, owner, workspace, at)
 		return raw, id
 	}
 	keyA, idA := issue("ws_a", "sa_a", []string{"run:read", "run:cancel", "run:create"})

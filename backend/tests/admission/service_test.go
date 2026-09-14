@@ -16,6 +16,13 @@ var who = application.Caller{WorkspaceID: "ws_a", SubjectID: "sa_a", CredentialI
 func request() application.Request {
 	return application.Request{IdempotencyKey: "request_0001", ToolID: "tool_a", ToolVersion: "1.0.0", ToolsetVersionID: "set_v1", ConnectionID: "conn_a", Currency: "USD", MaxChargeMicro: "100", Arguments: []byte(`{"n":9007199254740993,"text":"data"}`)}
 }
+func (s *scope) EnforceExecutionRisk(_ context.Context, _ application.RiskRequest) error {
+	s.ops = append(s.ops, "risk")
+	if s.fail == "risk" {
+		return application.ErrForbidden
+	}
+	return nil
+}
 func plan(q application.Request) application.Plan {
 	return application.Plan{ToolID: q.ToolID, ToolVersion: q.ToolVersion, ToolVersionID: "tool_v1", ToolsetVersionID: q.ToolsetVersionID, ConnectionID: q.ConnectionID, PriceVersionID: "price_v1", DeploymentRevision: "deploy_v1", BudgetID: "budget_a", PeriodID: "period_a", Currency: q.Currency, ReserveMicro: 50, ValidUntil: moment.Add(time.Hour)}
 }
@@ -30,6 +37,16 @@ type resolverFunc func(context.Context, application.Caller, application.Request,
 
 func (f resolverFunc) Resolve(c context.Context, w application.Caller, q application.Request, a string) (application.Plan, error) {
 	return f(c, w, q, a)
+}
+
+type riskFunc func(context.Context, application.RiskRequest) (application.RiskDecision, error)
+
+func (f riskFunc) Evaluate(ctx context.Context, request application.RiskRequest) (application.RiskDecision, error) {
+	return f(ctx, request)
+}
+
+func allowRisk(context.Context, application.RiskRequest) (application.RiskDecision, error) {
+	return application.RiskDecision{Outcome: "allow"}, nil
 }
 
 type clock struct{ at time.Time }
@@ -83,7 +100,7 @@ func (s *scope) AppendOutbox(_ context.Context, r application.Record) error {
 }
 func build(t *testing.T, u *unit, auth authFunc, resolve resolverFunc) *application.Service {
 	t.Helper()
-	s, e := application.New(auth, resolve, input.Codec{}, ids{}, clock{moment}, u)
+	s, e := application.New(auth, resolve, input.Codec{}, ids{}, clock{moment}, riskFunc(allowRisk), u)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -101,7 +118,7 @@ func TestAdmissionOrderStableRequestAndNoFalseSuccess(t *testing.T) {
 	if e != nil || r.Replayed || r.ReservedMicro != 50 {
 		t.Fatal(r, e)
 	}
-	if strings.Join(u.scope.ops, ",") != "replay,reserve,run,job,outbox" {
+	if strings.Join(u.scope.ops, ",") != "replay,risk,reserve,run,job,outbox" {
 		t.Fatal(u.scope.ops)
 	}
 	if !strings.Contains(u.scope.captured.CanonicalArguments, "9007199254740993") {
@@ -127,7 +144,7 @@ func TestAdmissionOrderStableRequestAndNoFalseSuccess(t *testing.T) {
 	if _, e = s.Admit(context.Background(), who, q); !errors.Is(e, application.ErrConflict) {
 		t.Fatal(e)
 	}
-	for _, step := range []string{"reserve", "run", "job", "outbox"} {
+	for _, step := range []string{"risk", "reserve", "run", "job", "outbox"} {
 		u.scope = &scope{fail: step}
 		r, e = s.Admit(context.Background(), who, request())
 		if e == nil || r.RunID != "" {
@@ -198,8 +215,11 @@ func TestNoImplicitAuthorizationOrResolverIsInstalled(t *testing.T) {
 		a application.Authorizer
 		r application.Resolver
 	}{{nil, resolverFunc(resolve)}, {authFunc(allow), nil}} {
-		if _, e := application.New(deps.a, deps.r, input.Codec{}, ids{}, clock{moment}, &unit{}); e == nil {
+		if _, e := application.New(deps.a, deps.r, input.Codec{}, ids{}, clock{moment}, riskFunc(allowRisk), &unit{}); e == nil {
 			t.Fatal("missing authoritative port allowed")
 		}
+	}
+	if _, e := application.New(authFunc(allow), resolverFunc(resolve), input.Codec{}, ids{}, clock{moment}, nil, &unit{}); e == nil {
+		t.Fatal("missing execution risk port allowed")
 	}
 }

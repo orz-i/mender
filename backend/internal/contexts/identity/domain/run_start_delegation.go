@@ -10,7 +10,7 @@ type RunStartDelegation struct {
 	ToolsetVersionID, ToolID, ToolVersion, ToolVersionID string
 	ConnectionID, Currency                               string
 	MaxChargeMicro                                       int64
-	IdempotencyKey                                       string
+	IdempotencyKey, ArgumentsHash                        string
 	MembershipRole                                       MembershipRole
 	CreatedAt, ExpiresAt, RevokedAt                      time.Time
 	UserDisabled, MembershipDisabled, WorkspaceDisabled  bool
@@ -43,8 +43,20 @@ func validVersion(value string) bool {
 	return true
 }
 
+func validSHA256(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for _, ch := range value {
+		if !(ch >= '0' && ch <= '9' || ch >= 'a' && ch <= 'f') {
+			return false
+		}
+	}
+	return true
+}
+
 func (d RunStartDelegation) Validate() bool {
-	if !ValidID(d.ID) || len(d.Digest) != 64 || !ValidID(d.WorkspaceID) || !ValidID(d.UserID) || !ValidID(d.ToolsetVersionID) || !ValidID(d.ToolID) || !validVersion(d.ToolVersion) || !ValidID(d.ToolVersionID) || !ValidID(d.ConnectionID) || len(d.Currency) != 3 || d.MaxChargeMicro < 0 || !validIdempotencyKey(d.IdempotencyKey) || d.CreatedAt.IsZero() || !d.ExpiresAt.After(d.CreatedAt) {
+	if !ValidID(d.ID) || len(d.Digest) != 64 || !ValidID(d.WorkspaceID) || !ValidID(d.UserID) || !ValidID(d.ToolsetVersionID) || !ValidID(d.ToolID) || !validVersion(d.ToolVersion) || !ValidID(d.ToolVersionID) || !ValidID(d.ConnectionID) || len(d.Currency) != 3 || d.MaxChargeMicro < 0 || !validIdempotencyKey(d.IdempotencyKey) || !validSHA256(d.ArgumentsHash) || d.CreatedAt.IsZero() || !d.ExpiresAt.After(d.CreatedAt) {
 		return false
 	}
 	for _, ch := range d.Currency {

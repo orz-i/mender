@@ -191,6 +191,7 @@ func exerciseCancellation(t *testing.T, ctx context.Context, owner, runtime, wri
 	})
 	t.Run("expired inactive original period releases without crediting new period", func(t *testing.T) {
 		at := time.Now().UTC().Truncate(time.Microsecond)
+		seedAdmissionRiskTarget(t, ctx, owner, "ws_a", "set_cancel_period", "cancel_period", at)
 		_, e := owner.Exec(ctx, `INSERT INTO commerce.budget_periods(workspace_id,budget_id,period_id,currency,starts_at,ends_at,limit_micro) VALUES('ws_a','cancel_period','p1','USD',$1,$2,100),('ws_a','cancel_period','p2','USD',$1,$2,100)`, at.Add(-time.Hour), at.Add(time.Hour))
 		must(t, e)
 		r, e := admissions.Admit(ctx, creationCaller, request("cancel_old_period", "cancel_period"))
@@ -310,6 +311,7 @@ func exerciseCancellation(t *testing.T, ctx context.Context, owner, runtime, wri
 	})
 	t.Run("cancellation and new admissions serialize on the original quota row", func(t *testing.T) {
 		at := time.Now().UTC()
+		seedAdmissionRiskTarget(t, ctx, owner, "ws_a", "set_cancel_race", "cancel_race", at)
 		_, e := owner.Exec(ctx, `INSERT INTO commerce.budget_periods(workspace_id,budget_id,period_id,currency,starts_at,ends_at,limit_micro) VALUES('ws_a','cancel_race','p1','USD',$1,$2,60)`, at.Add(-time.Hour), at.Add(time.Hour))
 		must(t, e)
 		r, e := admissions.Admit(ctx, creationCaller, request("cancel_race_existing", "cancel_race"))

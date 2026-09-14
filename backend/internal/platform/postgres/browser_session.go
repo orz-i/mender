@@ -25,6 +25,7 @@ func BrowserSessionRole(ctx context.Context, pool *pgxpool.Pool) error {
 	 AND has_column_privilege(current_user,'identity.run_delegations','revoked_at','UPDATE')
 	 AND has_column_privilege(current_user,'identity.run_start_delegations','digest','INSERT')
 	 AND has_column_privilege(current_user,'identity.run_start_delegations','idempotency_key','INSERT')
+	 AND has_column_privilege(current_user,'identity.run_start_delegations','arguments_hash','INSERT')
 	 AND has_column_privilege(current_user,'identity.run_start_delegations','revoked_at','UPDATE')
 	 AND NOT has_table_privilege(current_user,'identity.users','INSERT,UPDATE,DELETE,TRUNCATE')
 	 AND NOT has_table_privilege(current_user,'identity.workspace_memberships','INSERT,UPDATE,DELETE,TRUNCATE')

@@ -40,6 +40,7 @@ func applicationConstraint(value identity.RunStartConstraint) application.StartC
 		Currency:         value.Currency,
 		MaxChargeMicro:   value.MaxChargeMicro,
 		IdempotencyKey:   value.IdempotencyKey,
+		ArgumentsHash:    value.ArgumentsHash,
 	}
 }
 
@@ -53,6 +54,7 @@ func publicConstraint(value application.StartConstraint) identity.RunStartConstr
 		Currency:         value.Currency,
 		MaxChargeMicro:   value.MaxChargeMicro,
 		IdempotencyKey:   value.IdempotencyKey,
+		ArgumentsHash:    value.ArgumentsHash,
 	}
 }
 
@@ -107,6 +109,7 @@ func (d *Delegated) Authorize(ctx context.Context, caller application.Caller, re
 		Currency:         request.Currency,
 		MaxChargeMicro:   cap,
 		IdempotencyKey:   request.IdempotencyKey,
+		ArgumentsHash:    caller.Start.ArgumentsHash,
 	}
 	return mapError(d.delegations.AuthorizeRunStartDelegation(ctx, principal, caller.WorkspaceID, requested))
 }

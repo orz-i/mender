@@ -93,7 +93,8 @@ func TestHumanRunStartDelegationBindsExactLaunchAndChargeCap(t *testing.T) {
 	}
 	router := gin.New()
 	handler.Register(router)
-	body := `{"toolset_version_id":"set_alpha_v1","tool_id":"tool_alpha","tool_version":"1.0.0","tool_version_id":"tool_alpha_v1","connection_id":"conn_alpha","currency":"USD","max_charge_micro":"75","idempotency_key":"human-alpha-0001"}`
+	argumentsHash := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	body := `{"toolset_version_id":"set_alpha_v1","tool_id":"tool_alpha","tool_version":"1.0.0","tool_version_id":"tool_alpha_v1","connection_id":"conn_alpha","currency":"USD","max_charge_micro":"75","idempotency_key":"human-alpha-0001","arguments_hash":"` + argumentsHash + `"}`
 	request := httptest.NewRequest(http.MethodPost, "/api/console/v1/workspaces/ws_alpha/run-start-delegations", strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("X-Mender-CSRF", issuedSession.CSRFToken)
@@ -108,16 +109,17 @@ func TestHumanRunStartDelegationBindsExactLaunchAndChargeCap(t *testing.T) {
 			DelegationID   string `json:"delegation_id"`
 			Token          string `json:"token"`
 			MaxChargeMicro string `json:"max_charge_micro"`
+			ArgumentsHash  string `json:"arguments_hash"`
 		} `json:"data"`
 	}
-	if err = json.Unmarshal(w.Body.Bytes(), &response); err != nil || response.Data.DelegationID == "" || response.Data.Token == "" || response.Data.MaxChargeMicro != "75" {
+	if err = json.Unmarshal(w.Body.Bytes(), &response); err != nil || response.Data.DelegationID == "" || response.Data.Token == "" || response.Data.MaxChargeMicro != "75" || response.Data.ArgumentsHash != argumentsHash {
 		t.Fatal("invalid start delegation response", err, w.Body.String())
 	}
 	principal, err := delegations.Authenticate(context.Background(), response.Data.Token)
 	if err != nil {
 		t.Fatal(err)
 	}
-	exact := identityapp.RunStartConstraint{ToolsetVersionID: "set_alpha_v1", ToolID: "tool_alpha", ToolVersion: "1.0.0", ToolVersionID: "tool_alpha_v1", ConnectionID: "conn_alpha", Currency: "USD", MaxChargeMicro: 75, IdempotencyKey: "human-alpha-0001"}
+	exact := identityapp.RunStartConstraint{ToolsetVersionID: "set_alpha_v1", ToolID: "tool_alpha", ToolVersion: "1.0.0", ToolVersionID: "tool_alpha_v1", ConnectionID: "conn_alpha", Currency: "USD", MaxChargeMicro: 75, IdempotencyKey: "human-alpha-0001", ArgumentsHash: argumentsHash}
 	if err = delegations.Authorize(context.Background(), principal, "ws_alpha", exact); err != nil {
 		t.Fatal("exact delegated StartRun denied", err)
 	}
@@ -133,6 +135,9 @@ func TestHumanRunStartDelegationBindsExactLaunchAndChargeCap(t *testing.T) {
 		"currency":    func(v *identityapp.RunStartConstraint) { v.Currency = "EUR" },
 		"cap":         func(v *identityapp.RunStartConstraint) { v.MaxChargeMicro = 76 },
 		"idempotency": func(v *identityapp.RunStartConstraint) { v.IdempotencyKey = "human-alpha-0002" },
+		"arguments": func(v *identityapp.RunStartConstraint) {
+			v.ArgumentsHash = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+		},
 	} {
 		changed := exact
 		mutate(&changed)

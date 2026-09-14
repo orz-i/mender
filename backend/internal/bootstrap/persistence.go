@@ -32,6 +32,7 @@ import (
 	governancehttp "github.com/orz-i/mender/backend/internal/contexts/governance/adapters/inbound/httpapi"
 	governanceidentity "github.com/orz-i/mender/backend/internal/contexts/governance/adapters/outbound/identityaccess"
 	governancepg "github.com/orz-i/mender/backend/internal/contexts/governance/adapters/outbound/postgres"
+	governancerandom "github.com/orz-i/mender/backend/internal/contexts/governance/adapters/outbound/random"
 	governanceapp "github.com/orz-i/mender/backend/internal/contexts/governance/application"
 	"github.com/orz-i/mender/backend/internal/contexts/identity/adapters/inbound/facade"
 	identityhttp "github.com/orz-i/mender/backend/internal/contexts/identity/adapters/inbound/httpapi"
@@ -68,51 +69,53 @@ import (
 )
 
 type APIConfig struct {
-	RunAPIEnabled                      bool
-	RunReadAPIEnabled                  bool
-	DatabaseURL                        string
-	CursorSigningKey                   []byte
-	CoordinatedCancelEnabled           bool
-	ProviderCancelEnabled              bool
-	CancellationDatabaseURL            string
-	StartRunAPIEnabled                 bool
-	AdmissionDatabaseURL               string
-	MCPGatewayEnabled                  bool
-	MCPFixedToolsetEnabled             bool
-	ConsoleOIDCEnabled                 bool
-	BrowserSessionDatabaseURL          string
-	OIDCIssuer                         string
-	OIDCClientID                       string
-	OIDCClientSecretFile               string
-	OIDCRedirectURL                    string
-	FlowSigningKeyFile                 string
-	ConsoleCookieSecure                bool
-	ConsoleSessionTTL                  time.Duration
-	ConsoleRunDelegationEnabled        bool
-	ConsoleRunDelegationTTL            time.Duration
-	ConsoleHumanStartEnabled           bool
-	ConsoleHumanStartDelegationTTL     time.Duration
-	ConsoleLaunchDiscoveryEnabled      bool
-	ConsoleUsageEnabled                bool
-	CommerceObserverDatabaseURL        string
-	ConsoleConnectionsEnabled          bool
-	ConnectionManagerDatabaseURL       string
-	ConsoleCatalogEnabled              bool
-	CatalogManagerDatabaseURL          string
-	AdminCatalogReviewEnabled          bool
-	GovernanceReviewerDatabaseURL      string
-	AdminCatalogPolicyEnabled          bool
-	GovernancePolicyManagerDatabaseURL string
-	ConsoleConnectionOAuthEnabled      bool
-	ConnectionOAuthProviderID          string
-	ConnectionOAuthAuthorizationURL    string
-	ConnectionOAuthTokenURL            string
-	ConnectionOAuthClientID            string
-	ConnectionOAuthClientSecretFile    string
-	ConnectionOAuthRedirectURL         string
-	ConnectionOAuthScopes              []string
-	ConnectionOAuthSecretRoot          string
-	ConnectionOAuthFlowTTL             time.Duration
+	RunAPIEnabled                           bool
+	RunReadAPIEnabled                       bool
+	DatabaseURL                             string
+	CursorSigningKey                        []byte
+	CoordinatedCancelEnabled                bool
+	ProviderCancelEnabled                   bool
+	CancellationDatabaseURL                 string
+	StartRunAPIEnabled                      bool
+	AdmissionDatabaseURL                    string
+	MCPGatewayEnabled                       bool
+	MCPFixedToolsetEnabled                  bool
+	ConsoleOIDCEnabled                      bool
+	BrowserSessionDatabaseURL               string
+	OIDCIssuer                              string
+	OIDCClientID                            string
+	OIDCClientSecretFile                    string
+	OIDCRedirectURL                         string
+	FlowSigningKeyFile                      string
+	ConsoleCookieSecure                     bool
+	ConsoleSessionTTL                       time.Duration
+	ConsoleRunDelegationEnabled             bool
+	ConsoleRunDelegationTTL                 time.Duration
+	ConsoleHumanStartEnabled                bool
+	ConsoleHumanStartDelegationTTL          time.Duration
+	ConsoleLaunchDiscoveryEnabled           bool
+	ConsoleUsageEnabled                     bool
+	CommerceObserverDatabaseURL             string
+	ConsoleConnectionsEnabled               bool
+	ConnectionManagerDatabaseURL            string
+	ConsoleCatalogEnabled                   bool
+	CatalogManagerDatabaseURL               string
+	AdminCatalogReviewEnabled               bool
+	GovernanceReviewerDatabaseURL           string
+	AdminCatalogPolicyEnabled               bool
+	GovernancePolicyManagerDatabaseURL      string
+	ConsoleExecutionRiskEnabled             bool
+	GovernanceExecutionConfirmerDatabaseURL string
+	ConsoleConnectionOAuthEnabled           bool
+	ConnectionOAuthProviderID               string
+	ConnectionOAuthAuthorizationURL         string
+	ConnectionOAuthTokenURL                 string
+	ConnectionOAuthClientID                 string
+	ConnectionOAuthClientSecretFile         string
+	ConnectionOAuthRedirectURL              string
+	ConnectionOAuthScopes                   []string
+	ConnectionOAuthSecretRoot               string
+	ConnectionOAuthFlowTTL                  time.Duration
 }
 
 func loadMountedTextSecret(path, label string) (string, error) {
@@ -324,6 +327,20 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	default:
 		return c, errors.New("MENDER_CONSOLE_HUMAN_START_ENABLED must be true or false")
 	}
+	switch getenv("MENDER_CONSOLE_EXECUTION_RISK_ENABLED") {
+	case "", "false":
+	case "true":
+		if !c.ConsoleOIDCEnabled || !c.ConsoleHumanStartEnabled || !c.ConsoleLaunchDiscoveryEnabled || !c.StartRunAPIEnabled {
+			return APIConfig{}, errors.New("Console execution risk requires Console OIDC, launch discovery and Human StartRun")
+		}
+		c.ConsoleExecutionRiskEnabled = true
+		c.GovernanceExecutionConfirmerDatabaseURL = getenv("MENDER_GOVERNANCE_EXECUTION_CONFIRMER_DATABASE_URL")
+		if c.GovernanceExecutionConfirmerDatabaseURL == "" {
+			return APIConfig{}, errors.New("Console execution risk requires a separate governance-execution-confirmer database role")
+		}
+	default:
+		return c, errors.New("MENDER_CONSOLE_EXECUTION_RISK_ENABLED must be true or false")
+	}
 	switch getenv("MENDER_RUN_COORDINATED_CANCEL_ENABLED") {
 	case "", "false":
 	case "true":
@@ -393,7 +410,7 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	}
 	switch getenv("MENDER_RUN_API_ENABLED") {
 	case "", "false":
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleCatalogEnabled || c.AdminCatalogReviewEnabled || c.AdminCatalogPolicyEnabled || c.ConsoleConnectionOAuthEnabled {
+		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleExecutionRiskEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleCatalogEnabled || c.AdminCatalogReviewEnabled || c.AdminCatalogPolicyEnabled || c.ConsoleConnectionOAuthEnabled {
 			return APIConfig{}, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return c, nil
@@ -427,7 +444,7 @@ func (systemClock) Now() time.Time { return time.Now().UTC().Truncate(time.Micro
 // BuildAPI never migrates, seeds data or falls back to a test repository.
 func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	if !c.RunAPIEnabled {
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleCatalogEnabled || c.AdminCatalogReviewEnabled || c.AdminCatalogPolicyEnabled || c.ConsoleConnectionOAuthEnabled {
+		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleExecutionRiskEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleCatalogEnabled || c.AdminCatalogReviewEnabled || c.AdminCatalogPolicyEnabled || c.ConsoleConnectionOAuthEnabled {
 			return nil, nil, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return httpserver.NewRouter(), func() {}, nil
@@ -455,6 +472,9 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	}
 	if c.ConsoleHumanStartEnabled && (!c.ConsoleOIDCEnabled || !c.ConsoleLaunchDiscoveryEnabled || !c.StartRunAPIEnabled) {
 		return nil, nil, errors.New("Console Human StartRun requires Console OIDC, launch discovery and StartRun API")
+	}
+	if c.ConsoleExecutionRiskEnabled && (!c.ConsoleOIDCEnabled || !c.ConsoleHumanStartEnabled || !c.ConsoleLaunchDiscoveryEnabled || !c.StartRunAPIEnabled) {
+		return nil, nil, errors.New("Console execution risk requires Console OIDC, launch discovery and Human StartRun")
 	}
 	if c.ConsoleConnectionOAuthEnabled && (!c.ConsoleOIDCEnabled || !c.ConsoleConnectionsEnabled) {
 		return nil, nil, errors.New("Connection OAuth requires Console OIDC and Console Connections")
@@ -486,9 +506,13 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	var catalogManagerPool *pgxpool.Pool
 	var governanceReviewerPool *pgxpool.Pool
 	var governancePolicyManagerPool *pgxpool.Pool
+	var governanceExecutionConfirmerPool *pgxpool.Pool
 	var commerceObserverPool *pgxpool.Pool
 	var startDelegationFacade *facade.RunStartDelegations
 	closePools := func() {
+		if governanceExecutionConfirmerPool != nil {
+			governanceExecutionConfirmerPool.Close()
+		}
 		if governancePolicyManagerPool != nil {
 			governancePolicyManagerPool.Close()
 		}
@@ -867,6 +891,36 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 			}
 			registers = append(registers, policyHandler.Register)
 		}
+		if c.ConsoleExecutionRiskEnabled {
+			governanceExecutionConfirmerPool, buildErr = database.Open(start, c.GovernanceExecutionConfirmerDatabaseURL)
+			if buildErr != nil {
+				return failed(buildErr)
+			}
+			confirmerCfg := governanceExecutionConfirmerPool.Config().ConnConfig
+			if readerCfg.Host != confirmerCfg.Host || readerCfg.Port != confirmerCfg.Port || readerCfg.Database != confirmerCfg.Database || confirmerCfg.User == readerCfg.User || confirmerCfg.User == sessionCfg.User || (catalogManagerPool != nil && confirmerCfg.User == catalogManagerPool.Config().ConnConfig.User) || (governanceReviewerPool != nil && confirmerCfg.User == governanceReviewerPool.Config().ConnConfig.User) || (governancePolicyManagerPool != nil && confirmerCfg.User == governancePolicyManagerPool.Config().ConnConfig.User) || (connectionManagerPool != nil && confirmerCfg.User == connectionManagerPool.Config().ConnConfig.User) || (commerceObserverPool != nil && confirmerCfg.User == commerceObserverPool.Config().ConnConfig.User) {
+				return failed(errors.New("Console execution risk requires the same database with a distinct restricted role"))
+			}
+			if buildErr = migrations.Verify(start, governanceExecutionConfirmerPool); buildErr != nil {
+				return failed(buildErr)
+			}
+			if buildErr = database.GovernanceExecutionConfirmerRole(start, governanceExecutionConfirmerPool); buildErr != nil {
+				return failed(buildErr)
+			}
+			executionRiskAccess := governanceidentity.New(humanIdentity)
+			executionRiskCore, serviceErr := governanceapp.NewExecutionRiskCore(governancepg.NewExecutionRiskPool(governanceExecutionConfirmerPool))
+			if serviceErr != nil {
+				return failed(serviceErr)
+			}
+			executionRiskService, serviceErr := governanceapp.NewExecutionRiskHuman(executionRiskCore, executionRiskAccess, systemClock{}, governancerandom.ConfirmationIDs{})
+			if serviceErr != nil {
+				return failed(serviceErr)
+			}
+			executionRiskHandler, handlerErr := governancehttp.NewExecutionRisk(executionRiskService, executionRiskAccess)
+			if handlerErr != nil {
+				return failed(handlerErr)
+			}
+			registers = append(registers, executionRiskHandler.Register)
+		}
 	}
 	var queries *runapp.Queries
 	if c.RunReadAPIEnabled {
@@ -890,7 +944,7 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 			return failed(err)
 		}
 		readerCfg, writerCfg := pool.Config().ConnConfig, admissionPool.Config().ConnConfig
-		if readerCfg.Host != writerCfg.Host || readerCfg.Port != writerCfg.Port || readerCfg.Database != writerCfg.Database || readerCfg.User == writerCfg.User {
+		if readerCfg.Host != writerCfg.Host || readerCfg.Port != writerCfg.Port || readerCfg.Database != writerCfg.Database || readerCfg.User == writerCfg.User || (governanceExecutionConfirmerPool != nil && writerCfg.User == governanceExecutionConfirmerPool.Config().ConnConfig.User) {
 			return failed(errors.New("admission requires the same database with a distinct restricted role"))
 		}
 		resolver, err := BuildAdmissionResolver(pool)
@@ -1019,6 +1073,14 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 				return err
 			}
 			if err := database.GovernancePolicyManagerRole(ctx, governancePolicyManagerPool); err != nil {
+				return err
+			}
+		}
+		if governanceExecutionConfirmerPool != nil {
+			if err := migrations.Verify(ctx, governanceExecutionConfirmerPool); err != nil {
+				return err
+			}
+			if err := database.GovernanceExecutionConfirmerRole(ctx, governanceExecutionConfirmerPool); err != nil {
 				return err
 			}
 		}

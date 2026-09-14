@@ -20,7 +20,7 @@ func (c *advancingClock) Now() time.Time {
 }
 func TestPlanExpiryAfterReserveNeverCreatesRun(t *testing.T) {
 	u := &unit{scope: &scope{}}
-	s, e := application.New(authFunc(allow), resolverFunc(resolve), input.Codec{}, ids{}, &advancingClock{}, u)
+	s, e := application.New(authFunc(allow), resolverFunc(resolve), input.Codec{}, ids{}, &advancingClock{}, riskFunc(allowRisk), u)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -28,7 +28,7 @@ func TestPlanExpiryAfterReserveNeverCreatesRun(t *testing.T) {
 	if !errors.Is(e, application.ErrInvalid) || r.RunID != "" {
 		t.Fatal(r, e)
 	}
-	if len(u.scope.ops) != 2 || u.scope.ops[1] != "reserve" {
+	if len(u.scope.ops) != 3 || u.scope.ops[1] != "risk" || u.scope.ops[2] != "reserve" {
 		t.Fatal("expired plan continued persistence", u.scope.ops)
 	}
 }

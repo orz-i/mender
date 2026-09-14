@@ -36,6 +36,18 @@ func (a *admissionAuth) Authorize(ctx context.Context, c admit.Caller, q admit.R
 	return nil
 }
 
+func seedAdmissionRiskTarget(t *testing.T, ctx context.Context, owner *pgxpool.Pool, workspace, toolset, budget string, at time.Time) {
+	t.Helper()
+	_, err := owner.Exec(ctx, `INSERT INTO distribution.toolsets(workspace_id,id,state,published_at,updated_at)
+	 VALUES($1,$2,'published',$3,$3) ON CONFLICT(workspace_id,id) DO NOTHING`, workspace, toolset, at)
+	must(t, err)
+	_, err = owner.Exec(ctx, `INSERT INTO distribution.toolset_bindings(
+	 workspace_id,toolset_version_id,tool_id,tool_version_label,tool_version_id,budget_id,connection_id,mcp_exposed,state,published_at)
+	 VALUES($1,$2,'tool_a','1.0.0','tool_v1',$3,'conn_a',false,'published',$4)
+	 ON CONFLICT(workspace_id,toolset_version_id,tool_version_id) DO NOTHING`, workspace, toolset, budget, at)
+	must(t, err)
+}
+
 type admissionResolver struct{}
 
 func (admissionResolver) Resolve(ctx context.Context, _ admit.Caller, q admit.Request, _ string) (admit.Plan, error) {
@@ -86,6 +98,18 @@ func exerciseAdmission(t *testing.T, ctx context.Context, owner, runtime *pgxpoo
 		t.Fatal("missing real authority port silently supplied")
 	}
 	at := time.Now().UTC().Truncate(time.Microsecond)
+	_, e = owner.Exec(ctx, `INSERT INTO catalog.tool_versions(
+	 id,tool_id,version,provider_id,price_version_id,deployment_revision,title,description,input_schema,output_schema,
+	 side_effect,idempotency,mcp_publishable,state,published_at)
+	 VALUES('tool_v1','tool_a','1.0.0','provider_admission','price_v1','deployment_v1','Admission fixture','',
+	 '{"type":"object"}'::jsonb,'{"type":"object"}'::jsonb,'read_only','safe_read',false,'published',$1)
+	 ON CONFLICT(id) DO NOTHING`, at)
+	must(t, e)
+	for _, w := range []string{"ws_a", "ws_b"} {
+		seedAdmissionRiskTarget(t, ctx, owner, w, "set_budget_ok", "budget_ok", at)
+		seedAdmissionRiskTarget(t, ctx, owner, w, "set_budget_tight", "budget_tight", at)
+		seedAdmissionRiskTarget(t, ctx, owner, w, "set_budget_expired", "budget_expired", at)
+	}
 	budget := func(workspace, id string, limit int64) {
 		_, e := owner.Exec(ctx, `INSERT INTO commerce.budget_periods(workspace_id,budget_id,period_id,currency,starts_at,ends_at,limit_micro) VALUES($1,$2,'p1','USD',$3,$4,$5)`, workspace, id, at.Add(-time.Hour), at.Add(time.Hour), limit)
 		must(t, e)

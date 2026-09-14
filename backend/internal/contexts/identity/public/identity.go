@@ -42,7 +42,7 @@ type RunStartConstraint struct {
 	ToolsetVersionID, ToolID, ToolVersion, ToolVersionID string
 	ConnectionID, Currency                               string
 	MaxChargeMicro                                       int64
-	IdempotencyKey                                       string
+	IdempotencyKey, ArgumentsHash                        string
 }
 
 type RunStartDelegationPrincipal struct {

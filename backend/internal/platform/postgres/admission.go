@@ -10,8 +10,8 @@ import (
 func AdmissionRole(ctx context.Context, pool *pgxpool.Pool) error {
 	var unsafe bool
 	e := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_roles r WHERE pg_has_role(current_user,r.oid,'MEMBER') AND (r.rolsuper OR r.rolbypassrls OR r.rolcreaterole OR r.rolcreatedb))
- OR EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN('identity','execution','commerce','catalog','distribution','connections','supply','mender_meta') AND c.relkind='r' AND pg_has_role(current_user,c.relowner,'MEMBER'))
- OR EXISTS(SELECT 1 FROM pg_namespace n WHERE n.nspname IN('identity','execution','commerce','catalog','distribution','connections','supply','mender_meta') AND (pg_has_role(current_user,n.nspowner,'MEMBER') OR has_schema_privilege(current_user,n.oid,'CREATE')))
+ OR EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN('identity','execution','commerce','catalog','distribution','connections','supply','governance','mender_meta') AND c.relkind='r' AND pg_has_role(current_user,c.relowner,'MEMBER'))
+ OR EXISTS(SELECT 1 FROM pg_namespace n WHERE n.nspname IN('identity','execution','commerce','catalog','distribution','connections','supply','governance','mender_meta') AND (pg_has_role(current_user,n.nspowner,'MEMBER') OR has_schema_privilege(current_user,n.oid,'CREATE')))
  OR has_database_privilege(current_user,current_database(),'CREATE')`).Scan(&unsafe)
 	if e != nil || unsafe {
 		return errors.New("admission role is privileged")
@@ -46,6 +46,12 @@ func AdmissionRole(ctx context.Context, pool *pgxpool.Pool) error {
  AND has_table_privilege(current_user,'execution.outbox','INSERT')
  AND has_table_privilege(current_user,'commerce.budget_periods','SELECT') AND has_column_privilege(current_user,'commerce.budget_periods','reserved_micro','UPDATE') AND has_column_privilege(current_user,'commerce.budget_periods','revision','UPDATE')
  AND has_table_privilege(current_user,'commerce.reservations','SELECT') AND has_table_privilege(current_user,'commerce.reservations','INSERT')
+	AND has_table_privilege(current_user,'governance.execution_policy_decisions','SELECT')
+	AND NOT has_table_privilege(current_user,'governance.execution_policy_decisions','INSERT,UPDATE,DELETE,TRUNCATE')
+	AND NOT has_table_privilege(current_user,'governance.execution_confirmations','SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
+	AND has_function_privilege(current_user,'governance.evaluate_execution_policy(text,text,text,text,text,text,text,text,timestamptz)','EXECUTE')
+	AND has_function_privilege(current_user,'governance.consume_execution_confirmation(text,text,text,text,text,text,text,timestamptz)','EXECUTE')
+	AND NOT has_function_privilege(current_user,'governance.create_execution_confirmation(text,text,text,text,text,text,text,text,timestamptz,timestamptz)','EXECUTE')
  AND NOT has_table_privilege(current_user,'commerce.budget_periods','INSERT,DELETE,TRUNCATE')
  AND NOT has_column_privilege(current_user,'commerce.budget_periods','limit_micro','UPDATE') AND NOT has_column_privilege(current_user,'commerce.budget_periods','consumed_micro','UPDATE')
  AND NOT has_column_privilege(current_user,'commerce.budget_periods','workspace_id','UPDATE') AND NOT has_column_privilege(current_user,'commerce.budget_periods','budget_id','UPDATE') AND NOT has_column_privilege(current_user,'commerce.budget_periods','period_id','UPDATE')
@@ -69,8 +75,8 @@ func AdmissionRole(ctx context.Context, pool *pgxpool.Pool) error {
 		}
 	}
 	var count int
-	e = pool.QueryRow(ctx, `SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relrowsecurity AND c.relforcerowsecurity AND ((n.nspname='execution' AND c.relname IN('runs','run_admissions','jobs','outbox')) OR (n.nspname='commerce' AND c.relname IN('budget_periods','reservations')))`).Scan(&count)
-	if e != nil || count != 6 {
+	e = pool.QueryRow(ctx, `SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relrowsecurity AND c.relforcerowsecurity AND ((n.nspname='execution' AND c.relname IN('runs','run_admissions','jobs','outbox')) OR (n.nspname='commerce' AND c.relname IN('budget_periods','reservations')) OR (n.nspname='governance' AND c.relname IN('execution_policy_decisions','execution_confirmations')))`).Scan(&count)
+	if e != nil || count != 8 {
 		return errors.New("admission RLS protection missing")
 	}
 	return nil
