@@ -252,6 +252,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		failure(w, http.StatusBadRequest, "MCP_PROTOCOL_VERSION_REQUIRED")
 		return
 	}
+	if err := enforceInitializeProtocolVersion(r); err != nil {
+		failure(w, http.StatusBadRequest, "MCP_PROTOCOL_VERSION_MISMATCH")
+		return
+	}
 	token, ok := bearer(r.Header)
 	if !ok {
 		failure(w, http.StatusUnauthorized, "UNAUTHENTICATED")
