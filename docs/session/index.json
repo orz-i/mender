@@ -58,9 +58,9 @@
     "ses_3d423882ee9a4eaa8daa05aa4f6ff6c3": {
       "path": "docs/session/ses_3d423882ee9a4eaa8daa05aa4f6ff6c3.md",
       "title": "Trusted Provider Callback / Inbox Alpha",
-      "status": "active",
+      "status": "completed",
       "created_at": "unix:1789358947",
-      "updated_at": "unix:1789372322",
+      "updated_at": "unix:1789372492",
       "parent_session_id": "ses_2ff604d30e7b40b0bc4220d7837fb59e"
     },
     "ses_62a1ebea37544a1a9eb3d95cec77deaf": {
