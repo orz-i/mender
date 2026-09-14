@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "gate": "G3",
+  "as_of": "2026-09-14",
+  "requirements": ["S3-13", "S3-15", "S3-18", "T13", "T14", "T15", "T16", "T40"],
+  "mcp": {
+    "certified_protocol_version": "2026-07-28",
+    "selected_legacy_protocol_version": "2025-11-25",
+    "sdk_harness": {
+      "module": "github.com/modelcontextprotocol/go-sdk",
+      "version": "v1.7.0",
+      "certification_scope": "automated-harness-only"
+    },
+    "distributions": [
+      {
+        "id": "meta_tools",
+        "route": "/mcp/v1/workspaces/{workspace_id}",
+        "status": "certified"
+      },
+      {
+        "id": "fixed_toolset",
+        "route": "/mcp/v1/workspaces/{workspace_id}/toolsets/{toolset_version_id}",
+        "status": "certified"
+      }
+    ],
+    "protocol_cases": [
+      { "id": "current", "version": "2026-07-28", "status": "certified" },
+      { "id": "selected_legacy", "version": "2025-11-25", "status": "rejected" }
+    ],
+    "evidence": [
+      {
+        "file": "backend/tests/mcp/protocol_test.go",
+        "symbol": "TestStatelessOfficialSDKNegotiates20260728AfterMenderAuthentication"
+      },
+      {
+        "file": "backend/tests/mcp/protocol_test.go",
+        "symbol": "TestMCPHTTPFailsClosedBeforeSDKForAuthWorkspaceAndProtocol"
+      },
+      {
+        "file": "backend/tests/mcp/compatibility_matrix_test.go",
+        "symbol": "TestCertifiedMCPDistributionCompatibilityMatrix"
+      },
+      {
+        "file": "backend/tests/mcp/fixed_toolset_test.go",
+        "symbol": "TestFixedToolsetListsPublishedBusinessSchemaAndStartsServerOwnedRun"
+      }
+    ]
+  },
+  "entry_matrix": {
+    "workspace": "ws_g3_matrix",
+    "subject": "sa_g3_matrix",
+    "toolset": "set_g3_matrix_v1",
+    "sources": ["http", "mcp_streamable_http", "agent_http"],
+    "shared_truth": ["admission", "governance", "run", "artifact", "settlement"],
+    "evidence": [
+      {
+        "file": "backend/tests/integration/g3_entry_matrix_test.go",
+        "symbol": "exerciseG3EntryMatrix"
+      },
+      {
+        "file": "backend/tests/integration/postgres_test.go",
+        "symbol": "TestPostgresRuntimeContract",
+        "subtest": "G3 same-subject three-source Entry Run Artifact convergence matrix"
+      }
+    ]
+  },
+  "limits": {
+    "third_party_clients_certified": [],
+    "legacy_protocol_compatibility": false,
+    "a2a_protocol": false,
+    "multi_turn_agent": false,
+    "payment_accounting": false,
+    "production_proxy_certified": false
+  },
+  "document": "docs/engineering/2026-09-14-g3-compatibility-entry-matrix.md"
+}
