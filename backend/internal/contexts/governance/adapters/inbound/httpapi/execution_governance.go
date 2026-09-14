@@ -2,6 +2,8 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -23,7 +25,10 @@ func NewExecutionGovernance(service *application.ExecutionGovernanceService, aut
 }
 
 func (h *ExecutionGovernanceHandler) Register(router *gin.Engine) {
-	router.GET("/api/admin/v1/workspaces/:workspace_id/execution-governance", h.snapshot)
+	base := "/api/admin/v1/workspaces/:workspace_id/execution-governance"
+	router.GET(base, h.snapshot)
+	router.POST(base+"/revisions", h.createPolicy)
+	router.POST(base+"/revisions/:policy_id/activate", h.activatePolicy)
 }
 
 func executionGovernanceFilter(c *gin.Context) (application.ExecutionGovernanceFilter, error) {
@@ -83,7 +88,8 @@ func executionGovernanceFilter(c *gin.Context) (application.ExecutionGovernanceF
 func executionGovernancePolicyView(v application.ExecutionGovernancePolicyRevision) gin.H {
 	return gin.H{
 		"id": v.ID, "revision": strconv.FormatInt(v.Revision, 10), "state": v.State,
-		"max_unconfirmed_risk_level": v.MaxUnconfirmedRiskLevel, "deny_unsafe_write": v.DenyUnsafeWrite,
+		"max_unconfirmed_risk_level": v.MaxUnconfirmedRiskLevel, "max_machine_risk_level": v.MaxMachineRiskLevel,
+		"deny_unsafe_write": v.DenyUnsafeWrite, "confirmation_ttl_seconds": v.ConfirmationTTLSeconds,
 		"created_by_user_id": nullableString(v.CreatedByUserID), "created_at": v.CreatedAt,
 		"activated_by_user_id": nullableString(v.ActivatedByUserID), "activated_at": nullableTime(v.ActivatedAt), "retired_at": nullableTime(v.RetiredAt),
 	}
@@ -169,4 +175,73 @@ func (h *ExecutionGovernanceHandler) snapshot(c *gin.Context) {
 		"active_policy": active, "revisions": revisions, "decisions": decisions, "confirmations": confirmations,
 		"next_before_decision_sequence": nextDecision, "next_confirmation_cursor": nextConfirmation,
 	}})
+}
+
+type executionPolicyInput struct {
+	ID                      string `json:"id"`
+	MaxUnconfirmedRiskLevel string `json:"max_unconfirmed_risk_level"`
+	MaxMachineRiskLevel     string `json:"max_machine_risk_level"`
+	DenyUnsafeWrite         bool   `json:"deny_unsafe_write"`
+	ConfirmationTTLSeconds  int    `json:"confirmation_ttl_seconds"`
+}
+
+func decodeExecutionPolicy(c *gin.Context) (executionPolicyInput, error) {
+	var in executionPolicyInput
+	if c.Request.URL.RawQuery != "" || c.Request.ContentLength > 4096 {
+		return in, application.ErrInvalid
+	}
+	dec := json.NewDecoder(io.LimitReader(c.Request.Body, 4097))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&in); err != nil {
+		return in, application.ErrInvalid
+	}
+	if dec.Decode(&struct{}{}) != io.EOF {
+		return in, application.ErrInvalid
+	}
+	return in, nil
+}
+
+func (h *ExecutionGovernanceHandler) createPolicy(c *gin.Context) {
+	configure(c)
+	workspace := c.Param("workspace_id")
+	if !validID(workspace) {
+		fail(c, application.ErrInvalid)
+		return
+	}
+	in, err := decodeExecutionPolicy(c)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	ctx, cancel, actor, ok := (&PublicationReviewHandler{auth: h.auth}).actor(c, true)
+	defer cancel()
+	if !ok {
+		return
+	}
+	item, err := h.service.CreatePolicy(ctx, actor, workspace, in.ID, in.MaxUnconfirmedRiskLevel, in.MaxMachineRiskLevel, in.DenyUnsafeWrite, in.ConfirmationTTLSeconds)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"data": executionGovernancePolicyView(item)})
+}
+
+func (h *ExecutionGovernanceHandler) activatePolicy(c *gin.Context) {
+	configure(c)
+	workspace, id := c.Param("workspace_id"), c.Param("policy_id")
+	if !validID(workspace) || !validID(id) || c.Request.URL.RawQuery != "" || c.Request.ContentLength > 0 {
+		fail(c, application.ErrInvalid)
+		return
+	}
+	ctx, cancel, actor, ok := (&PublicationReviewHandler{auth: h.auth}).actor(c, true)
+	defer cancel()
+	if !ok {
+		return
+	}
+	item, err := h.service.ActivatePolicy(ctx, actor, workspace, id)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": executionGovernancePolicyView(item)})
 }

@@ -20,7 +20,7 @@ func GovernanceExecutionConfirmerRole(ctx context.Context, pool *pgxpool.Pool) e
 	 AND has_function_privilege(current_user,'governance.evaluate_execution_policy(text,text,text,text,text,text,text,text,timestamptz)','EXECUTE')
 	 AND has_function_privilege(current_user,'governance.create_execution_confirmation(text,text,text,text,text,text,text,text,timestamptz,timestamptz)','EXECUTE')
 	 AND NOT has_function_privilege(current_user,'governance.consume_execution_confirmation(text,text,text,text,text,text,text,timestamptz)','EXECUTE')
-	 AND NOT has_function_privilege(current_user,'governance.create_execution_policy(text,text,text,text,boolean,timestamptz)','EXECUTE')
+	 AND NOT has_function_privilege(current_user,'governance.create_execution_policy(text,text,text,text,text,boolean,integer,timestamptz)','EXECUTE')
 	 AND NOT has_function_privilege(current_user,'governance.activate_execution_policy(text,text,text,timestamptz)','EXECUTE')
 	 AND NOT has_schema_privilege(current_user,'execution','USAGE')
 	 AND NOT has_schema_privilege(current_user,'commerce','USAGE')

@@ -26,6 +26,27 @@ func TestExecutionPolicyDecisionRequiresExactHashesAndKnownOutcome(t *testing.T)
 	}
 }
 
+func TestExecutionPolicyRevisionBoundsMachineRiskAndConfirmationTTL(t *testing.T) {
+	at := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
+	p := ExecutionPolicyRevision{
+		WorkspaceID: "ws_a", ID: "exec_policy_a", Revision: 1, State: "active",
+		MaxUnconfirmedRiskLevel: "high", MaxMachineRiskLevel: "medium", DenyUnsafeWrite: true,
+		ConfirmationTTLSeconds: 90, CreatedAt: at, ActivatedAt: at.Add(time.Second),
+	}
+	if !p.Valid() {
+		t.Fatal("valid execution policy revision rejected")
+	}
+	p.MaxMachineRiskLevel = "critical"
+	if p.Valid() {
+		t.Fatal("machine risk ceiling above unconfirmed human ceiling accepted")
+	}
+	p.MaxMachineRiskLevel = "medium"
+	p.ConfirmationTTLSeconds = 29
+	if p.Valid() {
+		t.Fatal("confirmation TTL below lower bound accepted")
+	}
+}
+
 func TestExecutionConfirmationLifecycleIsExactAndSingleState(t *testing.T) {
 	at := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
 	c := ExecutionConfirmation{

@@ -27,11 +27,12 @@ func validExecutionRiskLevel(value string) bool {
 }
 
 type ExecutionGovernancePolicyRevision struct {
-	WorkspaceID, ID, State, MaxUnconfirmedRiskLevel string
-	Revision                                        int64
-	DenyUnsafeWrite                                 bool
-	CreatedByUserID, ActivatedByUserID              string
-	CreatedAt, ActivatedAt, RetiredAt               time.Time
+	WorkspaceID, ID, State, MaxUnconfirmedRiskLevel, MaxMachineRiskLevel string
+	Revision                                                             int64
+	DenyUnsafeWrite                                                      bool
+	ConfirmationTTLSeconds                                               int
+	CreatedByUserID, ActivatedByUserID                                   string
+	CreatedAt, ActivatedAt, RetiredAt                                    time.Time
 }
 
 type ExecutionGovernanceConfirmation struct {
@@ -54,18 +55,21 @@ type ExecutionGovernanceSnapshot struct {
 
 type ExecutionGovernanceRepository interface {
 	ListExecutionGovernance(context.Context, string, ExecutionGovernanceFilter) (ExecutionGovernanceSnapshot, error)
+	CreateExecutionPolicy(context.Context, string, string, string, string, string, bool, int, time.Time) (ExecutionGovernancePolicyRevision, error)
+	ActivateExecutionPolicy(context.Context, string, string, string, time.Time) (ExecutionGovernancePolicyRevision, error)
 }
 
 type ExecutionGovernanceService struct {
 	repository ExecutionGovernanceRepository
 	auth       Authorizer
+	clock      Clock
 }
 
-func NewExecutionGovernance(repository ExecutionGovernanceRepository, auth Authorizer) (*ExecutionGovernanceService, error) {
-	if repository == nil || auth == nil {
+func NewExecutionGovernance(repository ExecutionGovernanceRepository, auth Authorizer, clock Clock) (*ExecutionGovernanceService, error) {
+	if repository == nil || auth == nil || clock == nil {
 		return nil, ErrUnavailable
 	}
-	return &ExecutionGovernanceService{repository: repository, auth: auth}, nil
+	return &ExecutionGovernanceService{repository: repository, auth: auth, clock: clock}, nil
 }
 
 func validExecutionOutcome(value string) bool {
@@ -108,10 +112,38 @@ func validExecutionGovernanceFilter(filter ExecutionGovernanceFilter) bool {
 
 func executionPolicyDomain(v ExecutionGovernancePolicyRevision) domain.ExecutionPolicyRevision {
 	return domain.ExecutionPolicyRevision{
-		WorkspaceID: v.WorkspaceID, ID: v.ID, State: v.State, MaxUnconfirmedRiskLevel: v.MaxUnconfirmedRiskLevel,
-		Revision: v.Revision, DenyUnsafeWrite: v.DenyUnsafeWrite, CreatedByUserID: v.CreatedByUserID,
+		WorkspaceID: v.WorkspaceID, ID: v.ID, State: v.State, MaxUnconfirmedRiskLevel: v.MaxUnconfirmedRiskLevel, MaxMachineRiskLevel: v.MaxMachineRiskLevel,
+		Revision: v.Revision, DenyUnsafeWrite: v.DenyUnsafeWrite, ConfirmationTTLSeconds: v.ConfirmationTTLSeconds, CreatedByUserID: v.CreatedByUserID,
 		ActivatedByUserID: v.ActivatedByUserID, CreatedAt: v.CreatedAt, ActivatedAt: v.ActivatedAt, RetiredAt: v.RetiredAt,
 	}
+}
+
+func executionRiskRank(value string) int {
+	switch value {
+	case "low":
+		return 1
+	case "medium":
+		return 2
+	case "high":
+		return 3
+	case "critical":
+		return 4
+	default:
+		return 100
+	}
+}
+
+func validExecutionPolicySettings(maxUnconfirmed, maxMachine string, ttlSeconds int) bool {
+	return validExecutionRiskLevel(maxUnconfirmed) && validExecutionRiskLevel(maxMachine) &&
+		executionRiskRank(maxMachine) <= executionRiskRank(maxUnconfirmed) && ttlSeconds >= 30 && ttlSeconds <= 600
+}
+
+func (s *ExecutionGovernanceService) now() (time.Time, error) {
+	at := s.clock.Now().UTC().Truncate(time.Microsecond)
+	if at.IsZero() {
+		return time.Time{}, ErrUnavailable
+	}
+	return at, nil
 }
 
 func executionConfirmationDomain(v ExecutionGovernanceConfirmation) domain.ExecutionConfirmation {
@@ -200,4 +232,47 @@ func (s *ExecutionGovernanceService) Snapshot(ctx context.Context, actor Actor, 
 		return ExecutionGovernanceSnapshot{}, ErrUnavailable
 	}
 	return snapshot, nil
+}
+
+func (s *ExecutionGovernanceService) CreatePolicy(ctx context.Context, actor Actor, workspace, id, maxUnconfirmed, maxMachine string, denyUnsafe bool, ttlSeconds int) (ExecutionGovernancePolicyRevision, error) {
+	if !validID(actor.UserID) || !validID(workspace) || !validID(id) || !validExecutionPolicySettings(maxUnconfirmed, maxMachine, ttlSeconds) {
+		return ExecutionGovernancePolicyRevision{}, ErrInvalid
+	}
+	if err := s.auth.Authorize(ctx, actor, workspace, "execution:governance"); err != nil {
+		return ExecutionGovernancePolicyRevision{}, err
+	}
+	at, err := s.now()
+	if err != nil {
+		return ExecutionGovernancePolicyRevision{}, err
+	}
+	item, err := s.repository.CreateExecutionPolicy(ctx, workspace, id, actor.UserID, maxUnconfirmed, maxMachine, denyUnsafe, ttlSeconds, at)
+	if err != nil {
+		return ExecutionGovernancePolicyRevision{}, err
+	}
+	if item.WorkspaceID != workspace || item.ID != id || item.State != "draft" || !executionPolicyDomain(item).Valid() ||
+		item.MaxUnconfirmedRiskLevel != maxUnconfirmed || item.MaxMachineRiskLevel != maxMachine || item.DenyUnsafeWrite != denyUnsafe || item.ConfirmationTTLSeconds != ttlSeconds {
+		return ExecutionGovernancePolicyRevision{}, ErrUnavailable
+	}
+	return item, nil
+}
+
+func (s *ExecutionGovernanceService) ActivatePolicy(ctx context.Context, actor Actor, workspace, id string) (ExecutionGovernancePolicyRevision, error) {
+	if !validID(actor.UserID) || !validID(workspace) || !validID(id) {
+		return ExecutionGovernancePolicyRevision{}, ErrInvalid
+	}
+	if err := s.auth.Authorize(ctx, actor, workspace, "execution:governance"); err != nil {
+		return ExecutionGovernancePolicyRevision{}, err
+	}
+	at, err := s.now()
+	if err != nil {
+		return ExecutionGovernancePolicyRevision{}, err
+	}
+	item, err := s.repository.ActivateExecutionPolicy(ctx, workspace, id, actor.UserID, at)
+	if err != nil {
+		return ExecutionGovernancePolicyRevision{}, err
+	}
+	if item.WorkspaceID != workspace || item.ID != id || item.State != "active" || !executionPolicyDomain(item).Valid() {
+		return ExecutionGovernancePolicyRevision{}, ErrUnavailable
+	}
+	return item, nil
 }

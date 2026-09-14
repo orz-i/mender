@@ -25,7 +25,7 @@ func GovernancePolicyManagerRole(ctx context.Context, pool *pgxpool.Pool) error 
 	 AND NOT has_table_privilege(current_user,'governance.execution_policy_decisions','INSERT,UPDATE,DELETE,TRUNCATE')
 	 AND has_table_privilege(current_user,'governance.execution_confirmations','SELECT')
 	 AND NOT has_table_privilege(current_user,'governance.execution_confirmations','INSERT,UPDATE,DELETE,TRUNCATE')
-	 AND has_function_privilege(current_user,'governance.create_execution_policy(text,text,text,text,boolean,timestamptz)','EXECUTE')
+	 AND has_function_privilege(current_user,'governance.create_execution_policy(text,text,text,text,text,boolean,integer,timestamptz)','EXECUTE')
 	 AND has_function_privilege(current_user,'governance.activate_execution_policy(text,text,text,timestamptz)','EXECUTE')
 	 AND NOT has_function_privilege(current_user,'governance.create_execution_confirmation(text,text,text,text,text,text,text,text,timestamptz,timestamptz)','EXECUTE')
 	 AND NOT has_function_privilege(current_user,'governance.consume_execution_confirmation(text,text,text,text,text,text,text,timestamptz)','EXECUTE')

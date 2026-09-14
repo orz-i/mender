@@ -32,7 +32,7 @@ type ExecutionConfirmationRequest struct {
 
 type ExecutionRiskRepository interface {
 	EvaluateExecutionRisk(context.Context, ExecutionRiskRequest) (ExecutionRiskDecision, error)
-	CreateExecutionConfirmation(context.Context, ExecutionConfirmationRequest) (ExecutionRiskDecision, string, error)
+	CreateExecutionConfirmation(context.Context, ExecutionConfirmationRequest) (ExecutionRiskDecision, string, time.Time, error)
 	ConsumeExecutionConfirmation(context.Context, ExecutionRiskRequest) (string, error)
 }
 
@@ -89,27 +89,27 @@ func (s *ExecutionRiskCore) Evaluate(ctx context.Context, request ExecutionRiskR
 	return item, nil
 }
 
-func (s *ExecutionRiskCore) Confirm(ctx context.Context, request ExecutionConfirmationRequest) (ExecutionRiskDecision, string, error) {
+func (s *ExecutionRiskCore) Confirm(ctx context.Context, request ExecutionConfirmationRequest) (ExecutionRiskDecision, string, time.Time, error) {
 	if !validExecutionRiskRequest(request.ExecutionRiskRequest) || !validID(request.ConfirmationID) || !request.ExpiresAt.After(request.At) || request.ExpiresAt.After(request.At.Add(10*time.Minute)) {
-		return ExecutionRiskDecision{}, "", ErrInvalid
+		return ExecutionRiskDecision{}, "", time.Time{}, ErrInvalid
 	}
-	decision, confirmationID, err := s.repository.CreateExecutionConfirmation(ctx, request)
+	decision, confirmationID, expiresAt, err := s.repository.CreateExecutionConfirmation(ctx, request)
 	if err != nil {
-		return ExecutionRiskDecision{}, "", err
+		return ExecutionRiskDecision{}, "", time.Time{}, err
 	}
 	if decision.WorkspaceID != request.WorkspaceID || decision.SubjectKind != "human" || decision.SubjectID != request.SubjectID ||
 		decision.ToolsetVersionID != request.ToolsetVersionID || decision.ToolVersionID != request.ToolVersionID || decision.ConnectionID != request.ConnectionID ||
 		decision.ArgumentsHash != request.ArgumentsHash || decision.IdempotencyKeyHash != request.IdempotencyKeyHash || !asExecutionDomain(decision).Valid() {
-		return ExecutionRiskDecision{}, "", ErrUnavailable
+		return ExecutionRiskDecision{}, "", time.Time{}, ErrUnavailable
 	}
 	if decision.Outcome == string(domain.ExecutionConfirmationRequired) {
-		if confirmationID != request.ConfirmationID {
-			return ExecutionRiskDecision{}, "", ErrUnavailable
+		if confirmationID != request.ConfirmationID || !expiresAt.After(request.At) || expiresAt.After(request.ExpiresAt) || expiresAt.After(request.At.Add(10*time.Minute)) {
+			return ExecutionRiskDecision{}, "", time.Time{}, ErrUnavailable
 		}
-	} else if confirmationID != "" {
-		return ExecutionRiskDecision{}, "", ErrUnavailable
+	} else if confirmationID != "" || !expiresAt.IsZero() {
+		return ExecutionRiskDecision{}, "", time.Time{}, ErrUnavailable
 	}
-	return decision, confirmationID, nil
+	return decision, confirmationID, expiresAt, nil
 }
 
 func (s *ExecutionRiskCore) Consume(ctx context.Context, request ExecutionRiskRequest) (string, error) {
@@ -177,10 +177,10 @@ func (s *ExecutionRiskHumanService) Confirm(ctx context.Context, actor Actor, wo
 	if err != nil || !validID(id) {
 		return HumanExecutionConfirmation{}, ErrUnavailable
 	}
-	expires := request.At.Add(5 * time.Minute)
-	decision, confirmationID, err := s.core.Confirm(ctx, ExecutionConfirmationRequest{ExecutionRiskRequest: request, ConfirmationID: id, ExpiresAt: expires})
+	requestedExpiry := request.At.Add(10 * time.Minute)
+	decision, confirmationID, expiresAt, err := s.core.Confirm(ctx, ExecutionConfirmationRequest{ExecutionRiskRequest: request, ConfirmationID: id, ExpiresAt: requestedExpiry})
 	if err != nil {
 		return HumanExecutionConfirmation{}, err
 	}
-	return HumanExecutionConfirmation{Decision: decision, ConfirmationID: confirmationID, ExpiresAt: expires}, nil
+	return HumanExecutionConfirmation{Decision: decision, ConfirmationID: confirmationID, ExpiresAt: expiresAt}, nil
 }

@@ -35,7 +35,7 @@ func scanExecutionGovernancePolicy(row pgx.Row) (application.ExecutionGovernance
 	var createdBy, activatedBy *string
 	var activatedAt, retiredAt *time.Time
 	err := row.Scan(&item.WorkspaceID, &item.ID, &item.Revision, &item.State, &item.MaxUnconfirmedRiskLevel,
-		&item.DenyUnsafeWrite, &createdBy, &item.CreatedAt, &activatedBy, &activatedAt, &retiredAt)
+		&item.MaxMachineRiskLevel, &item.DenyUnsafeWrite, &item.ConfirmationTTLSeconds, &createdBy, &item.CreatedAt, &activatedBy, &activatedAt, &retiredAt)
 	if createdBy != nil {
 		item.CreatedByUserID = *createdBy
 	}
@@ -66,7 +66,7 @@ func scanExecutionGovernanceConfirmation(row pgx.Row) (application.ExecutionGove
 	return item, mapErr(err)
 }
 
-const executionGovernancePolicyCols = `workspace_id,id,revision,state,max_unconfirmed_risk_level,deny_unsafe_write,created_by_user_id,created_at,activated_by_user_id,activated_at,retired_at`
+const executionGovernancePolicyCols = `workspace_id,id,revision,state,max_unconfirmed_risk_level,max_machine_risk_level,deny_unsafe_write,confirmation_ttl_seconds,created_by_user_id,created_at,activated_by_user_id,activated_at,retired_at`
 
 func (r *ExecutionGovernanceRepository) ListExecutionGovernance(ctx context.Context, workspace string, filter application.ExecutionGovernanceFilter) (application.ExecutionGovernanceSnapshot, error) {
 	tx, err := r.begin(ctx, workspace)
@@ -166,6 +166,44 @@ func (r *ExecutionGovernanceRepository) ListExecutionGovernance(ctx context.Cont
 		return application.ExecutionGovernanceSnapshot{}, application.ErrUnavailable
 	}
 	return snapshot, nil
+}
+
+func (r *ExecutionGovernanceRepository) CreateExecutionPolicy(ctx context.Context, workspace, id, actor, maxUnconfirmed, maxMachine string, denyUnsafe bool, ttlSeconds int, at time.Time) (application.ExecutionGovernancePolicyRevision, error) {
+	tx, err := r.begin(ctx, workspace)
+	if err != nil {
+		return application.ExecutionGovernancePolicyRevision{}, err
+	}
+	defer rollback(tx)
+	if _, err = tx.Exec(ctx, `SELECT governance.create_execution_policy($1,$2,$3,$4,$5,$6,$7,$8)`, workspace, id, actor, maxUnconfirmed, maxMachine, denyUnsafe, ttlSeconds, at); err != nil {
+		return application.ExecutionGovernancePolicyRevision{}, mapErr(err)
+	}
+	item, err := scanExecutionGovernancePolicy(tx.QueryRow(ctx, `SELECT `+executionGovernancePolicyCols+` FROM governance.execution_policy_revisions WHERE workspace_id=$1 AND id=$2`, workspace, id))
+	if err != nil {
+		return application.ExecutionGovernancePolicyRevision{}, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return application.ExecutionGovernancePolicyRevision{}, application.ErrUnavailable
+	}
+	return item, nil
+}
+
+func (r *ExecutionGovernanceRepository) ActivateExecutionPolicy(ctx context.Context, workspace, id, actor string, at time.Time) (application.ExecutionGovernancePolicyRevision, error) {
+	tx, err := r.begin(ctx, workspace)
+	if err != nil {
+		return application.ExecutionGovernancePolicyRevision{}, err
+	}
+	defer rollback(tx)
+	if _, err = tx.Exec(ctx, `SELECT governance.activate_execution_policy($1,$2,$3,$4)`, workspace, id, actor, at); err != nil {
+		return application.ExecutionGovernancePolicyRevision{}, mapErr(err)
+	}
+	item, err := scanExecutionGovernancePolicy(tx.QueryRow(ctx, `SELECT `+executionGovernancePolicyCols+` FROM governance.execution_policy_revisions WHERE workspace_id=$1 AND id=$2`, workspace, id))
+	if err != nil {
+		return application.ExecutionGovernancePolicyRevision{}, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return application.ExecutionGovernancePolicyRevision{}, application.ErrUnavailable
+	}
+	return item, nil
 }
 
 var _ application.ExecutionGovernanceRepository = (*ExecutionGovernanceRepository)(nil)

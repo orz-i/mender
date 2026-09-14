@@ -890,7 +890,7 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 				return failed(handlerErr)
 			}
 			registers = append(registers, policyHandler.Register)
-			executionGovernanceService, serviceErr := governanceapp.NewExecutionGovernance(governancepg.NewExecutionGovernance(governancePolicyManagerPool), policyAccess)
+			executionGovernanceService, serviceErr := governanceapp.NewExecutionGovernance(governancepg.NewExecutionGovernance(governancePolicyManagerPool), policyAccess, systemClock{})
 			if serviceErr != nil {
 				return failed(serviceErr)
 			}

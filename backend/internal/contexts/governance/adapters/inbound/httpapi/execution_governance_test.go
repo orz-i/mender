@@ -13,7 +13,35 @@ import (
 )
 
 type executionGovernanceRepo struct {
-	filter application.ExecutionGovernanceFilter
+	filter                     application.ExecutionGovernanceFilter
+	createActor, activateActor string
+	maxUnconfirmed, maxMachine string
+	denyUnsafe                 bool
+	ttl                        int
+}
+
+func TestExecutionGovernancePolicyMutationsAreStrictAndUseSessionActor(t *testing.T) {
+	repo := &executionGovernanceRepo{}
+	r := executionGovernanceRouter(t, repo, &reviewAuth{})
+	path := "/api/admin/v1/workspaces/ws_1/execution-governance/revisions"
+	body := `{"id":"exec_policy_3","max_unconfirmed_risk_level":"high","max_machine_risk_level":"medium","deny_unsafe_write":true,"confirmation_ttl_seconds":120}`
+	if w := reviewRequest(r, http.MethodPost, path, body, ""); w.Code != http.StatusForbidden {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if w := reviewRequest(r, http.MethodPost, path, body[:len(body)-1]+`,"script":"allow()"}`, "csrf_1"); w.Code != http.StatusBadRequest {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if w := reviewRequest(r, http.MethodPost, path, `{"id":"exec_policy_3","max_unconfirmed_risk_level":"medium","max_machine_risk_level":"critical","deny_unsafe_write":true,"confirmation_ttl_seconds":120}`, "csrf_1"); w.Code != http.StatusBadRequest {
+		t.Fatal("machine ceiling wider than Human unconfirmed ceiling accepted", w.Code, w.Body.String())
+	}
+	w := reviewRequest(r, http.MethodPost, path, body, "csrf_1")
+	if w.Code != http.StatusCreated || repo.createActor != "reviewer_1" || repo.maxUnconfirmed != "high" || repo.maxMachine != "medium" || !repo.denyUnsafe || repo.ttl != 120 {
+		t.Fatal(w.Code, repo.createActor, repo.maxUnconfirmed, repo.maxMachine, repo.denyUnsafe, repo.ttl, w.Body.String())
+	}
+	w = reviewRequest(r, http.MethodPost, "/api/admin/v1/workspaces/ws_1/execution-governance/revisions/exec_policy_3/activate", "", "csrf_1")
+	if w.Code != http.StatusOK || repo.activateActor != "reviewer_1" {
+		t.Fatal(w.Code, repo.activateActor, w.Body.String())
+	}
 }
 
 func (r *executionGovernanceRepo) ListExecutionGovernance(_ context.Context, ws string, filter application.ExecutionGovernanceFilter) (application.ExecutionGovernanceSnapshot, error) {
@@ -22,8 +50,8 @@ func (r *executionGovernanceRepo) ListExecutionGovernance(_ context.Context, ws 
 	argsHash, idemHash := strings.Repeat("a", 64), strings.Repeat("b", 64)
 	return application.ExecutionGovernanceSnapshot{
 		Revisions: []application.ExecutionGovernancePolicyRevision{{
-			WorkspaceID: ws, ID: "exec_policy_2", Revision: 9007199254740993, State: "active", MaxUnconfirmedRiskLevel: "low",
-			DenyUnsafeWrite: true, CreatedByUserID: "owner_1", ActivatedByUserID: "admin_1", CreatedAt: at.Add(-time.Minute), ActivatedAt: at,
+			WorkspaceID: ws, ID: "exec_policy_2", Revision: 9007199254740993, State: "active", MaxUnconfirmedRiskLevel: "low", MaxMachineRiskLevel: "low",
+			DenyUnsafeWrite: true, ConfirmationTTLSeconds: 300, CreatedByUserID: "owner_1", ActivatedByUserID: "admin_1", CreatedAt: at.Add(-time.Minute), ActivatedAt: at,
 		}},
 		Decisions: []application.ExecutionRiskDecision{{
 			WorkspaceID: ws, PolicyRevisionID: "exec_policy_2", PolicyRevision: 9007199254740993,
@@ -42,9 +70,25 @@ func (r *executionGovernanceRepo) ListExecutionGovernance(_ context.Context, ws 
 	}, nil
 }
 
+func (r *executionGovernanceRepo) CreateExecutionPolicy(_ context.Context, ws, id, actor, maxUnconfirmed, maxMachine string, denyUnsafe bool, ttl int, at time.Time) (application.ExecutionGovernancePolicyRevision, error) {
+	r.createActor, r.maxUnconfirmed, r.maxMachine, r.denyUnsafe, r.ttl = actor, maxUnconfirmed, maxMachine, denyUnsafe, ttl
+	return application.ExecutionGovernancePolicyRevision{
+		WorkspaceID: ws, ID: id, Revision: 3, State: "draft", MaxUnconfirmedRiskLevel: maxUnconfirmed, MaxMachineRiskLevel: maxMachine,
+		DenyUnsafeWrite: denyUnsafe, ConfirmationTTLSeconds: ttl, CreatedByUserID: actor, CreatedAt: at,
+	}, nil
+}
+
+func (r *executionGovernanceRepo) ActivateExecutionPolicy(_ context.Context, ws, id, actor string, at time.Time) (application.ExecutionGovernancePolicyRevision, error) {
+	r.activateActor = actor
+	return application.ExecutionGovernancePolicyRevision{
+		WorkspaceID: ws, ID: id, Revision: 3, State: "active", MaxUnconfirmedRiskLevel: "high", MaxMachineRiskLevel: "medium",
+		DenyUnsafeWrite: true, ConfirmationTTLSeconds: 120, CreatedByUserID: "reviewer_1", CreatedAt: at.Add(-time.Minute), ActivatedByUserID: actor, ActivatedAt: at,
+	}, nil
+}
+
 func executionGovernanceRouter(t *testing.T, repo *executionGovernanceRepo, auth *reviewAuth) *gin.Engine {
 	t.Helper()
-	service, err := application.NewExecutionGovernance(repo, auth)
+	service, err := application.NewExecutionGovernance(repo, auth, reviewClock{at: time.Date(2026, 9, 13, 13, 0, 0, 0, time.UTC)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +111,7 @@ func TestExecutionGovernanceSnapshotUsesServerFiltersCursorsAndExactIntegers(t *
 		t.Fatal(w.Code, w.Body.String())
 	}
 	body := w.Body.String()
-	for _, wanted := range []string{`"revision":"9007199254740993"`, `"sequence":"9007199254740995"`, `"subject_kind":"human"`, `"arguments_hash":"` + strings.Repeat("a", 64) + `"`, `"state":"expired"`, `"persisted_state":"active"`, `"next_before_decision_sequence":"9007199254740995"`} {
+	for _, wanted := range []string{`"revision":"9007199254740993"`, `"max_machine_risk_level":"low"`, `"confirmation_ttl_seconds":300`, `"sequence":"9007199254740995"`, `"subject_kind":"human"`, `"arguments_hash":"` + strings.Repeat("a", 64) + `"`, `"state":"expired"`, `"persisted_state":"active"`, `"next_before_decision_sequence":"9007199254740995"`} {
 		if !strings.Contains(body, wanted) {
 			t.Fatal("missing response fact", wanted, body)
 		}

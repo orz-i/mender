@@ -41,24 +41,28 @@ func (r *ExecutionRiskTxRepository) EvaluateExecutionRisk(ctx context.Context, r
 	return scanExecutionDecision(r.q.QueryRow(ctx, `SELECT `+executionDecisionCols+` FROM governance.execution_policy_decisions WHERE sequence=$1`, sequence))
 }
 
-func (r *ExecutionRiskTxRepository) CreateExecutionConfirmation(ctx context.Context, request application.ExecutionConfirmationRequest) (application.ExecutionRiskDecision, string, error) {
+func (r *ExecutionRiskTxRepository) CreateExecutionConfirmation(ctx context.Context, request application.ExecutionConfirmationRequest) (application.ExecutionRiskDecision, string, time.Time, error) {
 	if r == nil || r.q == nil {
-		return application.ExecutionRiskDecision{}, "", application.ErrUnavailable
+		return application.ExecutionRiskDecision{}, "", time.Time{}, application.ErrUnavailable
 	}
 	var sequence int64
 	var confirmationID *string
 	err := r.q.QueryRow(ctx, `SELECT decision_sequence,confirmation_id_result FROM governance.create_execution_confirmation($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, request.WorkspaceID, request.ConfirmationID, request.SubjectID, request.ToolsetVersionID, request.ToolVersionID, request.ConnectionID, request.ArgumentsHash, request.IdempotencyKeyHash, request.At, request.ExpiresAt).Scan(&sequence, &confirmationID)
 	if err != nil {
-		return application.ExecutionRiskDecision{}, "", mapErr(err)
+		return application.ExecutionRiskDecision{}, "", time.Time{}, mapErr(err)
 	}
 	decision, err := scanExecutionDecision(r.q.QueryRow(ctx, `SELECT `+executionDecisionCols+` FROM governance.execution_policy_decisions WHERE sequence=$1`, sequence))
 	if err != nil {
-		return application.ExecutionRiskDecision{}, "", err
+		return application.ExecutionRiskDecision{}, "", time.Time{}, err
 	}
 	if confirmationID == nil {
-		return decision, "", nil
+		return decision, "", time.Time{}, nil
 	}
-	return decision, *confirmationID, nil
+	var expiresAt time.Time
+	if err = r.q.QueryRow(ctx, `SELECT expires_at FROM governance.execution_confirmations WHERE workspace_id=$1 AND id=$2`, request.WorkspaceID, *confirmationID).Scan(&expiresAt); err != nil {
+		return application.ExecutionRiskDecision{}, "", time.Time{}, mapErr(err)
+	}
+	return decision, *confirmationID, expiresAt, nil
 }
 
 func (r *ExecutionRiskTxRepository) ConsumeExecutionConfirmation(ctx context.Context, request application.ExecutionRiskRequest) (string, error) {
@@ -111,12 +115,12 @@ func (r *ExecutionRiskPoolRepository) EvaluateExecutionRisk(ctx context.Context,
 	return item, err
 }
 
-func (r *ExecutionRiskPoolRepository) CreateExecutionConfirmation(ctx context.Context, request application.ExecutionConfirmationRequest) (item application.ExecutionRiskDecision, confirmation string, err error) {
+func (r *ExecutionRiskPoolRepository) CreateExecutionConfirmation(ctx context.Context, request application.ExecutionConfirmationRequest) (item application.ExecutionRiskDecision, confirmation string, expiresAt time.Time, err error) {
 	err = r.within(ctx, request.WorkspaceID, func(tx *ExecutionRiskTxRepository) error {
-		item, confirmation, err = tx.CreateExecutionConfirmation(ctx, request)
+		item, confirmation, expiresAt, err = tx.CreateExecutionConfirmation(ctx, request)
 		return err
 	})
-	return item, confirmation, err
+	return item, confirmation, expiresAt, err
 }
 
 func (r *ExecutionRiskPoolRepository) ConsumeExecutionConfirmation(ctx context.Context, request application.ExecutionRiskRequest) (id string, err error) {
@@ -129,5 +133,3 @@ func (r *ExecutionRiskPoolRepository) ConsumeExecutionConfirmation(ctx context.C
 
 var _ application.ExecutionRiskRepository = (*ExecutionRiskTxRepository)(nil)
 var _ application.ExecutionRiskRepository = (*ExecutionRiskPoolRepository)(nil)
-
-var _ = time.Time{}

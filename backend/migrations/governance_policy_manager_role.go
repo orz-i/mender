@@ -32,7 +32,7 @@ func GrantGovernancePolicyManager(ctx context.Context, pool *pgxpool.Pool, role 
 		"GRANT SELECT ON mender_meta.schema_migrations TO " + id,
 		"GRANT SELECT ON governance.catalog_publication_policy_revisions,governance.catalog_publication_policy_decisions,governance.execution_policy_revisions,governance.execution_policy_decisions,governance.execution_confirmations TO " + id,
 		"GRANT EXECUTE ON FUNCTION governance.create_catalog_publication_policy(text,text,text,text,boolean,boolean,timestamptz),governance.activate_catalog_publication_policy(text,text,text,timestamptz) TO " + id,
-		"GRANT EXECUTE ON FUNCTION governance.create_execution_policy(text,text,text,text,boolean,timestamptz),governance.activate_execution_policy(text,text,text,timestamptz) TO " + id,
+		"GRANT EXECUTE ON FUNCTION governance.create_execution_policy(text,text,text,text,text,boolean,integer,timestamptz),governance.activate_execution_policy(text,text,text,timestamptz) TO " + id,
 	} {
 		if _, err = tx.Exec(ctx, sql); err != nil {
 			return errors.New("governance-policy-manager grant failed")

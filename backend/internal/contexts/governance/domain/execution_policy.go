@@ -11,15 +11,17 @@ const (
 )
 
 type ExecutionPolicyRevision struct {
-	WorkspaceID, ID, State, MaxUnconfirmedRiskLevel string
-	Revision                                        int64
-	DenyUnsafeWrite                                 bool
-	CreatedByUserID, ActivatedByUserID              string
-	CreatedAt, ActivatedAt, RetiredAt               time.Time
+	WorkspaceID, ID, State, MaxUnconfirmedRiskLevel, MaxMachineRiskLevel string
+	Revision                                                             int64
+	DenyUnsafeWrite                                                      bool
+	ConfirmationTTLSeconds                                               int
+	CreatedByUserID, ActivatedByUserID                                   string
+	CreatedAt, ActivatedAt, RetiredAt                                    time.Time
 }
 
 func (p ExecutionPolicyRevision) Valid() bool {
-	if !validID(p.WorkspaceID) || !validID(p.ID) || p.Revision < 1 || !validRisk(p.MaxUnconfirmedRiskLevel) || p.CreatedAt.IsZero() {
+	if !validID(p.WorkspaceID) || !validID(p.ID) || p.Revision < 1 || !validRisk(p.MaxUnconfirmedRiskLevel) || !validRisk(p.MaxMachineRiskLevel) ||
+		p.ConfirmationTTLSeconds < 30 || p.ConfirmationTTLSeconds > 600 || riskRank(p.MaxMachineRiskLevel) > riskRank(p.MaxUnconfirmedRiskLevel) || p.CreatedAt.IsZero() {
 		return false
 	}
 	switch p.State {
@@ -96,3 +98,18 @@ func validHash(v string) bool {
 }
 
 func validRisk(v string) bool { return v == "low" || v == "medium" || v == "high" || v == "critical" }
+
+func riskRank(v string) int {
+	switch v {
+	case "low":
+		return 1
+	case "medium":
+		return 2
+	case "high":
+		return 3
+	case "critical":
+		return 4
+	default:
+		return 100
+	}
+}

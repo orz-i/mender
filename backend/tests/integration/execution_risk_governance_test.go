@@ -23,7 +23,7 @@ func ensurePermissiveExecutionPolicy(t *testing.T, ctx context.Context, owner *p
 	must(t, tx.QueryRow(ctx, `SELECT count(*) FROM governance.execution_policy_revisions WHERE workspace_id=$1 AND state='active'`, workspace).Scan(&active))
 	if active == 0 {
 		id := "integration_execution_policy_v1"
-		_, err = tx.Exec(ctx, `SELECT governance.create_execution_policy($1,$2,'integration_admin','critical',false,$3)`, workspace, id, at)
+		_, err = tx.Exec(ctx, `SELECT governance.create_execution_policy($1,$2,'integration_admin','critical','critical',false,300,$3)`, workspace, id, at)
 		must(t, err)
 		_, err = tx.Exec(ctx, `SELECT governance.activate_execution_policy($1,$2,'integration_admin',$3)`, workspace, id, at)
 		must(t, err)
@@ -43,6 +43,7 @@ func exerciseExecutionRiskGovernance(t *testing.T, ctx context.Context, owner *p
 		id, tool, effect, idem, set string
 	}{
 		{"tv_exec_safe", "tool_exec_safe", "read_only", "safe_read", "set_exec_safe"},
+		{"tv_exec_idempotent", "tool_exec_idempotent", "write", "idempotent", "set_exec_idempotent"},
 		{"tv_exec_unsafe", "tool_exec_unsafe", "write", "unsafe", "set_exec_unsafe"},
 	} {
 		_, err = owner.Exec(ctx, `INSERT INTO catalog.tool_versions(
@@ -74,7 +75,7 @@ func exerciseExecutionRiskGovernance(t *testing.T, ctx context.Context, owner *p
 	must(t, err)
 	var revision int64
 	must(t, policyTx.QueryRow(ctx, `SELECT governance.create_execution_policy(
-	 'ws_exec_policy','exec_allow_v1','policy_admin','critical',false,$1)`, at.Add(time.Second)).Scan(&revision))
+	 'ws_exec_policy','exec_allow_v1','policy_admin','critical','critical',false,300,$1)`, at.Add(time.Second)).Scan(&revision))
 	if revision != 1 {
 		t.Fatal("unexpected first execution policy revision", revision)
 	}
@@ -91,7 +92,7 @@ func exerciseExecutionRiskGovernance(t *testing.T, ctx context.Context, owner *p
 	_, err = policyTx.Exec(ctx, `SELECT set_config('mender.workspace_id','ws_exec_policy',true)`)
 	must(t, err)
 	must(t, policyTx.QueryRow(ctx, `SELECT governance.create_execution_policy(
-	 'ws_exec_policy','exec_allow_v1','policy_admin','critical',false,$1)`, at.Add(time.Second)).Scan(&revision))
+	 'ws_exec_policy','exec_allow_v1','policy_admin','critical','critical',false,300,$1)`, at.Add(time.Second)).Scan(&revision))
 	_, err = policyTx.Exec(ctx, `SELECT governance.activate_execution_policy('ws_exec_policy','exec_allow_v1','policy_admin',$1)`, at.Add(2*time.Second))
 	must(t, err)
 	must(t, policyTx.Commit(ctx))
@@ -126,7 +127,7 @@ func exerciseExecutionRiskGovernance(t *testing.T, ctx context.Context, owner *p
 	_, err = policyTx.Exec(ctx, `SELECT set_config('mender.workspace_id','ws_exec_policy',true)`)
 	must(t, err)
 	must(t, policyTx.QueryRow(ctx, `SELECT governance.create_execution_policy(
-	 'ws_exec_policy','exec_confirm_v2','policy_admin','low',false,$1)`, at.Add(4*time.Second)).Scan(&revision))
+	 'ws_exec_policy','exec_confirm_v2','policy_admin','high','low',false,60,$1)`, at.Add(4*time.Second)).Scan(&revision))
 	if revision != 2 {
 		t.Fatal("execution policy revision did not advance", revision)
 	}
@@ -139,8 +140,16 @@ func exerciseExecutionRiskGovernance(t *testing.T, ctx context.Context, owner *p
 		t.Fatal("strict human execution policy did not require confirmation", risk, outcome, reasons)
 	}
 	_, _, outcome, reasons = eval("machine", "sa_exec", "set_exec_unsafe", "tv_exec_unsafe", repeatHex('c'), repeatHex('d'), at.Add(6*time.Second))
-	if outcome != "deny" || !containsString(reasons, "machine_confirmation_unavailable") {
+	if outcome != "deny" || !containsString(reasons, "machine_risk_above_ceiling") {
 		t.Fatal("machine caller bypassed human confirmation requirement", outcome, reasons)
+	}
+	_, risk, outcome, reasons = eval("human", "user_exec", "set_exec_idempotent", "tv_exec_idempotent", repeatHex('2'), repeatHex('3'), at.Add(6*time.Second))
+	if risk != "high" || outcome != "allow" || !containsString(reasons, "within_unconfirmed_risk") {
+		t.Fatal("Human caller did not use the unconfirmed risk ceiling", risk, outcome, reasons)
+	}
+	_, risk, outcome, reasons = eval("machine", "sa_exec", "set_exec_idempotent", "tv_exec_idempotent", repeatHex('2'), repeatHex('3'), at.Add(6*time.Second))
+	if risk != "high" || outcome != "deny" || !containsString(reasons, "machine_risk_above_ceiling") {
+		t.Fatal("machine caller exceeded the independent machine risk ceiling", risk, outcome, reasons)
 	}
 
 	confirmTx, err := owner.Begin(ctx)
@@ -154,6 +163,11 @@ func exerciseExecutionRiskGovernance(t *testing.T, ctx context.Context, owner *p
 		repeatHex('c'), repeatHex('d'), at.Add(7*time.Second), at.Add(5*time.Minute)).Scan(&confirmDecision, &confirmationID))
 	if confirmDecision < 1 || confirmationID == nil || *confirmationID != "confirm_exec_1" {
 		t.Fatal("human confirmation was not created for exact dangerous action", confirmDecision, confirmationID)
+	}
+	var confirmationExpiry time.Time
+	must(t, confirmTx.QueryRow(ctx, `SELECT expires_at FROM governance.execution_confirmations WHERE workspace_id='ws_exec_policy' AND id='confirm_exec_1'`).Scan(&confirmationExpiry))
+	if !confirmationExpiry.Equal(at.Add(67 * time.Second)) {
+		t.Fatal("execution confirmation TTL was not clamped by active policy", confirmationExpiry)
 	}
 	var consumed *string
 	must(t, confirmTx.QueryRow(ctx, `SELECT governance.consume_execution_confirmation(
@@ -192,7 +206,7 @@ func exerciseExecutionRiskGovernance(t *testing.T, ctx context.Context, owner *p
 	_, err = policyTx.Exec(ctx, `SELECT set_config('mender.workspace_id','ws_exec_policy',true)`)
 	must(t, err)
 	must(t, policyTx.QueryRow(ctx, `SELECT governance.create_execution_policy(
-	 'ws_exec_policy','exec_confirm_v3','policy_admin','low',false,$1)`, at.Add(11*time.Second)).Scan(&revision))
+	 'ws_exec_policy','exec_confirm_v3','policy_admin','low','low',false,30,$1)`, at.Add(11*time.Second)).Scan(&revision))
 	_, err = policyTx.Exec(ctx, `SELECT governance.activate_execution_policy('ws_exec_policy','exec_confirm_v3','policy_admin',$1)`, at.Add(12*time.Second))
 	must(t, err)
 	must(t, policyTx.Commit(ctx))
