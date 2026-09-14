@@ -18,6 +18,42 @@ export interface RunRecord {
   updatedAt: string;
 }
 
+function validTimestamp(value: unknown, message: string) {
+  const raw = string(value, message);
+  if (raw.length < 1 || raw.length > 64 || Number.isNaN(Date.parse(raw))) throw new Error(message);
+  return raw;
+}
+
+function parseArtifactObjectStatus(value: unknown): ArtifactObjectStatusRecord {
+  const raw = object(value, '服务返回了无法识别的 Artifact object 状态');
+  exactKeys(raw, ['state', 'expires_at'], '服务返回了无法识别的 Artifact object 状态');
+  const state = string(raw.state) as ArtifactObjectState;
+  if (!['not_materialized', 'available', 'expired'].includes(state)) throw new Error('服务返回了无法识别的 Artifact object 状态');
+  const expiresAt = raw.expires_at === null ? null : validTimestamp(raw.expires_at, '服务返回了无效的 Artifact object 到期时间');
+  if (state === 'not_materialized' && expiresAt !== null) throw new Error('服务返回了不一致的 Artifact object 状态');
+  if (state !== 'not_materialized' && expiresAt === null) throw new Error('服务返回了不一致的 Artifact object 状态');
+  return { state, expiresAt };
+}
+
+function validateArtifactObjectURL(value: unknown) {
+  const raw = string(value, '服务返回了无效的 Artifact object capability URL');
+  if (raw.length < 1 || raw.length > 4096 || raw.includes('#')) throw new Error('服务返回了无效的 Artifact object capability URL');
+  const parsed = new URL(raw, 'https://mender.invalid');
+  const keys = [...parsed.searchParams.keys()];
+  const capability = parsed.searchParams.getAll('cap');
+  const cap = capability.length === 1 ? capability[0] : undefined;
+  if (parsed.origin !== 'https://mender.invalid' || parsed.pathname !== '/api/v1/artifact-objects/content' || keys.length !== 1 || keys.some((key) => key !== 'cap') || cap === undefined || cap.length < 1 || cap.length > 2048 || parsed.username || parsed.password) {
+    throw new Error('服务返回了无效的 Artifact object capability URL');
+  }
+  return raw;
+}
+
+function parseArtifactObjectGrant(value: unknown): ArtifactObjectGrantRecord {
+  const raw = object(value, '服务返回了无法识别的 Artifact object capability');
+  exactKeys(raw, ['url', 'expires_at'], '服务返回了无法识别的 Artifact object capability');
+  return { url: validateArtifactObjectURL(raw.url), expiresAt: validTimestamp(raw.expires_at, '服务返回了无效的 Artifact object capability 到期时间') };
+}
+
 function parseRunCost(value: unknown): RunCostRecord {
   const raw = object(value, '服务返回了无法识别的 Run quota cost');
   exactKeys(raw, [
@@ -87,6 +123,18 @@ export interface ArtifactRecord {
 
 export interface ArtifactDetailRecord extends ArtifactRecord {
   content: unknown;
+}
+
+export type ArtifactObjectState = 'not_materialized' | 'available' | 'expired';
+
+export interface ArtifactObjectStatusRecord {
+  state: ArtifactObjectState;
+  expiresAt: string | null;
+}
+
+export interface ArtifactObjectGrantRecord {
+  url: string;
+  expiresAt: string;
 }
 
 export type RunQuotaState = 'held' | 'released' | 'settled';
@@ -380,6 +428,31 @@ export function createRunsClient(baseUrl = '', fetcher: typeof fetch = fetch, ap
       const metadata = parseArtifact(data, true);
       if (metadata.artifactId !== request.artifactId) throw new Error('服务返回了错误的 Artifact');
       return { ...metadata, content: data.content };
+    },
+    async getRunArtifactObjectStatus(request: ArtifactRequest): Promise<ArtifactObjectStatusRecord> {
+      requireId(request.runId, 'Run ID');
+      if (!artifactIdPattern.test(request.artifactId)) throw new Error('Artifact ID 格式无效');
+      const raw = object(await jsonRequest(fetcher, `${runBase(request.workspaceId)}/${encodeURIComponent(request.runId)}/artifacts/${encodeURIComponent(request.artifactId)}/object`, request, { signal: requestSignal(request.signal) }));
+      return parseArtifactObjectStatus(raw.data);
+    },
+    async issueRunArtifactObjectCapability(request: ArtifactRequest): Promise<ArtifactObjectGrantRecord> {
+      requireId(request.runId, 'Run ID');
+      if (!artifactIdPattern.test(request.artifactId)) throw new Error('Artifact ID 格式无效');
+      const raw = object(await jsonRequest(fetcher, `${runBase(request.workspaceId)}/${encodeURIComponent(request.runId)}/artifacts/${encodeURIComponent(request.artifactId)}/object-capability`, request, {
+        method: 'POST', signal: requestSignal(request.signal),
+      }));
+      return parseArtifactObjectGrant(raw.data);
+    },
+    async readRunArtifactObject(grant: ArtifactObjectGrantRecord, signal?: AbortSignal): Promise<unknown> {
+      const url = validateArtifactObjectURL(grant.url);
+      validTimestamp(grant.expiresAt, 'Artifact object capability 到期时间无效');
+      const response = await fetcher(`${base}${url}`, {
+        method: 'GET', signal: requestSignal(signal), cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer', headers: { Accept: 'application/json' },
+      });
+      if (!response.ok) throw await errorFrom(response);
+      const contentType = response.headers.get('Content-Type')?.split(';', 1)[0]?.trim().toLowerCase();
+      if (contentType !== 'application/json') throw new Error('服务返回了无法识别的 Artifact object 内容类型');
+      return response.json() as Promise<unknown>;
     },
     async cancelRun(request: CancelRunRequest): Promise<RunRecord> {
       requireId(request.runId, 'Run ID');

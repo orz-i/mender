@@ -82,12 +82,14 @@ export function RunExplorerPage({ gateway }: { gateway: RunGateway }) {
     void queryClient.cancelQueries({ queryKey: ['run-events'] });
     void queryClient.cancelQueries({ queryKey: ['run-artifacts'] });
     void queryClient.cancelQueries({ queryKey: ['run-artifact-content'] });
+    void queryClient.cancelQueries({ queryKey: ['run-artifact-object-status'] });
     void queryClient.cancelQueries({ queryKey: ['run-cost'] });
     queryClient.removeQueries({ queryKey: ['run-list'] });
     queryClient.removeQueries({ queryKey: ['run-detail'] });
     queryClient.removeQueries({ queryKey: ['run-events'] });
     queryClient.removeQueries({ queryKey: ['run-artifacts'] });
     queryClient.removeQueries({ queryKey: ['run-artifact-content'] });
+    queryClient.removeQueries({ queryKey: ['run-artifact-object-status'] });
     queryClient.removeQueries({ queryKey: ['run-cost'] });
     setAccess(null); setSelectedRun(null); setSelectedArtifact(null); setCursor(null); setCancelReason('');
   };
@@ -149,6 +151,20 @@ export function RunExplorerPage({ gateway }: { gateway: RunGateway }) {
     queryKey: ['run-artifact-content', access?.sessionKey, access?.workspaceId, selectedRun, selectedArtifact],
     enabled: access !== null && selectedRun !== null && selectedArtifact !== null,
     queryFn: ({ signal }) => gateway.artifact(access!, selectedRun!, selectedArtifact!, signal),
+  });
+
+  const artifactObjectStatusQuery = useQuery({
+    queryKey: ['run-artifact-object-status', access?.sessionKey, access?.workspaceId, selectedRun, selectedArtifact],
+    enabled: access !== null && selectedRun !== null && selectedArtifact !== null,
+    retry: false,
+    queryFn: ({ signal }) => gateway.artifactObjectStatus(access!, selectedRun!, selectedArtifact!, signal),
+  });
+
+  const artifactObjectReadMutation = useMutation({
+    mutationFn: async () => {
+      if (!access || !selectedRun || !selectedArtifact) throw new Error('请先选择 Artifact');
+      return gateway.artifactObjectContent(access, selectedRun, selectedArtifact);
+    },
   });
 
   const cancelMutation = useMutation({
@@ -229,6 +245,16 @@ export function RunExplorerPage({ gateway }: { gateway: RunGateway }) {
             {artifactContentQuery.isPending && selectedArtifact && <div className="empty-state compact"><strong>正在读取 Artifact 内容…</strong></div>}
             {artifactContentQuery.error && <div className="error-panel" role="alert">{errorMessage(artifactContentQuery.error)}</div>}
             {artifactContentQuery.data && <div className="artifact-preview" aria-live="polite"><div className="detail-section-heading"><div><p className="section-kicker">Result JSON</p><strong className="mono">{artifactContentQuery.data.id}</strong></div><span>{artifactContentQuery.data.sizeBytes.toLocaleString()} B</span></div><pre>{JSON.stringify(artifactContentQuery.data.content, null, 2)}</pre></div>}
+            {selectedArtifact && <div className="empty-state compact"><strong>Artifact object 副本</strong>
+              {artifactObjectStatusQuery.isPending && <span>正在读取服务端对象生命周期事实…</span>}
+              {artifactObjectStatusQuery.error && <span className="error-panel" role="alert">{errorMessage(artifactObjectStatusQuery.error)}</span>}
+              {artifactObjectStatusQuery.data === null && <span>当前部署未启用短时对象读取；inline Artifact 仍是兼容真源。</span>}
+              {artifactObjectStatusQuery.data?.state === 'not_materialized' && <span>服务端尚未物化对象副本。页面不会根据 Artifact 大小自行判断。</span>}
+              {artifactObjectStatusQuery.data?.state === 'expired' && <span>服务端对象副本已过期（{artifactObjectStatusQuery.data.expiresAt ? formatTime(artifactObjectStatusQuery.data.expiresAt) : '—'}）；旧 capability 不再有效。</span>}
+              {artifactObjectStatusQuery.data?.state === 'available' && <><span>服务端对象副本可用至 {formatTime(artifactObjectStatusQuery.data.expiresAt!)}。读取会重新签发 ≤5 分钟 capability，并在服务端再次验证摘要与生命周期。</span><Button type="button" variant="outline" disabled={artifactObjectReadMutation.isPending} onClick={() => artifactObjectReadMutation.mutate()}>{artifactObjectReadMutation.isPending ? '正在签发并读取…' : '通过短时 capability 读取对象副本'}</Button></>}
+              {artifactObjectReadMutation.error && <span className="error-panel" role="alert">{errorMessage(artifactObjectReadMutation.error)}</span>}
+              {artifactObjectReadMutation.data?.artifactId === selectedArtifact && <div className="artifact-preview" aria-live="polite"><div className="detail-section-heading"><div><p className="section-kicker">Object copy JSON</p><strong className="mono">{selectedArtifact}</strong></div><span>capability 至 {formatTime(artifactObjectReadMutation.data.capabilityExpiresAt)}</span></div><pre>{JSON.stringify(artifactObjectReadMutation.data.content, null, 2)}</pre></div>}
+            </div>}
           </section>
           <section className="detail-section cancel-section"><h3>取消</h3>{canCancel ? <><label className="cancel-reason">取消原因（可选）<textarea value={cancelReason} maxLength={500} onChange={(event) => setCancelReason(event.target.value)} placeholder="仅提交取消意图；不会在客户端假定 Remote Agent / Provider 已停止" /></label><Button type="button" variant="outline" disabled={cancelMutation.isPending} onClick={() => cancelMutation.mutate()}>{cancelMutation.isPending ? '正在请求…' : '请求取消'}</Button></> : <p className="muted-copy">当前状态或当前短期委托不允许新的取消请求。服务端仍会重新校验 Membership 与 delegation scope；只有服务端投影为 canceled 才表示取消终态已确认。</p>}{cancelMutation.error && <div className="error-panel" role="alert">{errorMessage(cancelMutation.error)}</div>}</section>
         </>}

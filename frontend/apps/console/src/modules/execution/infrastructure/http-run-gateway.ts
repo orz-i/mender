@@ -127,6 +127,18 @@ export function createRunGateway(): RunGateway {
     async artifact(access, runId, artifactId, signal) {
       return artifactDetail(await client.getRunArtifact({ workspaceId: access.workspaceId, token: access.delegatedToken, runId, artifactId, signal }));
     },
+    async artifactObjectStatus(access, runId, artifactId, signal) {
+      try {
+        return await client.getRunArtifactObjectStatus({ workspaceId: access.workspaceId, token: access.delegatedToken, runId, artifactId, signal });
+      } catch (error) {
+        if (error instanceof MenderApiError && error.status === 404) return null;
+        throw error;
+      }
+    },
+    async artifactObjectContent(access, runId, artifactId, signal) {
+      const grant = await client.issueRunArtifactObjectCapability({ workspaceId: access.workspaceId, token: access.delegatedToken, runId, artifactId, signal });
+      return { artifactId, content: await client.readRunArtifactObject(grant, signal), capabilityExpiresAt: grant.expiresAt };
+    },
     async cost(access, runId, signal) {
       try {
         return quotaCost(await client.getRunCost({ workspaceId: access.workspaceId, token: access.delegatedToken, runId, signal }));

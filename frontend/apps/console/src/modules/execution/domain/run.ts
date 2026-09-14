@@ -38,6 +38,17 @@ export interface RunArtifactDetail extends RunArtifact {
   content: unknown;
 }
 
+export interface RunArtifactObjectStatus {
+  state: 'not_materialized' | 'available' | 'expired';
+  expiresAt: string | null;
+}
+
+export interface RunArtifactObjectContent {
+  artifactId: string;
+  content: unknown;
+  capabilityExpiresAt: string;
+}
+
 export interface RunQuotaCost {
   runId: string;
   budgetId: string;

@@ -7,6 +7,47 @@ const run = (state = 'queued') => ({
   created_at: '2026-09-12T00:00:00Z', updated_at: '2026-09-12T00:00:01Z',
 });
 
+test('Artifact object status and capability stay behind delegated run:read while signed content drops Authorization', async () => {
+  const calls = [];
+  const signedUrl = '/api/v1/artifact-objects/content?cap=signed_capability';
+  const client = createConsoleRunsClient('', async (url, init) => {
+    calls.push({ url, init });
+    if (url.endsWith('/object')) return Response.json({ data: { state: 'available', expires_at: '2026-09-12T00:05:00Z' }, meta: { request_id: 'req_status' } });
+    if (url.endsWith('/object-capability')) return Response.json({ data: { url: signedUrl, expires_at: '2026-09-12T00:01:00Z' }, meta: { request_id: 'req_grant' } }, { status: 201 });
+    if (url === signedUrl) return Response.json({ answer: 42 }, { headers: { 'Content-Type': 'application/json' } });
+    throw new Error(`unexpected URL ${url}`);
+  });
+  const access = { workspaceId: 'ws_a', token: 'short_lived_delegation', runId: 'run_a', artifactId: 'artifact_a' };
+  const status = await client.getRunArtifactObjectStatus(access);
+  assert.equal(status.state, 'available');
+  assert.equal(status.expiresAt, '2026-09-12T00:05:00Z');
+  const grant = await client.issueRunArtifactObjectCapability(access);
+  assert.equal(grant.url, signedUrl);
+  assert.deepEqual(await client.readRunArtifactObject(grant), { answer: 42 });
+  assert.equal(calls[0].url, '/api/console/v1/workspaces/ws_a/runs/run_a/artifacts/artifact_a/object');
+  assert.equal(calls[1].url, '/api/console/v1/workspaces/ws_a/runs/run_a/artifacts/artifact_a/object-capability');
+  for (const call of calls.slice(0, 2)) {
+    assert.equal(new Headers(call.init.headers).get('Authorization'), 'Bearer short_lived_delegation');
+    assert.equal(call.init.credentials, 'omit');
+    assert.ok(!call.url.includes('short_lived_delegation'));
+  }
+  assert.equal(new Headers(calls[2].init.headers).get('Authorization'), null);
+  assert.equal(calls[2].init.credentials, 'omit');
+  assert.equal(calls[2].init.referrerPolicy, 'no-referrer');
+});
+
+test('Artifact object client fails closed on inferred, leaked, or unsafe server projections', async () => {
+  const access = { workspaceId: 'ws_a', token: 'short_lived_delegation', runId: 'run_a', artifactId: 'artifact_a' };
+  const leaked = createConsoleRunsClient('', async () => Response.json({ data: { state: 'available', expires_at: '2026-09-12T00:05:00Z', object_key: 'objects/internal' }, meta: { request_id: 'req' } }));
+  await assert.rejects(leaked.getRunArtifactObjectStatus(access), /Artifact object 状态/);
+  const inconsistent = createConsoleRunsClient('', async () => Response.json({ data: { state: 'not_materialized', expires_at: '2026-09-12T00:05:00Z' }, meta: { request_id: 'req' } }));
+  await assert.rejects(inconsistent.getRunArtifactObjectStatus(access), /不一致/);
+  const unsafeUrl = createConsoleRunsClient('', async () => Response.json({ data: { url: 'https://evil.example/object?cap=secret', expires_at: '2026-09-12T00:01:00Z' }, meta: { request_id: 'req' } }, { status: 201 }));
+  await assert.rejects(unsafeUrl.issueRunArtifactObjectCapability(access), /capability URL/);
+  const duplicated = createConsoleRunsClient('', async () => Response.json({ data: { url: '/api/v1/artifact-objects/content?cap=a&cap=b', expires_at: '2026-09-12T00:01:00Z' }, meta: { request_id: 'req' } }, { status: 201 }));
+  await assert.rejects(duplicated.issueRunArtifactObjectCapability(access), /capability URL/);
+});
+
 test('reads exact Run quota cost with delegated Bearer and rejects accounting drift', async () => {
   assert.equal('getRunCost' in createRunsClient(), false, 'Machine Run client must not advertise the Console-only cost route');
   const client = createConsoleRunsClient('', async (url, init) => {
