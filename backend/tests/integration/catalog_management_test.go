@@ -11,9 +11,28 @@ import (
 	governancepg "github.com/orz-i/mender/backend/internal/contexts/governance/adapters/outbound/postgres"
 	governanceapp "github.com/orz-i/mender/backend/internal/contexts/governance/application"
 	database "github.com/orz-i/mender/backend/internal/platform/postgres"
+	catalogmanagementopenapi "github.com/orz-i/mender/backend/internal/processes/catalogmanagement/adapters/outbound/openapiaccess"
 	catalogmanagementpg "github.com/orz-i/mender/backend/internal/processes/catalogmanagement/adapters/outbound/postgres"
+	catalogmanagementapp "github.com/orz-i/mender/backend/internal/processes/catalogmanagement/application"
+	openapifacade "github.com/orz-i/mender/backend/internal/processes/openapiimport/adapters/inbound/facade"
 	"github.com/orz-i/mender/backend/migrations"
 )
+
+type openAPIImportAuth struct{}
+
+func (openAPIImportAuth) Authenticate(context.Context, string) (catalogmanagementapp.Actor, error) {
+	return catalogmanagementapp.Actor{UserID: "user_openapi_import"}, nil
+}
+func (openAPIImportAuth) AuthenticateMutation(context.Context, string, string) (catalogmanagementapp.Actor, error) {
+	return catalogmanagementapp.Actor{UserID: "user_openapi_import"}, nil
+}
+func (openAPIImportAuth) Authorize(context.Context, catalogmanagementapp.Actor, string, string) error {
+	return nil
+}
+
+type openAPIImportClock struct{ at time.Time }
+
+func (c openAPIImportClock) Now() time.Time { return c.at }
 
 func exerciseCatalogManagementFoundation(t *testing.T, ctx context.Context, owner, runtime *pgxpool.Pool, runtimeDSN string) {
 	t.Helper()
@@ -32,6 +51,113 @@ func exerciseCatalogManagementFoundation(t *testing.T, ctx context.Context, owne
 	if database.GovernancePolicyManagerRole(ctx, owner) == nil || database.GovernancePolicyManagerRole(ctx, reviewer) == nil || database.GovernancePolicyManagerRole(ctx, manager) == nil {
 		t.Fatal("owner/reviewer/catalog-manager role accepted as governance policy manager")
 	}
+
+	openAPICatalog, err := catalogmanagementapp.New(catalogmanagementpg.New(manager), openAPIImportAuth{}, openAPIImportClock{at: time.Date(2026, 9, 14, 8, 30, 0, 0, time.UTC)})
+	must(t, err)
+	openAPIImporter, err := catalogmanagementapp.NewOpenAPIImport(openAPICatalog, catalogmanagementopenapi.New(openapifacade.New()))
+	must(t, err)
+	openAPIDocument := `{
+  "openapi": "3.1.0",
+  "info": {"title": "Imported Search API"},
+  "servers": [{"url": "https://api.example.test/v1"}],
+  "paths": {
+    "/search": {
+      "post": {
+        "operationId": "searchCompanies",
+        "summary": "Search companies",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {"query": {"type": "string"}},
+                "required": ["query"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {"type": "object", "properties": {"items": {"type": "array", "items": {"type": "string"}}}}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}`
+	openAPIPreview, err := openAPIImporter.Preview(ctx, catalogmanagementapp.Actor{UserID: "user_openapi_import"}, "ws_openapi_import", openAPIDocument)
+	if err != nil {
+		t.Fatal("OpenAPI preview failed before persistence", err)
+	}
+	if len(openAPIPreview.Operations) != 1 || !openAPIPreview.Operations[0].Importable {
+		t.Fatal("real OpenAPI analyzer did not produce an importable POST+JSON operation", openAPIPreview)
+	}
+	imported, err := openAPIImporter.Import(ctx, catalogmanagementapp.Actor{UserID: "user_openapi_import"}, "ws_openapi_import", catalogmanagementapp.OpenAPIImportInput{
+		Document: openAPIDocument, OperationID: "searchCompanies", ToolVersionID: "tv_openapi_import", ToolID: "tool_openapi_import", Version: "1.0.0",
+		ProviderID: "provider_openapi", PriceVersionID: "price_openapi", DeploymentRevision: "deploy_openapi",
+	})
+	if err != nil {
+		t.Fatal("OpenAPI import failed after an importable preview", err, openAPIPreview)
+	}
+	if imported.Tool.State != "draft" || imported.Tool.MCPPublishable || imported.Tool.SideEffect != "write" || imported.Tool.Idempotency != "unsafe" || imported.Operation.ServerURL != "https://api.example.test/v1" {
+		t.Fatal("OpenAPI import did not preserve safe draft/runtime facts", imported)
+	}
+	importTx, err := manager.Begin(ctx)
+	must(t, err)
+	defer func() { _ = importTx.Rollback(context.Background()) }()
+	_, err = importTx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_openapi_import',true)")
+	must(t, err)
+	var importedState, importedSideEffect, importedIdempotency string
+	var importedMCP bool
+	must(t, importTx.QueryRow(ctx, `SELECT state,side_effect,idempotency,mcp_publishable FROM catalog.tool_version_management WHERE workspace_id='ws_openapi_import' AND tool_version_id='tv_openapi_import'`).Scan(&importedState, &importedSideEffect, &importedIdempotency, &importedMCP))
+	if importedState != "draft" || importedSideEffect != "write" || importedIdempotency != "unsafe" || importedMCP {
+		t.Fatal("persisted OpenAPI draft drifted", importedState, importedSideEffect, importedIdempotency, importedMCP)
+	}
+	must(t, importTx.Commit(ctx))
+	ownerPublishedTx, err := owner.Begin(ctx)
+	must(t, err)
+	defer func() { _ = ownerPublishedTx.Rollback(context.Background()) }()
+	_, err = ownerPublishedTx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_openapi_import',true)")
+	must(t, err)
+	var publishedCount int
+	must(t, ownerPublishedTx.QueryRow(ctx, `SELECT count(*) FROM catalog.tool_versions WHERE id='tv_openapi_import'`).Scan(&publishedCount))
+	if publishedCount != 0 {
+		t.Fatal("OpenAPI import bypassed publication workflow", publishedCount)
+	}
+	must(t, ownerPublishedTx.Commit(ctx))
+
+	unsafeOperations := []struct {
+		name, operationID, document string
+	}{
+		{name: "remote-ref", operationID: "remoteRef", document: `{"openapi":"3.1.0","servers":[{"url":"https://api.example.test"}],"paths":{"/x":{"post":{"operationId":"remoteRef","requestBody":{"content":{"application/json":{"schema":{"$ref":"https://evil.example/schema.json"}}}},"responses":{"200":{"description":"ok","content":{"application/json":{"schema":{"type":"object"}}}}}}}}}`},
+		{name: "get-method", operationID: "getOnly", document: `{"openapi":"3.1.0","servers":[{"url":"https://api.example.test"}],"paths":{"/x":{"get":{"operationId":"getOnly","responses":{"200":{"description":"ok","content":{"application/json":{"schema":{"type":"object"}}}}}}}}}`},
+	}
+	for _, unsafe := range unsafeOperations {
+		_, importErr := openAPIImporter.Import(ctx, catalogmanagementapp.Actor{UserID: "user_openapi_import"}, "ws_openapi_import", catalogmanagementapp.OpenAPIImportInput{
+			Document: unsafe.document, OperationID: unsafe.operationID, ToolVersionID: "tv_openapi_" + unsafe.name, ToolID: "tool_openapi_" + unsafe.name, Version: "1.0.0",
+			ProviderID: "provider_openapi", PriceVersionID: "price_openapi", DeploymentRevision: "deploy_openapi",
+		})
+		if importErr == nil {
+			t.Fatal("unsafe OpenAPI operation created a draft", unsafe.name)
+		}
+	}
+	countTx, err := manager.Begin(ctx)
+	must(t, err)
+	defer func() { _ = countTx.Rollback(context.Background()) }()
+	_, err = countTx.Exec(ctx, "SELECT set_config('mender.workspace_id','ws_openapi_import',true)")
+	must(t, err)
+	var openAPIDraftCount int
+	must(t, countTx.QueryRow(ctx, `SELECT count(*) FROM catalog.tool_version_management WHERE workspace_id='ws_openapi_import'`).Scan(&openAPIDraftCount))
+	if openAPIDraftCount != 1 {
+		t.Fatal("unsafe OpenAPI attempts left persistent drafts", openAPIDraftCount)
+	}
+	must(t, countTx.Commit(ctx))
 
 	tx, err := manager.Begin(ctx)
 	must(t, err)

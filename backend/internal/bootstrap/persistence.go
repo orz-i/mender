@@ -53,6 +53,7 @@ import (
 	admissionapp "github.com/orz-i/mender/backend/internal/processes/admission/application"
 	catalogmanagementhttp "github.com/orz-i/mender/backend/internal/processes/catalogmanagement/adapters/inbound/httpapi"
 	catalogmanagementidentity "github.com/orz-i/mender/backend/internal/processes/catalogmanagement/adapters/outbound/identityaccess"
+	catalogmanagementopenapi "github.com/orz-i/mender/backend/internal/processes/catalogmanagement/adapters/outbound/openapiaccess"
 	catalogmanagementpg "github.com/orz-i/mender/backend/internal/processes/catalogmanagement/adapters/outbound/postgres"
 	catalogmanagementrandom "github.com/orz-i/mender/backend/internal/processes/catalogmanagement/adapters/outbound/random"
 	catalogmanagementapp "github.com/orz-i/mender/backend/internal/processes/catalogmanagement/application"
@@ -65,6 +66,7 @@ import (
 	mcpexecution "github.com/orz-i/mender/backend/internal/processes/mcpbridge/adapters/outbound/executionaccess"
 	mcpidentity "github.com/orz-i/mender/backend/internal/processes/mcpbridge/adapters/outbound/identityaccess"
 	mcpapp "github.com/orz-i/mender/backend/internal/processes/mcpbridge/application"
+	openapifacade "github.com/orz-i/mender/backend/internal/processes/openapiimport/adapters/inbound/facade"
 	callbackhttp "github.com/orz-i/mender/backend/internal/processes/providercallback/adapters/inbound/httpapi"
 	callbackexecution "github.com/orz-i/mender/backend/internal/processes/providercallback/adapters/outbound/executionaccess"
 	callbackfilesecret "github.com/orz-i/mender/backend/internal/processes/providercallback/adapters/outbound/filesecret"
@@ -959,6 +961,15 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 				return failed(handlerErr)
 			}
 			registers = append(registers, catalogHandler.Register)
+			openAPIImportService, serviceErr := catalogmanagementapp.NewOpenAPIImport(catalogService, catalogmanagementopenapi.New(openapifacade.New()))
+			if serviceErr != nil {
+				return failed(serviceErr)
+			}
+			openAPIImportHandler, handlerErr := catalogmanagementhttp.NewOpenAPIImport(openAPIImportService, catalogAccess)
+			if handlerErr != nil {
+				return failed(handlerErr)
+			}
+			registers = append(registers, openAPIImportHandler.Register)
 		}
 		if c.AdminCatalogReviewEnabled {
 			governanceReviewerPool, buildErr = database.Open(start, c.GovernanceReviewerDatabaseURL)

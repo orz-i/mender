@@ -99,7 +99,7 @@ func TestAnalyzeRejectsSwaggerVariableServerAndOperationIDCollision(t *testing.T
 	}
 	root := parseRoot(t, `{"openapi":"3.0.3","servers":[{"url":"https://{tenant}.example.test"}],"paths":{"/a":{"post":{"operationId":"same","requestBody":{"content":{"application/json":{"schema":{"type":"object"}}}},"responses":{"200":{"description":"ok","content":{"application/json":{"schema":{"type":"object"}}}}}}},"/b":{"post":{"operationId":"same","requestBody":{"content":{"application/json":{"schema":{"type":"object"}}}},"responses":{"200":{"description":"ok","content":{"application/json":{"schema":{"type":"object"}}}}}}}}}`)
 	result := Analyze(root)
-	if !hasDiagnostic(result.Diagnostics, "https_server_required") || result.Operations[0].Importable || result.Operations[1].Importable || !hasDiagnostic(result.Operations[1].Diagnostics, "operation_id_duplicate") {
+	if !hasDiagnostic(result.Diagnostics, "https_server_required") || result.Operations[0].Importable || result.Operations[1].Importable || !hasDiagnostic(result.Operations[0].Diagnostics, "operation_id_duplicate") || !hasDiagnostic(result.Operations[1].Diagnostics, "operation_id_duplicate") {
 		t.Fatal(result)
 	}
 }

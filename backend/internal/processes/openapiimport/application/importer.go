@@ -497,5 +497,30 @@ func Analyze(root map[string]any) Result {
 			result.Operations = append(result.Operations, op)
 		}
 	}
+	counts := make(map[string]int, len(result.Operations))
+	for _, operation := range result.Operations {
+		if operation.OperationID != "" {
+			counts[operation.OperationID]++
+		}
+	}
+	for i := range result.Operations {
+		operation := &result.Operations[i]
+		if operation.OperationID == "" || counts[operation.OperationID] < 2 {
+			continue
+		}
+		if !hasDiagnosticCode(operation.Diagnostics, "operation_id_duplicate") {
+			operation.Diagnostics = append(operation.Diagnostics, diagnostic("operation_id_duplicate", "error", operation.OperationID, operation.Path, operation.Method, "operationId must be unique within the document."))
+		}
+		operation.Importable = false
+	}
 	return result
+}
+
+func hasDiagnosticCode(items []Diagnostic, code string) bool {
+	for _, item := range items {
+		if item.Code == code {
+			return true
+		}
+	}
+	return false
 }
