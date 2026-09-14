@@ -90,7 +90,7 @@ func (e *Executor) prepareControl(ctx context.Context, workspace, run, provider 
 		}
 		return application.PreparedControl{}, supply.ErrExecutorUnavailable
 	}
-	if prepared.WorkspaceID != workspace || prepared.RunID != run || prepared.Deployment.Validate() != nil || prepared.Deployment.ProviderID != provider {
+	if prepared.WorkspaceID != workspace || prepared.RunID != run || prepared.Deployment.Validate() != nil || prepared.Deployment.ProviderID != provider || !e.transportAllowed(prepared.Deployment.TransportKind) {
 		return application.PreparedControl{}, supply.ErrExecutorUnavailable
 	}
 	return prepared, nil

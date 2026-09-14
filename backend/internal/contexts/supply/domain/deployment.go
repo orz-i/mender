@@ -9,6 +9,12 @@ import (
 
 var ErrInvalidDeployment = errors.New("invalid supply deployment")
 
+const (
+	TransportHTTP              = "http"
+	TransportMCPStreamableHTTP = "mcp_streamable_http"
+	TransportAgentHTTP         = "agent_http"
+)
+
 type Deployment struct {
 	Revision, ProviderID, TransportKind, EndpointURL, HTTPMethod  string
 	StatusEndpointURL, StatusHTTPMethod, CancelEndpointURL        string
@@ -59,11 +65,16 @@ func (d Deployment) Validate() error {
 		return ErrInvalidDeployment
 	}
 	switch d.TransportKind {
-	case "http":
+	case TransportHTTP:
 		if !validHeaderName(d.IdempotencyHeader) || reservedHTTPHeader(d.IdempotencyHeader) || d.MCPProtocolVersion != "" || d.MCPStateless {
 			return ErrInvalidDeployment
 		}
-	case "mcp_streamable_http":
+	case TransportAgentHTTP:
+		if !validHeaderName(d.IdempotencyHeader) || reservedHTTPHeader(d.IdempotencyHeader) || d.MCPProtocolVersion != "" || d.MCPStateless ||
+			d.StatusEndpointURL == "" || d.StatusHTTPMethod == "" || d.CancelEndpointURL == "" || d.CancelHTTPMethod == "" {
+			return ErrInvalidDeployment
+		}
+	case TransportMCPStreamableHTTP:
 		if d.IdempotencyHeader != "" || d.MCPProtocolVersion != "2026-07-28" || !d.MCPStateless || d.StatusEndpointURL != "" || d.StatusHTTPMethod != "" || d.CancelEndpointURL != "" || d.CancelHTTPMethod != "" {
 			return ErrInvalidDeployment
 		}
@@ -123,5 +134,9 @@ func (d Deployment) SupportsCancellation() bool {
 }
 
 func (d Deployment) SupportsMCPTools() bool {
-	return d.Validate() == nil && d.TransportKind == "mcp_streamable_http" && d.MCPProtocolVersion == "2026-07-28" && d.MCPStateless
+	return d.Validate() == nil && d.TransportKind == TransportMCPStreamableHTTP && d.MCPProtocolVersion == "2026-07-28" && d.MCPStateless
+}
+
+func (d Deployment) SupportsRemoteAgent() bool {
+	return d.Validate() == nil && d.TransportKind == TransportAgentHTTP && d.SupportsStatusQuery() && d.SupportsCancellation()
 }

@@ -50,6 +50,7 @@ type EgressPolicy struct {
 type Executor struct {
 	broker                   Broker
 	policy                   map[string]struct{}
+	transports               map[string]struct{}
 	allowHTTP, allowLoopback bool
 	resolver                 Resolver
 	dialer                   Dialer
@@ -76,8 +77,25 @@ func canonicalHost(value string) (string, error) {
 }
 
 func New(broker Broker, policy EgressPolicy, resolver Resolver, dialer Dialer, clock Clock) (*Executor, error) {
+	return NewForTransports(broker, policy, []string{domain.TransportHTTP}, resolver, dialer, clock)
+}
+
+func NewForTransports(broker Broker, policy EgressPolicy, transportKinds []string, resolver Resolver, dialer Dialer, clock Clock) (*Executor, error) {
 	if broker == nil || len(policy.AllowedHosts) == 0 || len(policy.AllowedHosts) > 256 {
 		return nil, supply.ErrExecutorUnavailable
+	}
+	if len(transportKinds) == 0 || len(transportKinds) > 2 {
+		return nil, supply.ErrExecutorUnavailable
+	}
+	transports := make(map[string]struct{}, len(transportKinds))
+	for _, kind := range transportKinds {
+		if kind != domain.TransportHTTP && kind != domain.TransportAgentHTTP {
+			return nil, supply.ErrExecutorUnavailable
+		}
+		if _, duplicate := transports[kind]; duplicate {
+			return nil, supply.ErrExecutorUnavailable
+		}
+		transports[kind] = struct{}{}
 	}
 	hosts := make(map[string]struct{}, len(policy.AllowedHosts))
 	for _, host := range policy.AllowedHosts {
@@ -99,7 +117,7 @@ func New(broker Broker, policy EgressPolicy, resolver Resolver, dialer Dialer, c
 	if clock == nil {
 		clock = systemClock{}
 	}
-	return &Executor{broker: broker, policy: hosts, allowHTTP: policy.AllowHTTP, allowLoopback: policy.AllowLoopback, resolver: resolver, dialer: dialer, clock: clock}, nil
+	return &Executor{broker: broker, policy: hosts, transports: transports, allowHTTP: policy.AllowHTTP, allowLoopback: policy.AllowLoopback, resolver: resolver, dialer: dialer, clock: clock}, nil
 }
 
 func validSubmission(s supply.Submission) bool {
@@ -244,8 +262,16 @@ func (e *Executor) resolveEndpoint(ctx context.Context, raw string) (*url.URL, s
 	return u, net.JoinHostPort(values[0], port), nil
 }
 
-func validPrepared(submission supply.Submission, prepared application.PreparedInvocation) bool {
-	return prepared.WorkspaceID == submission.WorkspaceID && prepared.RunID == submission.RunID && prepared.Deployment.Validate() == nil && prepared.Deployment.State == "active" && prepared.Deployment.TransportKind == "http" && prepared.Deployment.HTTPMethod == "POST" && len(prepared.CanonicalArguments) > 0 && len(prepared.CanonicalArguments) <= prepared.Deployment.MaxRequestBytes
+func (e *Executor) transportAllowed(kind string) bool {
+	if e == nil {
+		return false
+	}
+	_, ok := e.transports[kind]
+	return ok
+}
+
+func (e *Executor) validPrepared(submission supply.Submission, prepared application.PreparedInvocation) bool {
+	return prepared.WorkspaceID == submission.WorkspaceID && prepared.RunID == submission.RunID && prepared.Deployment.Validate() == nil && prepared.Deployment.State == "active" && e.transportAllowed(prepared.Deployment.TransportKind) && prepared.Deployment.HTTPMethod == "POST" && len(prepared.CanonicalArguments) > 0 && len(prepared.CanonicalArguments) <= prepared.Deployment.MaxRequestBytes
 }
 
 func buildHeaders(req *http.Request, deployment domain.Deployment, secret application.Secret, submissionKey string) error {
@@ -363,7 +389,7 @@ func (e *Executor) Submit(ctx context.Context, submission supply.Submission) (su
 		}
 		return supply.Result{}, supply.ErrExecutorUnavailable
 	}
-	if !validPrepared(submission, prepared) {
+	if !e.validPrepared(submission, prepared) {
 		return supply.Result{}, supply.ErrExecutorUnavailable
 	}
 	requestCtx, cancel := context.WithTimeout(ctx, prepared.Deployment.RequestTimeout)
@@ -409,6 +435,9 @@ func (e *Executor) Submit(ctx context.Context, submission supply.Submission) (su
 	}
 	result, err := decodeAccepted(body)
 	if err != nil {
+		return unknown()
+	}
+	if prepared.Deployment.TransportKind == domain.TransportAgentHTTP && result.ExternalTaskID == "" {
 		return unknown()
 	}
 	result.ProviderID = prepared.Deployment.ProviderID
