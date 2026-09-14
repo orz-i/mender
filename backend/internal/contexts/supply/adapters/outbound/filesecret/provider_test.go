@@ -34,6 +34,10 @@ func TestCredentialVaultWritesOnceAndDeletesExactAddress(t *testing.T) {
 	if err != nil || string(secret.Bytes()) != "oauth-access-material" {
 		t.Fatal("stored credential did not resolve through runtime SecretProvider", err)
 	}
+	resolved, err := provider.ResolveCredential(context.Background(), address)
+	if err != nil || string(resolved) != "oauth-access-material" {
+		t.Fatal("stored credential did not resolve through reviewed control-plane resolver", err)
+	}
 	name, _ := FileName(supplyapp.SecretRequest{ProviderID: address.ProviderID, ConnectionID: address.ConnectionID, CredentialVersionRef: address.CredentialVersionRef, ConnectionRevision: address.ConnectionRevision})
 	info, err := os.Stat(filepath.Join(root, name))
 	if err != nil {

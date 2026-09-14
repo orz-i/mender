@@ -42,4 +42,26 @@ func (s *Store) Delete(ctx context.Context, a application.OAuthCredentialAddress
 	return nil
 }
 
+func (s *Store) Load(ctx context.Context, a application.OAuthCredentialAddress) ([]byte, error) {
+	if s == nil || s.vault == nil {
+		return nil, application.ErrUnavailable
+	}
+	resolver, ok := s.vault.(supply.CredentialResolver)
+	if !ok {
+		return nil, application.ErrUnavailable
+	}
+	raw, err := resolver.ResolveCredential(ctx, address(a))
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
+		return nil, application.ErrUnavailable
+	}
+	if len(raw) == 0 {
+		return nil, application.ErrUnavailable
+	}
+	return append([]byte(nil), raw...), nil
+}
+
 var _ application.OAuthCredentialStore = (*Store)(nil)
+var _ application.OAuthRefreshCredentialStore = (*Store)(nil)

@@ -12,6 +12,36 @@ type OAuthRandom interface {
 	Token(int) (string, error)
 }
 
+func normalizeOAuthScopes(values []string, max int) ([]string, error) {
+	if len(values) < 1 || len(values) > max {
+		return nil, ErrUnavailable
+	}
+	seen := map[string]bool{}
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || len(value) > 128 || strings.ContainsAny(value, " \t\r\n") || seen[value] {
+			return nil, ErrUnavailable
+		}
+		seen[value] = true
+		result = append(result, value)
+	}
+	return result, nil
+}
+
+func containsScopes(granted, required []string) bool {
+	set := make(map[string]bool, len(granted))
+	for _, scope := range granted {
+		set[scope] = true
+	}
+	for _, scope := range required {
+		if !set[scope] {
+			return false
+		}
+	}
+	return true
+}
+
 type OAuthProvider interface {
 	ProviderID() string
 	AuthorizationURL(state, verifier string) (string, error)
@@ -19,8 +49,10 @@ type OAuthProvider interface {
 }
 
 type OAuthAccessToken struct {
-	Value     []byte
-	ExpiresAt time.Time
+	Value        []byte
+	RefreshValue []byte
+	ExpiresAt    time.Time
+	Scopes       []string
 }
 
 type OAuthCredentialAddress struct {
@@ -33,10 +65,18 @@ type OAuthCredentialStore interface {
 	Delete(context.Context, OAuthCredentialAddress) error
 }
 
+type OAuthRefreshCredentialStore interface {
+	OAuthCredentialStore
+	Load(context.Context, OAuthCredentialAddress) ([]byte, error)
+}
+
 type NewOAuthConnection struct {
 	WorkspaceID, ConnectionID, ProviderID, CredentialVersionRef, SubjectID string
 	Revision                                                               int64
 	CreatedAt, ExpiresAt                                                   time.Time
+	RefreshCredentialRef                                                   string
+	RefreshSecretRevision                                                  int64
+	RequiredScopes, GrantedScopes                                          []string
 }
 
 type OAuthRepository interface {
@@ -53,13 +93,15 @@ type OAuthCompletion struct {
 }
 
 type OAuthService struct {
-	authorizer HumanAuthorizer
-	repository OAuthRepository
-	provider   OAuthProvider
-	store      OAuthCredentialStore
-	random     OAuthRandom
-	clock      interface{ Now() time.Time }
-	flowTTL    time.Duration
+	authorizer     HumanAuthorizer
+	repository     OAuthRepository
+	provider       OAuthProvider
+	store          OAuthCredentialStore
+	refresh        OAuthRefreshCredentialStore
+	random         OAuthRandom
+	clock          interface{ Now() time.Time }
+	flowTTL        time.Duration
+	requiredScopes []string
 }
 
 func NewOAuth(authorizer HumanAuthorizer, repository OAuthRepository, provider OAuthProvider, store OAuthCredentialStore, random OAuthRandom, clock interface{ Now() time.Time }, flowTTL time.Duration) (*OAuthService, error) {
@@ -67,6 +109,20 @@ func NewOAuth(authorizer HumanAuthorizer, repository OAuthRepository, provider O
 		return nil, ErrUnavailable
 	}
 	return &OAuthService{authorizer: authorizer, repository: repository, provider: provider, store: store, random: random, clock: clock, flowTTL: flowTTL}, nil
+}
+
+func NewRefreshableOAuth(authorizer HumanAuthorizer, repository OAuthRepository, provider OAuthProvider, store OAuthRefreshCredentialStore, random OAuthRandom, clock interface{ Now() time.Time }, flowTTL time.Duration, requiredScopes []string) (*OAuthService, error) {
+	service, err := NewOAuth(authorizer, repository, provider, store, random, clock, flowTTL)
+	if err != nil || store == nil {
+		return nil, ErrUnavailable
+	}
+	scopes, err := normalizeOAuthScopes(requiredScopes, 16)
+	if err != nil || len(scopes) == 0 {
+		return nil, ErrUnavailable
+	}
+	service.refresh = store
+	service.requiredScopes = scopes
+	return service, nil
 }
 
 func (s *OAuthService) Begin(ctx context.Context, actor HumanActor, workspace string) (OAuthChallenge, error) {
@@ -125,6 +181,20 @@ func (s *OAuthService) Complete(ctx context.Context, actor HumanActor, challenge
 	if err != nil || !safeAccessToken(token.Value) || token.ExpiresAt.IsZero() || !token.ExpiresAt.After(now.Add(30*time.Second)) || token.ExpiresAt.After(now.Add(24*time.Hour)) {
 		return OAuthCompletion{}, ErrUnavailable
 	}
+	var grantedScopes []string
+	if s.refresh != nil {
+		if !safeAccessToken(token.RefreshValue) {
+			return OAuthCompletion{}, ErrUnavailable
+		}
+		if len(token.Scopes) == 0 {
+			grantedScopes = append([]string(nil), s.requiredScopes...)
+		} else {
+			grantedScopes, err = normalizeOAuthScopes(token.Scopes, 32)
+			if err != nil || !containsScopes(grantedScopes, s.requiredScopes) {
+				return OAuthCompletion{}, ErrUnavailable
+			}
+		}
+	}
 	connectionSuffix, err := s.random.Token(16)
 	if err != nil {
 		return OAuthCompletion{}, ErrUnavailable
@@ -137,20 +207,46 @@ func (s *OAuthService) Complete(ctx context.Context, actor HumanActor, challenge
 	if !validID(connectionID) || !validID(credentialRef) {
 		return OAuthCompletion{}, ErrUnavailable
 	}
+	refreshRef := ""
+	if s.refresh != nil {
+		refreshSuffix, randomErr := s.random.Token(16)
+		if randomErr != nil {
+			return OAuthCompletion{}, ErrUnavailable
+		}
+		refreshRef = "oauth_refresh_" + refreshSuffix
+		if !validID(refreshRef) {
+			return OAuthCompletion{}, ErrUnavailable
+		}
+	}
 	address := OAuthCredentialAddress{ProviderID: challenge.ProviderID, ConnectionID: connectionID, CredentialVersionRef: credentialRef, ConnectionRevision: 1}
 	if err = s.store.Store(ctx, address, token.Value); err != nil {
 		return OAuthCompletion{}, ErrUnavailable
 	}
+	refreshAddress := OAuthCredentialAddress{}
+	if s.refresh != nil {
+		refreshAddress = OAuthCredentialAddress{ProviderID: challenge.ProviderID, ConnectionID: connectionID, CredentialVersionRef: refreshRef, ConnectionRevision: 1}
+		if err = s.refresh.Store(ctx, refreshAddress, token.RefreshValue); err != nil {
+			_ = s.store.Delete(context.WithoutCancel(ctx), address)
+			return OAuthCompletion{}, ErrUnavailable
+		}
+	}
 	created, err := s.repository.CreateOAuthConnection(ctx, NewOAuthConnection{
 		WorkspaceID: challenge.WorkspaceID, ConnectionID: connectionID, ProviderID: challenge.ProviderID,
 		CredentialVersionRef: credentialRef, SubjectID: actor.UserID, Revision: 1, CreatedAt: now, ExpiresAt: token.ExpiresAt.UTC().Truncate(time.Microsecond),
+		RefreshCredentialRef: refreshRef, RefreshSecretRevision: 1, RequiredScopes: append([]string(nil), s.requiredScopes...), GrantedScopes: append([]string(nil), grantedScopes...),
 	})
 	if err != nil {
 		_ = s.store.Delete(context.WithoutCancel(ctx), address)
+		if s.refresh != nil {
+			_ = s.refresh.Delete(context.WithoutCancel(ctx), refreshAddress)
+		}
 		return OAuthCompletion{}, ErrUnavailable
 	}
 	if created.WorkspaceID != challenge.WorkspaceID || created.ConnectionID != connectionID || created.ProviderID != challenge.ProviderID || created.State != "active" || created.Revision != 1 || created.Validate() != nil {
 		_ = s.store.Delete(context.WithoutCancel(ctx), address)
+		if s.refresh != nil {
+			_ = s.refresh.Delete(context.WithoutCancel(ctx), refreshAddress)
+		}
 		return OAuthCompletion{}, ErrUnavailable
 	}
 	return OAuthCompletion{Connection: projectHumanConnection(created)}, nil

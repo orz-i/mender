@@ -175,5 +175,17 @@ func (p *Provider) DeleteCredential(ctx context.Context, address supplypublic.Cr
 	return supplypublic.ErrCredentialVaultUnavailable
 }
 
+func (p *Provider) ResolveCredential(ctx context.Context, address supplypublic.CredentialAddress) ([]byte, error) {
+	secret, err := p.ResolveSecret(ctx, addressRequest(address))
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
+		return nil, supplypublic.ErrCredentialVaultUnavailable
+	}
+	return secret.Bytes(), nil
+}
+
 var _ supplyapp.SecretProvider = (*Provider)(nil)
 var _ supplypublic.CredentialVault = (*Provider)(nil)
+var _ supplypublic.CredentialResolver = (*Provider)(nil)

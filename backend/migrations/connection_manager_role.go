@@ -30,6 +30,8 @@ func GrantConnectionManager(ctx context.Context, pool *pgxpool.Pool, role string
 		"GRANT INSERT (workspace_id,id,provider_id,credential_version_ref,state,revision,created_at,expires_at) ON connections.connections TO " + id,
 		"GRANT UPDATE (state,revision) ON connections.connections TO " + id,
 		"GRANT INSERT (workspace_id,connection_id,subject_id,active,created_at,expires_at) ON connections.connection_grants TO " + id,
+		"GRANT INSERT (workspace_id,connection_id,provider_id,refresh_credential_ref,refresh_secret_revision,connection_revision,required_scopes,granted_scopes,state,last_error_code,created_at,updated_at,last_refreshed_at) ON connections.oauth_refresh_sessions TO " + id,
+		"GRANT EXECUTE ON FUNCTION connections.revoke_oauth_refresh_session(text,text,bigint,bigint,timestamptz) TO " + id,
 	} {
 		if _, err = tx.Exec(ctx, sql); err != nil {
 			return errors.New("connection-manager grant failed")

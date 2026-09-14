@@ -39,9 +39,51 @@ func (r *oauthRandom) Token(bytes int) (string, error) {
 	}
 }
 
+func TestRefreshableOAuthPersistsSeparateOpaqueSecretsAndScopeFacts(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	provider := &oauthProvider{at: now, refresh: "provider-refresh-token", scopes: []string{"resources.read", "profile.read"}}
+	store := &oauthRefreshStore{}
+	repository := &oauthRepo{}
+	service, err := connectionapp.NewRefreshableOAuth(humanAuthorizer{manage: true}, repository, provider, store, &oauthRandom{}, oauthClock{at: now}, 10*time.Minute, []string{"resources.read", "profile.read"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	challenge, err := service.Begin(context.Background(), connectionapp.HumanActor{UserID: "user_alpha"}, "ws_alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.Complete(context.Background(), connectionapp.HumanActor{UserID: "user_alpha"}, challenge, challenge.State, "good-code"); err != nil {
+		t.Fatal(err)
+	}
+	input := repository.input
+	if input.RefreshCredentialRef == "" || input.RefreshCredentialRef == input.CredentialVersionRef || input.RefreshSecretRevision != 1 || input.Revision != 1 || len(input.RequiredScopes) != 2 || len(input.GrantedScopes) != 2 {
+		t.Fatal("refresh metadata was not persisted as opaque facts", input)
+	}
+	accessAddress := connectionapp.OAuthCredentialAddress{ProviderID: input.ProviderID, ConnectionID: input.ConnectionID, CredentialVersionRef: input.CredentialVersionRef, ConnectionRevision: 1}
+	refreshAddress := connectionapp.OAuthCredentialAddress{ProviderID: input.ProviderID, ConnectionID: input.ConnectionID, CredentialVersionRef: input.RefreshCredentialRef, ConnectionRevision: 1}
+	if store.items[accessAddress] != "provider-access-token" || store.items[refreshAddress] != "provider-refresh-token" {
+		t.Fatal("access and refresh secrets did not use separate immutable vault addresses", store.items)
+	}
+
+	shrunkRepo := &oauthRepo{}
+	shrunk, err := connectionapp.NewRefreshableOAuth(humanAuthorizer{manage: true}, shrunkRepo, &oauthProvider{at: now, refresh: "provider-refresh-token", scopes: []string{"resources.read"}}, &oauthRefreshStore{}, &oauthRandom{}, oauthClock{at: now}, 10*time.Minute, []string{"resources.read", "profile.read"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	shrunkChallenge, err := shrunk.Begin(context.Background(), connectionapp.HumanActor{UserID: "user_alpha"}, "ws_alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = shrunk.Complete(context.Background(), connectionapp.HumanActor{UserID: "user_alpha"}, shrunkChallenge, shrunkChallenge.State, "good-code"); err == nil || shrunkRepo.input.ConnectionID != "" {
+		t.Fatal("initial OAuth scope shrink reached durable Connection creation", err, shrunkRepo.input)
+	}
+}
+
 type oauthProvider struct {
 	at        time.Time
 	exchanges int
+	refresh   string
+	scopes    []string
 }
 
 func (*oauthProvider) ProviderID() string { return "provider_alpha" }
@@ -53,7 +95,7 @@ func (p *oauthProvider) Exchange(_ context.Context, code, verifier string) (conn
 	if code != "good-code" || verifier != strings.Repeat("v", 43) {
 		return connectionapp.OAuthAccessToken{}, connectionapp.ErrUnavailable
 	}
-	return connectionapp.OAuthAccessToken{Value: []byte("provider-access-token"), ExpiresAt: p.at.Add(time.Hour)}, nil
+	return connectionapp.OAuthAccessToken{Value: []byte("provider-access-token"), RefreshValue: []byte(p.refresh), ExpiresAt: p.at.Add(time.Hour), Scopes: append([]string(nil), p.scopes...)}, nil
 }
 
 type oauthStore struct {
@@ -69,6 +111,34 @@ func (s *oauthStore) Store(_ context.Context, address connectionapp.OAuthCredent
 func (s *oauthStore) Delete(_ context.Context, address connectionapp.OAuthCredentialAddress) error {
 	s.deleted = address == s.address
 	return nil
+}
+
+type oauthRefreshStore struct {
+	items map[connectionapp.OAuthCredentialAddress]string
+}
+
+func (s *oauthRefreshStore) Store(_ context.Context, address connectionapp.OAuthCredentialAddress, raw []byte) error {
+	if s.items == nil {
+		s.items = map[connectionapp.OAuthCredentialAddress]string{}
+	}
+	if _, exists := s.items[address]; exists {
+		return connectionapp.ErrUnavailable
+	}
+	s.items[address] = string(raw)
+	return nil
+}
+
+func (s *oauthRefreshStore) Delete(_ context.Context, address connectionapp.OAuthCredentialAddress) error {
+	delete(s.items, address)
+	return nil
+}
+
+func (s *oauthRefreshStore) Load(_ context.Context, address connectionapp.OAuthCredentialAddress) ([]byte, error) {
+	value, exists := s.items[address]
+	if !exists {
+		return nil, connectionapp.ErrUnavailable
+	}
+	return []byte(value), nil
 }
 
 type oauthRepo struct {
