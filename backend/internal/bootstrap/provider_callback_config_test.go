@@ -36,3 +36,34 @@ func TestProviderCallbackConfigurationIsExplicitAndFailsClosed(t *testing.T) {
 		}
 	}
 }
+
+func TestAdminProviderCallbackObservabilityRequiresHumanSessionAndObserverRole(t *testing.T) {
+	valid := map[string]string{
+		"MENDER_RUN_API_ENABLED":                    "true",
+		"MENDER_DATABASE_URL":                       "postgres://runtime-not-connected",
+		"MENDER_CONSOLE_OIDC_ENABLED":               "true",
+		"MENDER_BROWSER_SESSION_DATABASE_URL":        "postgres://session-not-connected",
+		"MENDER_CONSOLE_OIDC_ISSUER":                 "https://issuer.example",
+		"MENDER_CONSOLE_OIDC_CLIENT_ID":              "console",
+		"MENDER_CONSOLE_OIDC_CLIENT_SECRET_FILE":     `C:\mounted\oidc.secret`,
+		"MENDER_CONSOLE_OIDC_REDIRECT_URL":           "https://console.example/auth/callback",
+		"MENDER_CONSOLE_FLOW_SIGNING_KEY_FILE":       `C:\mounted\flow.key`,
+		"MENDER_ADMIN_PROVIDER_CALLBACKS_ENABLED":    "true",
+		"MENDER_CALLBACK_OBSERVER_DATABASE_URL":      "postgres://callback-observer-not-connected",
+	}
+	cfg, err := LoadAPIConfig(func(key string) string { return valid[key] })
+	if err != nil || !cfg.AdminProviderCallbacksEnabled || cfg.CallbackObserverDatabaseURL == "" {
+		t.Fatal(cfg, err)
+	}
+	for _, change := range []map[string]string{
+		{"MENDER_ADMIN_PROVIDER_CALLBACKS_ENABLED": "yes"},
+		{"MENDER_CONSOLE_OIDC_ENABLED": "false"},
+		{"MENDER_CALLBACK_OBSERVER_DATABASE_URL": ""},
+	} {
+		_, err = LoadAPIConfig(func(key string) string {
+			if value, ok := change[key]; ok { return value }
+			return valid[key]
+		})
+		if err == nil { t.Fatal("invalid Admin Provider Callback configuration accepted", change) }
+	}
+}

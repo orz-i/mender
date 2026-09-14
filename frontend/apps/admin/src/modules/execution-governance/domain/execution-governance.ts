@@ -4,6 +4,9 @@ export type ExecutionPolicyState = 'draft' | 'active' | 'retired';
 export type ExecutionOutcome = 'allow' | 'confirmation_required' | 'deny';
 export type ExecutionConfirmationState = 'active' | 'consumed' | 'expired';
 export type ExecutionSubjectKind = 'human' | 'machine';
+export type ProviderCallbackDisposition = 'pending' | 'accepted' | 'quarantined';
+export type ProviderCallbackObservationState = 'pending' | 'succeeded' | 'failed' | 'canceled';
+export type ProviderCallbackReason = 'event_id_conflict' | 'attempt_binding_mismatch' | 'observation_before_submission' | 'out_of_order' | 'terminal_replay' | 'execution_conflict';
 
 export interface ExecutionGovernanceWorkspace { id: string; role: ExecutionGovernanceWorkspaceRole }
 export interface ExecutionPolicyRevision {
@@ -32,4 +35,15 @@ export interface ExecutionGovernanceFilter {
 }
 export interface ExecutionPolicyInput {
   id: string; maxUnconfirmedRiskLevel: ExecutionRiskLevel; maxMachineRiskLevel: ExecutionRiskLevel; denyUnsafeWrite: boolean; confirmationTtlSeconds: number;
+}
+export interface ProviderCallbackInboxItem {
+  receiptId: string; workspaceId: string; providerId: string; eventId: string; runId: string; observationId: string;
+  observationState: ProviderCallbackObservationState; disposition: ProviderCallbackDisposition; reasonCode: ProviderCallbackReason | null;
+  deliveryCount: number; duplicateDeliveryCount: number; receivedAt: string; lastReceivedAt: string; observedAt: string; processedAt: string | null;
+}
+export interface ProviderCallbackCursor { receivedAt: string; receiptId: string }
+export interface ProviderCallbackInboxPage { items: ProviderCallbackInboxItem[]; nextCursor: ProviderCallbackCursor | null }
+export interface ProviderCallbackInboxFilter {
+  providerId?: string; disposition?: ProviderCallbackDisposition; reasonCode?: ProviderCallbackReason;
+  beforeReceivedAt?: string; beforeReceiptId?: string; limit?: number;
 }

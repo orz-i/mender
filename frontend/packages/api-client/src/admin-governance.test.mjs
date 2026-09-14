@@ -93,6 +93,37 @@ test('Admin Governance creates only declarative policy fields and activates with
   assert.equal(calls[1].init.body, undefined);
 });
 
+const callbackItem = () => ({
+  receipt_id: 'a'.repeat(64), workspace_id: 'ws_a', provider_id: 'provider_agent', event_id: 'evt.agent.1', run_id: 'run_agent', observation_id: 'obs.agent.1',
+  observation_state: 'succeeded', disposition: 'accepted', reason_code: null, delivery_count: 3, duplicate_delivery_count: 2,
+  received_at: '2026-09-14T06:30:00Z', last_received_at: '2026-09-14T06:31:00Z', observed_at: '2026-09-14T06:29:59Z', processed_at: '2026-09-14T06:30:00Z',
+});
+
+test('Admin Provider callback Inbox uses safe same-origin read projection and exact cursor', async () => {
+  const client = createAdminGovernanceClient('', async (url, init) => {
+    assert.equal(url, `/api/admin/v1/workspaces/ws_a/provider-callbacks?provider_id=provider_agent&disposition=accepted&before_received_at=2026-09-14T06%3A32%3A00Z&before_receipt_id=${'b'.repeat(64)}&limit=25`);
+    assert.equal(init.credentials, 'same-origin'); assert.equal(new Headers(init.headers).get('Authorization'), null); assert.equal(new Headers(init.headers).get('X-Mender-CSRF'), null);
+    return Response.json({ data: { items: [callbackItem()], next_cursor: { received_at: '2026-09-14T06:30:00Z', receipt_id: 'a'.repeat(64) } } });
+  });
+  const page = await client.providerCallbacks('ws_a', { providerId: 'provider_agent', disposition: 'accepted', beforeReceivedAt: '2026-09-14T06:32:00Z', beforeReceiptId: 'b'.repeat(64), limit: 25 });
+  assert.equal(page.items[0].deliveryCount, 3); assert.equal(page.items[0].duplicateDeliveryCount, 2); assert.equal(page.items[0].observationState, 'succeeded');
+  assert.deepEqual(page.nextCursor, { receivedAt: '2026-09-14T06:30:00Z', receiptId: 'a'.repeat(64) });
+});
+
+test('Admin Provider callback Inbox fails closed on leaked handles, inconsistent facts, and malformed cursors', async () => {
+  const leaked = callbackItem(); leaked.provider_request_id = 'secret-route';
+  await assert.rejects(createAdminGovernanceClient('', async () => Response.json({ data: { items: [leaked], next_cursor: null } })).providerCallbacks('ws_a'), /敏感字段|Provider callback Inbox/);
+  const inconsistent = callbackItem(); inconsistent.duplicate_delivery_count = 9;
+  await assert.rejects(createAdminGovernanceClient('', async () => Response.json({ data: { items: [inconsistent], next_cursor: null } })).providerCallbacks('ws_a'), /delivery count/);
+  const wrongWorkspace = callbackItem(); wrongWorkspace.workspace_id = 'ws_b';
+  await assert.rejects(createAdminGovernanceClient('', async () => Response.json({ data: { items: [wrongWorkspace], next_cursor: null } })).providerCallbacks('ws_a'), /Workspace/);
+  const client = createAdminGovernanceClient('', async () => Response.json({ data: { items: [], next_cursor: null } }));
+  await assert.rejects(client.providerCallbacks('ws_a', { beforeReceiptId: 'a'.repeat(64) }), /cursor/);
+  await assert.rejects(client.providerCallbacks('ws_a', { beforeReceivedAt: '2026-09-14T06:32:00Z' }), /cursor/);
+  await assert.rejects(client.providerCallbacks('ws_a', { beforeReceivedAt: '2026-09-14T06:32:00Z', beforeReceiptId: 'not-a-receipt' }), /cursor/);
+  await assert.rejects(client.providerCallbacks('ws_a', { limit: 101 }), /limit/);
+});
+
 test('Admin Governance policy fails closed on precision drift and sensitive projection', async () => {
   const numeric = policyDecision(); numeric.sequence = Number('9007199254740997');
   await assert.rejects(createAdminGovernanceClient('', async () => Response.json({ data: { revisions: [policyRevision()], decisions: [numeric] } })).policy('ws_a'), /exact integer|Governance 响应/);

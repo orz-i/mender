@@ -1,6 +1,6 @@
 import { createAdminGovernanceClient, createConsoleIdentityClient, MenderApiError } from '@mender/api-client';
 import { ExecutionGovernanceLoginRequiredError, type ExecutionGovernanceGateway } from '../application/execution-governance-gateway';
-import type { ExecutionConfirmation, ExecutionGovernanceSnapshot, ExecutionPolicyDecision, ExecutionPolicyRevision } from '../domain/execution-governance';
+import type { ExecutionConfirmation, ExecutionGovernanceSnapshot, ExecutionPolicyDecision, ExecutionPolicyRevision, ProviderCallbackInboxPage } from '../domain/execution-governance';
 
 function readCSRFCookie() {
   const prefix = 'mender_csrf=';
@@ -42,6 +42,12 @@ export function createExecutionGovernanceGateway(): ExecutionGovernanceGateway {
     async activate(workspaceId, policyId, signal) {
       try { return policy(await governance.activateExecutionPolicy(workspaceId, policyId, csrf(), signal)); }
       catch (error) { return mapError(error); }
+    },
+    async callbacks(workspaceId, filter = {}, signal) {
+      try {
+        const page = await governance.providerCallbacks(workspaceId, filter, signal);
+        return { items: page.items.map((item) => ({ ...item })), nextCursor: page.nextCursor ? { ...page.nextCursor } : null } satisfies ProviderCallbackInboxPage;
+      } catch (error) { return mapError(error); }
     },
   };
 }

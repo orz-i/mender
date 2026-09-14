@@ -15,6 +15,27 @@ export interface AdminPublicationApproval {
   decisionNote: string;
   consumedAt: string | null;
 }
+const callbackReasons: AdminProviderCallbackReason[] = ['event_id_conflict', 'attempt_binding_mismatch', 'observation_before_submission', 'out_of_order', 'terminal_replay', 'execution_conflict'];
+function callbackInboxItem(value: unknown): AdminProviderCallbackInboxItem {
+  const raw = object(value); safeProjection(raw);
+  const expected = ['receipt_id', 'workspace_id', 'provider_id', 'event_id', 'run_id', 'observation_id', 'observation_state', 'disposition', 'reason_code', 'delivery_count', 'duplicate_delivery_count', 'received_at', 'last_received_at', 'observed_at', 'processed_at'].sort();
+  const actual = Object.keys(raw).sort();
+  if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) throw new Error('服务返回了无法识别的 Provider callback Inbox');
+  const receiptId = string(raw.receipt_id); if (!/^[a-f0-9]{64}$/.test(receiptId)) throw new Error('服务返回了无法识别的 callback receipt');
+  const observationState = string(raw.observation_state); if (!['pending', 'succeeded', 'failed', 'canceled'].includes(observationState)) throw new Error('服务返回了无法识别的 callback observation state');
+  const disposition = string(raw.disposition); if (!['pending', 'accepted', 'quarantined'].includes(disposition)) throw new Error('服务返回了无法识别的 callback disposition');
+  const reason = raw.reason_code === null ? null : string(raw.reason_code) as AdminProviderCallbackReason;
+  if (reason !== null && !callbackReasons.includes(reason)) throw new Error('服务返回了无法识别的 callback quarantine reason');
+  if (typeof raw.delivery_count !== 'number' || !Number.isSafeInteger(raw.delivery_count) || raw.delivery_count < 1 || raw.delivery_count > 1_000_000 ||
+      typeof raw.duplicate_delivery_count !== 'number' || !Number.isSafeInteger(raw.duplicate_delivery_count) || raw.duplicate_delivery_count !== raw.delivery_count - 1) throw new Error('服务返回了不一致的 callback delivery count');
+  if (disposition === 'quarantined' && reason === null || disposition !== 'quarantined' && reason !== null) throw new Error('服务返回了不一致的 callback disposition');
+  return {
+    receiptId, workspaceId: string(raw.workspace_id), providerId: string(raw.provider_id), eventId: string(raw.event_id), runId: string(raw.run_id), observationId: string(raw.observation_id),
+    observationState: observationState as AdminProviderCallbackObservationState, disposition: disposition as AdminProviderCallbackDisposition, reasonCode: reason,
+    deliveryCount: raw.delivery_count, duplicateDeliveryCount: raw.duplicate_delivery_count, receivedAt: string(raw.received_at), lastReceivedAt: string(raw.last_received_at),
+    observedAt: string(raw.observed_at), processedAt: optionalString(raw.processed_at),
+  };
+}
 function executionRisk(value: unknown): AdminExecutionRiskLevel {
   const risk = string(value); if (!['low', 'medium', 'high', 'critical'].includes(risk)) throw new Error('服务返回了无法识别的 execution risk'); return risk as AdminExecutionRiskLevel;
 }
@@ -118,6 +139,21 @@ export interface AdminExecutionPolicyInput {
   id: string; maxUnconfirmedRiskLevel: AdminExecutionRiskLevel; maxMachineRiskLevel: AdminExecutionRiskLevel; denyUnsafeWrite: boolean; confirmationTtlSeconds: number;
 }
 
+export type AdminProviderCallbackDisposition = 'pending' | 'accepted' | 'quarantined';
+export type AdminProviderCallbackObservationState = 'pending' | 'succeeded' | 'failed' | 'canceled';
+export type AdminProviderCallbackReason = 'event_id_conflict' | 'attempt_binding_mismatch' | 'observation_before_submission' | 'out_of_order' | 'terminal_replay' | 'execution_conflict';
+export interface AdminProviderCallbackInboxItem {
+  receiptId: string; workspaceId: string; providerId: string; eventId: string; runId: string; observationId: string;
+  observationState: AdminProviderCallbackObservationState; disposition: AdminProviderCallbackDisposition; reasonCode: AdminProviderCallbackReason | null;
+  deliveryCount: number; duplicateDeliveryCount: number; receivedAt: string; lastReceivedAt: string; observedAt: string; processedAt: string | null;
+}
+export interface AdminProviderCallbackCursor { receivedAt: string; receiptId: string }
+export interface AdminProviderCallbackInboxPage { items: AdminProviderCallbackInboxItem[]; nextCursor: AdminProviderCallbackCursor | null }
+export interface AdminProviderCallbackInboxFilter {
+  providerId?: string; disposition?: AdminProviderCallbackDisposition; reasonCode?: AdminProviderCallbackReason;
+  beforeReceivedAt?: string; beforeReceiptId?: string; limit?: number;
+}
+
 export type AdminPublicationAuditEventKind =
   | 'audit_baseline'
   | 'approval_submitted'
@@ -164,7 +200,7 @@ function string(value: unknown) { if (typeof value !== 'string' || value.length 
 function optionalString(value: unknown) { if (value === null) return null; return string(value); }
 function exactIntegerString(value: unknown) { const raw = string(value); if (!/^[0-9]+$/.test(raw)) throw new Error('服务返回了无法识别的 revision'); return raw; }
 function exactPositiveIntegerString(value: unknown) { const raw = string(value); if (!/^[1-9][0-9]*$/.test(raw)) throw new Error('服务返回了无法识别的 exact integer'); return raw; }
-const forbiddenGovernanceFields = ['credential_version_ref', 'secret', 'token', 'arguments', 'artifact', 'artifact_body', 'reserve_micro', 'limit_micro', 'consumed_micro', 'reserved_micro', 'available_micro', 'charge_micro', 'charged_micro', 'payment', 'invoice', 'revenue'];
+const forbiddenGovernanceFields = ['credential_version_ref', 'secret', 'token', 'arguments', 'artifact', 'artifact_body', 'reserve_micro', 'limit_micro', 'consumed_micro', 'reserved_micro', 'available_micro', 'charge_micro', 'charged_micro', 'payment', 'invoice', 'revenue', 'body_sha256', 'key_id', 'signature', 'provider_request_id', 'external_task_id', 'result_json', 'error_code'];
 function safeProjection(raw: Record<string, unknown>) {
   for (const forbidden of forbiddenGovernanceFields) if (forbidden in raw) throw new Error('服务返回了不应暴露给 Governance 的敏感字段');
 }
@@ -207,6 +243,7 @@ export function createAdminGovernanceClient(baseUrl = '', fetcher: typeof fetch 
   const historyRoot = (workspaceId: string) => `${base}/api/admin/v1/workspaces/${encodeURIComponent(workspaceId)}/publication-history`;
   const policyRoot = (workspaceId: string) => `${base}/api/admin/v1/workspaces/${encodeURIComponent(workspaceId)}/publication-policy`;
   const executionRoot = (workspaceId: string) => `${base}/api/admin/v1/workspaces/${encodeURIComponent(workspaceId)}/execution-governance`;
+  const callbackRoot = (workspaceId: string) => `${base}/api/admin/v1/workspaces/${encodeURIComponent(workspaceId)}/provider-callbacks`;
   return {
     async list(workspaceId: string, signal?: AbortSignal): Promise<AdminPublicationApproval[]> {
       if (!workspaceId) throw new Error('Workspace ID is required');
@@ -289,6 +326,32 @@ export function createAdminGovernanceClient(baseUrl = '', fetcher: typeof fetch 
     async activateExecutionPolicy(workspaceId: string, policyId: string, csrfToken: string, signal?: AbortSignal) {
       const response = await request(fetcher, `${executionRoot(workspaceId)}/revisions/${encodeURIComponent(policyId)}/activate`, { method: 'POST', signal, headers: { 'X-Mender-CSRF': csrf(csrfToken) } });
       return executionPolicyRevision(object(await response.json()).data);
+    },
+    async providerCallbacks(workspaceId: string, filter: AdminProviderCallbackInboxFilter = {}, signal?: AbortSignal): Promise<AdminProviderCallbackInboxPage> {
+      if (!workspaceId) throw new Error('Workspace ID is required');
+      if (filter.limit !== undefined && (!Number.isInteger(filter.limit) || filter.limit < 1 || filter.limit > 100)) throw new Error('Provider callback limit must be an integer between 1 and 100');
+      if ((filter.beforeReceivedAt === undefined) !== (filter.beforeReceiptId === undefined)) throw new Error('Provider callback cursor must include receivedAt and receiptId');
+      if (filter.beforeReceiptId !== undefined && !/^[a-f0-9]{64}$/.test(filter.beforeReceiptId)) throw new Error('Provider callback receipt cursor is invalid');
+      const params = new URLSearchParams();
+      if (filter.providerId) params.set('provider_id', filter.providerId);
+      if (filter.disposition) params.set('disposition', filter.disposition);
+      if (filter.reasonCode) params.set('reason_code', filter.reasonCode);
+      if (filter.beforeReceivedAt && filter.beforeReceiptId) { params.set('before_received_at', filter.beforeReceivedAt); params.set('before_receipt_id', filter.beforeReceiptId); }
+      if (filter.limit !== undefined) params.set('limit', String(filter.limit));
+      const suffix = params.size > 0 ? `?${params.toString()}` : '';
+      const response = await request(fetcher, `${callbackRoot(workspaceId)}${suffix}`, { signal });
+      const raw = object(await response.json()); const data = object(raw.data); safeProjection(data);
+      if (!Array.isArray(data.items)) throw new Error('服务返回了无法识别的 Provider callback Inbox');
+      let nextCursor: AdminProviderCallbackCursor | null = null;
+      if (data.next_cursor !== null) {
+        const cursor = object(data.next_cursor); const keys = Object.keys(cursor).sort();
+        if (keys.length !== 2 || keys[0] !== 'receipt_id' || keys[1] !== 'received_at') throw new Error('服务返回了无法识别的 Provider callback cursor');
+        const receiptId = string(cursor.receipt_id); if (!/^[a-f0-9]{64}$/.test(receiptId)) throw new Error('服务返回了无法识别的 Provider callback cursor');
+        nextCursor = { receivedAt: string(cursor.received_at), receiptId };
+      }
+      const items = data.items.map(callbackInboxItem);
+      if (items.some((item) => item.workspaceId !== workspaceId)) throw new Error('服务返回了错误 Workspace 的 Provider callback Inbox');
+      return { items, nextCursor };
     },
   };
 }

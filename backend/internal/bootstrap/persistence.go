@@ -113,6 +113,8 @@ type APIConfig struct {
 	GovernanceReviewerDatabaseURL           string
 	AdminCatalogPolicyEnabled               bool
 	GovernancePolicyManagerDatabaseURL      string
+	AdminProviderCallbacksEnabled           bool
+	CallbackObserverDatabaseURL             string
 	ConsoleExecutionRiskEnabled             bool
 	GovernanceExecutionConfirmerDatabaseURL string
 	ConsoleConnectionOAuthEnabled           bool
@@ -293,6 +295,20 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 		}
 	default:
 		return c, errors.New("MENDER_ADMIN_CATALOG_POLICY_ENABLED must be true or false")
+	}
+	switch getenv("MENDER_ADMIN_PROVIDER_CALLBACKS_ENABLED") {
+	case "", "false":
+	case "true":
+		if !c.ConsoleOIDCEnabled {
+			return APIConfig{}, errors.New("Admin Provider callbacks require Console OIDC")
+		}
+		c.AdminProviderCallbacksEnabled = true
+		c.CallbackObserverDatabaseURL = strings.TrimSpace(getenv("MENDER_CALLBACK_OBSERVER_DATABASE_URL"))
+		if c.CallbackObserverDatabaseURL == "" {
+			return APIConfig{}, errors.New("Admin Provider callbacks require a separate callback-observer database role")
+		}
+	default:
+		return c, errors.New("MENDER_ADMIN_PROVIDER_CALLBACKS_ENABLED must be true or false")
 	}
 	switch getenv("MENDER_CONSOLE_LAUNCH_DISCOVERY_ENABLED") {
 	case "", "false":
@@ -479,7 +495,7 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	}
 	switch getenv("MENDER_RUN_API_ENABLED") {
 	case "", "false":
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.ProviderCallbackEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleExecutionRiskEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleCatalogEnabled || c.AdminCatalogReviewEnabled || c.AdminCatalogPolicyEnabled || c.ConsoleConnectionOAuthEnabled {
+		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.ProviderCallbackEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleExecutionRiskEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleCatalogEnabled || c.AdminCatalogReviewEnabled || c.AdminCatalogPolicyEnabled || c.AdminProviderCallbacksEnabled || c.ConsoleConnectionOAuthEnabled {
 			return APIConfig{}, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return c, nil
@@ -513,7 +529,7 @@ func (systemClock) Now() time.Time { return time.Now().UTC().Truncate(time.Micro
 // BuildAPI never migrates, seeds data or falls back to a test repository.
 func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	if !c.RunAPIEnabled {
-		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.ProviderCallbackEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleExecutionRiskEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleCatalogEnabled || c.AdminCatalogReviewEnabled || c.AdminCatalogPolicyEnabled || c.ConsoleConnectionOAuthEnabled {
+		if c.RunReadAPIEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.ProviderCallbackEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleExecutionRiskEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleCatalogEnabled || c.AdminCatalogReviewEnabled || c.AdminCatalogPolicyEnabled || c.AdminProviderCallbacksEnabled || c.ConsoleConnectionOAuthEnabled {
 			return nil, nil, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return httpserver.NewRouter(), func() {}, nil
@@ -576,10 +592,14 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	var catalogManagerPool *pgxpool.Pool
 	var governanceReviewerPool *pgxpool.Pool
 	var governancePolicyManagerPool *pgxpool.Pool
+	var callbackObserverPool *pgxpool.Pool
 	var governanceExecutionConfirmerPool *pgxpool.Pool
 	var commerceObserverPool *pgxpool.Pool
 	var startDelegationFacade *facade.RunStartDelegations
 	closePools := func() {
+		if callbackObserverPool != nil {
+			callbackObserverPool.Close()
+		}
 		if callbackPool != nil {
 			callbackPool.Close()
 		}
@@ -1011,6 +1031,35 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 			}
 			registers = append(registers, executionGovernanceHandler.Register)
 		}
+		if c.AdminProviderCallbacksEnabled {
+			callbackObserverPool, buildErr = database.Open(start, c.CallbackObserverDatabaseURL)
+			if buildErr != nil {
+				return failed(buildErr)
+			}
+			observerCfg := callbackObserverPool.Config().ConnConfig
+			if readerCfg.Host != observerCfg.Host || readerCfg.Port != observerCfg.Port || readerCfg.Database != observerCfg.Database || observerCfg.User == readerCfg.User || observerCfg.User == sessionCfg.User ||
+				(callbackPool != nil && observerCfg.User == callbackPool.Config().ConnConfig.User) || (catalogManagerPool != nil && observerCfg.User == catalogManagerPool.Config().ConnConfig.User) ||
+				(governanceReviewerPool != nil && observerCfg.User == governanceReviewerPool.Config().ConnConfig.User) || (governancePolicyManagerPool != nil && observerCfg.User == governancePolicyManagerPool.Config().ConnConfig.User) ||
+				(connectionManagerPool != nil && observerCfg.User == connectionManagerPool.Config().ConnConfig.User) || (commerceObserverPool != nil && observerCfg.User == commerceObserverPool.Config().ConnConfig.User) {
+				return failed(errors.New("Admin Provider callbacks require the same database with a distinct restricted role"))
+			}
+			if buildErr = migrations.Verify(start, callbackObserverPool); buildErr != nil {
+				return failed(buildErr)
+			}
+			if buildErr = database.CallbackObserverRole(start, callbackObserverPool); buildErr != nil {
+				return failed(buildErr)
+			}
+			callbackAccess := governanceidentity.New(humanIdentity)
+			callbackService, serviceErr := governanceapp.NewProviderCallbackInbox(governancepg.NewProviderCallbackInbox(callbackObserverPool), callbackAccess)
+			if serviceErr != nil {
+				return failed(serviceErr)
+			}
+			callbackHandler, handlerErr := governancehttp.NewProviderCallbackInbox(callbackService, callbackAccess)
+			if handlerErr != nil {
+				return failed(handlerErr)
+			}
+			registers = append(registers, callbackHandler.Register)
+		}
 		if c.ConsoleExecutionRiskEnabled {
 			governanceExecutionConfirmerPool, buildErr = database.Open(start, c.GovernanceExecutionConfirmerDatabaseURL)
 			if buildErr != nil {
@@ -1153,6 +1202,14 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 				return err
 			}
 			if err := database.CallbackIngestorRole(ctx, callbackPool); err != nil {
+				return err
+			}
+		}
+		if callbackObserverPool != nil {
+			if err := migrations.Verify(ctx, callbackObserverPool); err != nil {
+				return err
+			}
+			if err := database.CallbackObserverRole(ctx, callbackObserverPool); err != nil {
 				return err
 			}
 		}

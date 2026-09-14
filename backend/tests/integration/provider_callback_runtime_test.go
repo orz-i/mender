@@ -52,8 +52,10 @@ func exerciseProviderCallbackRuntime(t *testing.T, ctx context.Context, owner *p
 	t.Helper()
 	worker, _ := openTemporaryRoleWithDSN(t, ctx, owner, runtimeDSN, "mender_callback_worker_", migrations.GrantWorker)
 	callbackPool, callbackDSN := openTemporaryRoleWithDSN(t, ctx, owner, runtimeDSN, "mender_callback_ingestor_", migrations.GrantCallbackIngestor)
+	observerPool, _ := openTemporaryRoleWithDSN(t, ctx, owner, runtimeDSN, "mender_callback_observer_", migrations.GrantCallbackObserver)
 	must(t, database.WorkerRole(ctx, worker))
 	must(t, database.CallbackIngestorRole(ctx, callbackPool))
+	must(t, database.CallbackObserverRole(ctx, observerPool))
 	probe, err := callbackPool.Begin(ctx)
 	must(t, err)
 	_, err = probe.Exec(ctx, `SELECT set_config('mender.workspace_id','ws_callback',true)`)
@@ -224,6 +226,34 @@ VALUES('ws_callback',$1,'sa_callback','key_callback',$1||'_idem',repeat('c',64),
 		if _, e := callbackPool.Exec(ctx, sql); e == nil {
 			t.Fatal("callback-ingestor role accepted forbidden operation", sql)
 		}
+	}
+
+	observerTx, err := observerPool.Begin(ctx)
+	must(t, err)
+	defer func() { _ = observerTx.Rollback(context.Background()) }()
+	_, err = observerTx.Exec(ctx, `SELECT set_config('mender.workspace_id','ws_callback',true)`)
+	must(t, err)
+	var observedProvider, observedEvent, observedDisposition string
+	var observedDelivery int
+	must(t, observerTx.QueryRow(ctx, `SELECT provider_id,event_id,disposition,delivery_count FROM execution.provider_callback_inbox WHERE workspace_id='ws_callback' AND event_id='evt.callback.success' AND disposition='accepted'`).Scan(&observedProvider, &observedEvent, &observedDisposition, &observedDelivery))
+	if observedProvider != "provider_callback" || observedEvent != "evt.callback.success" || observedDisposition != "accepted" || observedDelivery != 2 {
+		t.Fatal("callback observer safe projection mismatch", observedProvider, observedEvent, observedDisposition, observedDelivery)
+	}
+	for _, sql := range []string{
+		`SELECT body_sha256 FROM execution.provider_callback_inbox`,
+		`SELECT key_id FROM execution.provider_callback_inbox`,
+		`SELECT provider_request_id FROM execution.provider_callback_inbox`,
+		`SELECT external_task_id FROM execution.provider_callback_inbox`,
+		`UPDATE execution.provider_callback_inbox SET disposition='accepted'`,
+	} {
+		if _, e := observerTx.Exec(ctx, sql); e == nil {
+			t.Fatal("callback-observer role accepted forbidden operation", sql)
+		}
+		_ = observerTx.Rollback(ctx)
+		observerTx, err = observerPool.Begin(ctx)
+		must(t, err)
+		_, err = observerTx.Exec(ctx, `SELECT set_config('mender.workspace_id','ws_callback',true)`)
+		must(t, err)
 	}
 
 	t.Log("real PostgreSQL Provider Callback ingress verified: raw-body HMAC, restricted callback role, Inbox replay/conflict quarantine, Attempt ownership binding, ordering checks and existing Run/Artifact convergence")
