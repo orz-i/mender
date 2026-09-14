@@ -37,6 +37,7 @@
     "db:grant-executor": "node scripts/backend.mjs run ./cmd/operator grant-executor",
     "db:grant-mcp-connector": "node scripts/backend.mjs run ./cmd/operator grant-mcp-connector",
     "db:grant-reconciler": "node scripts/backend.mjs run ./cmd/operator grant-reconciler",
+    "db:grant-callback-ingestor": "node scripts/backend.mjs run ./cmd/operator grant-callback-ingestor",
     "db:grant-settlement": "node scripts/backend.mjs run ./cmd/operator grant-settlement",
     "key:issue": "node scripts/backend.mjs run ./cmd/operator issue-key",
     "key:revoke": "node scripts/backend.mjs run ./cmd/operator revoke-key",
