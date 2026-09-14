@@ -2,7 +2,7 @@
   "schema_version": 1,
   "gate": "G3",
   "as_of": "2026-09-14",
-  "requirements": ["S3-13", "S3-15", "S3-18", "T13", "T14", "T15", "T16", "T40"],
+  "requirements": ["S3-13", "S3-14", "S3-15", "S3-18", "T07", "T08", "T13", "T14", "T15", "T16", "T40"],
   "mcp": {
     "certified_protocol_version": "2026-07-28",
     "selected_legacy_protocol_version": "2025-11-25",
@@ -61,6 +61,45 @@
         "file": "backend/tests/integration/postgres_test.go",
         "symbol": "TestPostgresRuntimeContract",
         "subtest": "G3 same-subject three-source Entry Run Artifact convergence matrix"
+      }
+    ]
+  },
+  "oauth_refresh": {
+    "status": "covered-alpha",
+    "provider_scope": "single-reviewed-provider",
+    "behaviors": [
+      "initial_refresh_secret_capture",
+      "cas_single_winner",
+      "refresh_token_rotation",
+      "refresh_token_retention",
+      "scope_shrink_fail_closed",
+      "invalid_grant_fail_closed",
+      "transient_retry",
+      "revoke_closes_candidate",
+      "secret_isolation",
+      "least_privilege"
+    ],
+    "evidence": [
+      {
+        "file": "backend/tests/connections/oauth_http_test.go",
+        "symbol": "TestRefreshableOAuthPersistsSeparateOpaqueSecretsAndScopeFacts"
+      },
+      {
+        "file": "backend/internal/contexts/connections/adapters/outbound/oauth/client_test.go",
+        "symbol": "TestReviewedOAuthRefreshUsesServerOwnedEndpointAndParsesRotation"
+      },
+      {
+        "file": "backend/internal/contexts/connections/adapters/outbound/oauth/client_test.go",
+        "symbol": "TestReviewedOAuthRefreshSeparatesPermanentAndTransientFailure"
+      },
+      {
+        "file": "backend/tests/integration/oauth_refresh_runtime_test.go",
+        "symbol": "exerciseOAuthRefreshRuntime"
+      },
+      {
+        "file": "backend/tests/integration/postgres_test.go",
+        "symbol": "TestPostgresRuntimeContract",
+        "subtest": "reviewed OAuth refresh CAS and token isolation"
       }
     ]
   },

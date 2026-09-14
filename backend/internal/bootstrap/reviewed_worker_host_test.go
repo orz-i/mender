@@ -81,6 +81,44 @@ func TestReviewedWorkerHostConfigIsDisabledByDefaultAndRequiresMasterSwitch(t *t
 	if _, err = LoadReviewedWorkerHostConfig(hostEnv(map[string]string{"MENDER_REVIEWED_AGENT_DISPATCH_ENABLED": "true"})); err == nil {
 		t.Fatal("Agent dispatch was accepted without reviewed master switch")
 	}
+	if _, err = LoadReviewedWorkerHostConfig(hostEnv(map[string]string{"MENDER_REVIEWED_OAUTH_REFRESH_ENABLED": "true"})); err == nil {
+		t.Fatal("OAuth refresh was accepted without reviewed master switch")
+	}
+}
+
+func TestReviewedWorkerHostConfigScopesOAuthRefresh(t *testing.T) {
+	values := map[string]string{
+		"MENDER_REVIEWED_WORKER_RUNTIME_ENABLED":     "true",
+		"MENDER_REVIEWED_OAUTH_REFRESH_ENABLED":      "true",
+		"MENDER_OAUTH_REFRESH_DATABASE_URL":          "postgres://oauth_refresher:pw@127.0.0.1:5432/mender?sslmode=disable",
+		"MENDER_CONNECTION_OAUTH_PROVIDER_ID":        "provider_alpha",
+		"MENDER_CONNECTION_OAUTH_AUTHORIZATION_URL":  "https://provider.example/oauth/authorize",
+		"MENDER_CONNECTION_OAUTH_TOKEN_URL":          "https://provider.example/oauth/token",
+		"MENDER_CONNECTION_OAUTH_CLIENT_ID":          "mender-provider-client",
+		"MENDER_CONNECTION_OAUTH_CLIENT_SECRET_FILE": "provider-client-secret-file",
+		"MENDER_CONNECTION_OAUTH_REDIRECT_URL":       "https://mender.example/api/console/v1/connections/oauth/callback",
+		"MENDER_CONNECTION_OAUTH_SCOPES":             "resources.read,profile.read",
+		"MENDER_CONNECTION_OAUTH_SECRET_ROOT":        `C:\mounted-connection-secrets`,
+		"MENDER_OAUTH_REFRESH_LEAD_TIME":             "10m",
+	}
+	cfg, err := LoadReviewedWorkerHostConfig(hostEnv(values))
+	if err != nil || !cfg.OAuthRefreshEnabled || cfg.OAuthRefreshLeadTime != 10*time.Minute || len(cfg.OAuthRefreshScopes) != 2 || cfg.HTTPDispatchEnabled || cfg.ProviderControlEnabled {
+		t.Fatal("valid OAuth-refresh-only reviewed runtime config rejected", cfg, err)
+	}
+	for _, key := range []string{"MENDER_OAUTH_REFRESH_DATABASE_URL", "MENDER_CONNECTION_OAUTH_PROVIDER_ID", "MENDER_CONNECTION_OAUTH_TOKEN_URL", "MENDER_CONNECTION_OAUTH_CLIENT_SECRET_FILE", "MENDER_CONNECTION_OAUTH_SCOPES", "MENDER_CONNECTION_OAUTH_SECRET_ROOT"} {
+		copy := map[string]string{}
+		for k, v := range values {
+			copy[k] = v
+		}
+		delete(copy, key)
+		if _, err = LoadReviewedWorkerHostConfig(hostEnv(copy)); err == nil {
+			t.Fatal("missing OAuth refresh reviewed input accepted", key)
+		}
+	}
+	values["MENDER_OAUTH_REFRESH_LEAD_TIME"] = "30s"
+	if _, err = LoadReviewedWorkerHostConfig(hostEnv(values)); err == nil {
+		t.Fatal("too-short OAuth refresh lead time accepted")
+	}
 }
 
 func TestReviewedWorkerHostConfigRequiresExplicitLocationsAndAllowlists(t *testing.T) {

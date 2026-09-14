@@ -40,12 +40,25 @@
 
 Provider ID、provider request ID、external task ID 与 mounted supplier secret 只存在于受控内部事实。受保护 Run/Artifact API 再读同一三个结果时不得出现这些 adapter-specific handles；另一个 Workspace 的凭据读取 `ws_g3_matrix` Run 必须返回 403。
 
+## T07 / T08 Reviewed OAuth Refresh Alpha
+
+G3 证据现在补充 **T07 / T08** 的自动化 OAuth refresh 语义，但这里仍然是 `covered-alpha`，不是某个第三方 OAuth Provider 的生产认证。初始授权只有在 `MENDER_CONNECTION_OAUTH_REFRESH_ENABLED=true` 时才要求并保存 refresh token；后台刷新还必须单独启用 `MENDER_REVIEWED_OAUTH_REFRESH_ENABLED=true`，并提供独立 `oauth-refresher` 数据库角色。两个开关默认都是 false。
+
+Access token 与 refresh token 始终只进入 mounted Secret Vault。PostgreSQL 只保存 opaque credential ref、Connection/refresh revision、required/granted scope、时间与状态；浏览器投影、日志和 G3 manifest 都没有 token bytes。Access 与 refresh 使用不同 immutable vault address，后台刷新只根据当前 Connection revision 与 sidecar revision 读取当前 refresh secret。
+
+真实 isolated PostgreSQL + Secret Vault evidence 覆盖：两个并发 refresh 都可以到达 reviewed token endpoint，但 Connection revision CAS 只有一个 winner；loser 写入的新 secret 会被清理，winner 切换到新的 immutable access ref。Provider 返回新 refresh token 时按新 ref/revision 轮换；未返回 refresh token 时继续使用已有 refresh secret。返回 scope 时必须继续覆盖 required scope；scope 缩减会将 Connection/refresh sidecar 收敛到 `error / scope_reduced`。OAuth `invalid_grant` 同样进入 durable error；5xx / 网络类瞬时错误保持 Connection `active`，供后续 bounded cycle 重试。
+
+Connection revoke 会同步把 refresh sidecar 置为 revoked；被撤销 Connection 不再是 refresh candidate。`oauth-refresher` principal 只读必要 Connection / refresh metadata 和非秘密 grant expiry 字段，不能读取 grant subject、Identity、Execution、Commerce 或 Supply，也不能 INSERT refresh sidecar。普通 browser-side `connection-manager` 仍不能 SELECT refresh metadata；它只通过窄的 Workspace/revision 绑定函数同步 revoke。
+
+本 evidence 不认证 Provider 应用审核、第三方 OAuth provider 的生产行为、token introspection、DPoP、OIDC user-session refresh 或任意自定义 OAuth 脚本。T07 / T08 在这里表示仓库自动化已覆盖刷新竞争、rotation/no-rotation、scope shrink、invalid_grant、transient retry、revoke 和 token isolation，不表示外部 Provider 已完成商业/生产验收。
+
 ## 需求与证据映射
 
+- **S3-14 / T07 / T08**：`backend/tests/connections/oauth_http_test.go`、`backend/internal/contexts/connections/adapters/outbound/oauth/client_test.go`、`backend/tests/integration/oauth_refresh_runtime_test.go`。覆盖初始 refresh secret capture、reviewed token endpoint、并发 CAS、rotation/no-rotation、scope shrink、invalid_grant、瞬时重试、revoke、Secret Vault 隔离与最小权限。
 - **S3-13 / T13–T16 / T40**：`backend/tests/mcp/protocol_test.go`、`backend/tests/mcp/compatibility_matrix_test.go`、`backend/tests/mcp/fixed_toolset_test.go`。覆盖官方 SDK current-version 会话、两种分发、header/body 协议一致性、错误版本和认证边界。
 - **S3-15**：`backend/tests/integration/g3_entry_matrix_test.go` 由 `TestPostgresRuntimeContract` 的 `G3 same-subject three-source Entry Run Artifact convergence matrix` 子测试执行，覆盖 same Workspace/subject 的 HTTP、upstream MCP、Remote Agent 三来源闭环。
 - **S3-18**：本文件和 `g3-evidence.json` 是当前 supported-client / limit 证据。当前 supported harness 只有 Go SDK v1.7.0；third-party client 列表为空。
 
 ## 不在本证据包中的声明
 
-本阶段没有增加 2025-11-25 compatibility，没有 A2A adapter、多轮 Agent resume、任意脚本／表达式运行时、生产代理或公网兼容实验，也没有 payment accounting。已有 Provider Callback、Artifact Object Lifecycle、OAuth 与其他 G3 相邻能力继续由各自 integration/engineering 证据覆盖，本文件不把它们重新命名为新的兼容承诺。
+本阶段没有增加 2025-11-25 compatibility，没有 A2A adapter、多轮 Agent resume、任意脚本／表达式运行时、生产代理或公网兼容实验，也没有 payment accounting。Provider Callback、Artifact Object Lifecycle 与其他 G3 相邻能力继续由各自 integration/engineering 证据覆盖；OAuth refresh 仅增加上述 T07/T08 自动化语义，不把单一 reviewed test provider 扩写成第三方 Provider 生产认证。

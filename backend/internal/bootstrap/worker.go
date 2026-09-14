@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	connectionapp "github.com/orz-i/mender/backend/internal/contexts/connections/application"
 	"github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/heartbeat"
 	runpg "github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/postgres"
 	runapp "github.com/orz-i/mender/backend/internal/contexts/execution/application"
@@ -183,9 +184,14 @@ type ReviewedWorkerServices struct {
 	providerControl *ReviewedProviderControlRuntime
 	settlement      *ReviewedUsageSettlementRuntime
 	artifactObjects *ReviewedArtifactObjectRuntime
+	oauthRefresh    *ReviewedOAuthRefreshRuntime
 }
 
 func NewReviewedWorkerServices(dispatch *ReviewedDispatchRuntime, providerControl *ReviewedProviderControlRuntime, settlement *ReviewedUsageSettlementRuntime, artifactObjects ...*ReviewedArtifactObjectRuntime) (*ReviewedWorkerServices, error) {
+	return NewReviewedWorkerServicesWithOAuthRefresh(dispatch, providerControl, settlement, nil, artifactObjects...)
+}
+
+func NewReviewedWorkerServicesWithOAuthRefresh(dispatch *ReviewedDispatchRuntime, providerControl *ReviewedProviderControlRuntime, settlement *ReviewedUsageSettlementRuntime, oauthRefresh *ReviewedOAuthRefreshRuntime, artifactObjects ...*ReviewedArtifactObjectRuntime) (*ReviewedWorkerServices, error) {
 	if len(artifactObjects) > 1 {
 		return nil, errors.New("reviewed worker services accept one artifact object runtime")
 	}
@@ -193,10 +199,10 @@ func NewReviewedWorkerServices(dispatch *ReviewedDispatchRuntime, providerContro
 	if len(artifactObjects) == 1 {
 		objects = artifactObjects[0]
 	}
-	if dispatch == nil && providerControl == nil && settlement == nil && objects == nil {
+	if dispatch == nil && providerControl == nil && settlement == nil && objects == nil && oauthRefresh == nil {
 		return nil, errors.New("reviewed worker services require at least one capability")
 	}
-	return &ReviewedWorkerServices{dispatch: dispatch, providerControl: providerControl, settlement: settlement, artifactObjects: objects}, nil
+	return &ReviewedWorkerServices{dispatch: dispatch, providerControl: providerControl, settlement: settlement, artifactObjects: objects, oauthRefresh: oauthRefresh}, nil
 }
 
 type ReviewedRuntimeCycleResult struct {
@@ -206,6 +212,7 @@ type ReviewedRuntimeCycleResult struct {
 	SettlementsHandled             int
 	ArtifactObjectsMaterialized    int
 	ArtifactObjectsExpired         int
+	OAuthRefreshesHandled          int
 }
 
 // RunReviewedRuntimeCycle performs bounded background convergence. For every
@@ -214,7 +221,7 @@ type ReviewedRuntimeCycleResult struct {
 // create goroutines, or loop on its own.
 func RunReviewedRuntimeCycle(ctx context.Context, logger *slog.Logger, workspaces []rundomain.WorkspaceID, services *ReviewedWorkerServices) (ReviewedRuntimeCycleResult, error) {
 	var result ReviewedRuntimeCycleResult
-	if services == nil || (services.providerControl == nil && services.settlement == nil && services.artifactObjects == nil) {
+	if services == nil || (services.providerControl == nil && services.settlement == nil && services.artifactObjects == nil && services.oauthRefresh == nil) {
 		return result, nil
 	}
 	if logger == nil || len(workspaces) == 0 || len(workspaces) > 64 {
@@ -271,6 +278,19 @@ func RunReviewedRuntimeCycle(ctx context.Context, logger *slog.Logger, workspace
 			}
 			if cycle.Materialized || cycle.Expired {
 				logger.Info("artifact object cycle handled durable work", "workspace_id", string(workspace), "materialized", cycle.Materialized, "expired", cycle.Expired)
+			}
+		}
+		if services.oauthRefresh != nil {
+			receipt, err := services.oauthRefresh.RefreshOne(ctx, string(workspace))
+			switch {
+			case err == nil:
+				result.OAuthRefreshesHandled++
+				logger.Info("OAuth refresh cycle handled durable work", "workspace_id", string(workspace), "connection_id", receipt.ConnectionID, "revision", receipt.Revision, "outcome", receipt.Outcome)
+			case errors.Is(err, connectionapp.ErrNoOAuthRefreshCandidate):
+			case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+				return result, err
+			default:
+				return result, err
 			}
 		}
 	}

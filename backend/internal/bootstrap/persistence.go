@@ -127,6 +127,7 @@ type APIConfig struct {
 	ConsoleExecutionRiskEnabled             bool
 	GovernanceExecutionConfirmerDatabaseURL string
 	ConsoleConnectionOAuthEnabled           bool
+	ConnectionOAuthRefreshEnabled           bool
 	ConnectionOAuthProviderID               string
 	ConnectionOAuthAuthorizationURL         string
 	ConnectionOAuthTokenURL                 string
@@ -375,6 +376,16 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 		}
 	default:
 		return c, errors.New("MENDER_CONSOLE_CONNECTION_OAUTH_ENABLED must be true or false")
+	}
+	switch getenv("MENDER_CONNECTION_OAUTH_REFRESH_ENABLED") {
+	case "", "false":
+	case "true":
+		if !c.ConsoleConnectionOAuthEnabled {
+			return APIConfig{}, errors.New("Connection OAuth refresh requires Connection OAuth")
+		}
+		c.ConnectionOAuthRefreshEnabled = true
+	default:
+		return c, errors.New("MENDER_CONNECTION_OAUTH_REFRESH_ENABLED must be true or false")
 	}
 	switch getenv("MENDER_RUN_START_API_ENABLED") {
 	case "", "false":
@@ -1010,7 +1021,14 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 				if vaultErr != nil {
 					return failed(vaultErr)
 				}
-				oauthService, oauthErr := connectionapp.NewOAuth(humanAccess, connectionpg.New(connectionManagerPool), oauthProvider, connectionsupplycredentials.New(vault), connectionrandom.Generator{}, systemClock{}, c.ConnectionOAuthFlowTTL)
+				credentialStore := connectionsupplycredentials.New(vault)
+				var oauthService *connectionapp.OAuthService
+				var oauthErr error
+				if c.ConnectionOAuthRefreshEnabled {
+					oauthService, oauthErr = connectionapp.NewRefreshableOAuth(humanAccess, connectionpg.New(connectionManagerPool), oauthProvider, credentialStore, connectionrandom.Generator{}, systemClock{}, c.ConnectionOAuthFlowTTL, c.ConnectionOAuthScopes)
+				} else {
+					oauthService, oauthErr = connectionapp.NewOAuth(humanAccess, connectionpg.New(connectionManagerPool), oauthProvider, credentialStore, connectionrandom.Generator{}, systemClock{}, c.ConnectionOAuthFlowTTL)
+				}
 				if oauthErr != nil {
 					return failed(oauthErr)
 				}

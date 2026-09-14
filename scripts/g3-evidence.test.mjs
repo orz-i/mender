@@ -11,6 +11,8 @@ test('G3 evidence manifest keeps the certified current protocol and exact three-
   const manifest = fresh();
   assert.doesNotThrow(() => validateG3Manifest(manifest));
   assert.deepEqual(manifest.entry_matrix.sources.sort(), ['agent_http', 'http', 'mcp_streamable_http']);
+  assert.equal(manifest.oauth_refresh.status, 'covered-alpha');
+  assert.ok(manifest.requirements.includes('T07') && manifest.requirements.includes('T08'));
   assert.deepEqual(manifest.limits.third_party_clients_certified, []);
 });
 
@@ -21,6 +23,7 @@ test('G3 evidence rejects legacy/third-party/A2A support inflation', () => {
     (m) => { m.limits.third_party_clients_certified = ['unverified-client']; },
     (m) => { m.limits.a2a_protocol = true; },
     (m) => { m.mcp.sdk_harness.version = 'v1.8.0'; },
+    (m) => { m.oauth_refresh.status = 'certified-production'; },
   ]) {
     const manifest = fresh();
     mutate(manifest);
@@ -34,6 +37,8 @@ test('G3 evidence rejects missing entry sources and truth phases', () => {
     (m) => { m.entry_matrix.shared_truth = ['run', 'artifact']; },
     (m) => { m.mcp.distributions.pop(); },
     (m) => { m.requirements = ['S3-13']; },
+    (m) => { m.oauth_refresh.behaviors = ['cas_single_winner']; },
+    (m) => { m.oauth_refresh.evidence.pop(); },
   ]) {
     const manifest = fresh();
     mutate(manifest);

@@ -7,28 +7,41 @@ import (
 	"sync"
 	"time"
 
+	connectionoauth "github.com/orz-i/mender/backend/internal/contexts/connections/adapters/outbound/oauth"
+	connectionsupplycredentials "github.com/orz-i/mender/backend/internal/contexts/connections/adapters/outbound/supplycredentials"
 	filesecret "github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/filesecret"
 	supplydomain "github.com/orz-i/mender/backend/internal/contexts/supply/domain"
 )
 
 type ReviewedWorkerHostConfig struct {
-	Enabled                   bool
-	HTTPDispatchEnabled       bool
-	AgentDispatchEnabled      bool
-	ProviderControlEnabled    bool
-	SettlementEnabled         bool
-	ArtifactObjectsEnabled    bool
-	SecretRoot                string
-	ExecutorDatabaseURL       string
-	ReconcilerDatabaseURL     string
-	SettlementDatabaseURL     string
-	ArtifactObjectDatabaseURL string
-	ArtifactObjectRoot        string
-	ArtifactObjectRetention   time.Duration
-	ProviderIDs               []string
-	AllowedHosts              []string
-	AllowHTTP                 bool
-	AllowLoopback             bool
+	Enabled                      bool
+	HTTPDispatchEnabled          bool
+	AgentDispatchEnabled         bool
+	ProviderControlEnabled       bool
+	SettlementEnabled            bool
+	ArtifactObjectsEnabled       bool
+	OAuthRefreshEnabled          bool
+	SecretRoot                   string
+	ExecutorDatabaseURL          string
+	ReconcilerDatabaseURL        string
+	SettlementDatabaseURL        string
+	ArtifactObjectDatabaseURL    string
+	ArtifactObjectRoot           string
+	ArtifactObjectRetention      time.Duration
+	OAuthRefreshDatabaseURL      string
+	OAuthRefreshProviderID       string
+	OAuthRefreshAuthorizationURL string
+	OAuthRefreshTokenURL         string
+	OAuthRefreshClientID         string
+	OAuthRefreshClientSecretFile string
+	OAuthRefreshRedirectURL      string
+	OAuthRefreshSecretRoot       string
+	OAuthRefreshScopes           []string
+	OAuthRefreshLeadTime         time.Duration
+	ProviderIDs                  []string
+	AllowedHosts                 []string
+	AllowHTTP                    bool
+	AllowLoopback                bool
 }
 
 func strictBool(getenv func(string) string, key string) (bool, error) {
@@ -81,13 +94,16 @@ func LoadReviewedWorkerHostConfig(getenv func(string) string) (ReviewedWorkerHos
 	if c.ArtifactObjectsEnabled, err = strictBool(getenv, "MENDER_REVIEWED_ARTIFACT_OBJECTS_ENABLED"); err != nil {
 		return ReviewedWorkerHostConfig{}, err
 	}
+	if c.OAuthRefreshEnabled, err = strictBool(getenv, "MENDER_REVIEWED_OAUTH_REFRESH_ENABLED"); err != nil {
+		return ReviewedWorkerHostConfig{}, err
+	}
 	if c.AllowHTTP, err = strictBool(getenv, "MENDER_REVIEWED_EGRESS_ALLOW_HTTP"); err != nil {
 		return ReviewedWorkerHostConfig{}, err
 	}
 	if c.AllowLoopback, err = strictBool(getenv, "MENDER_REVIEWED_EGRESS_ALLOW_LOOPBACK"); err != nil {
 		return ReviewedWorkerHostConfig{}, err
 	}
-	anyService := c.HTTPDispatchEnabled || c.AgentDispatchEnabled || c.ProviderControlEnabled || c.SettlementEnabled || c.ArtifactObjectsEnabled
+	anyService := c.HTTPDispatchEnabled || c.AgentDispatchEnabled || c.ProviderControlEnabled || c.SettlementEnabled || c.ArtifactObjectsEnabled || c.OAuthRefreshEnabled
 	if !c.Enabled {
 		if anyService || c.AllowHTTP || c.AllowLoopback {
 			return ReviewedWorkerHostConfig{}, errors.New("reviewed worker capabilities require MENDER_REVIEWED_WORKER_RUNTIME_ENABLED=true")
@@ -140,6 +156,31 @@ func LoadReviewedWorkerHostConfig(getenv func(string) string) (ReviewedWorkerHos
 		}
 		if c.ArtifactObjectDatabaseURL == "" || c.ArtifactObjectRoot == "" {
 			return ReviewedWorkerHostConfig{}, errors.New("artifact object runtime requires materializer database URL and object root")
+		}
+	}
+	if c.OAuthRefreshEnabled {
+		c.OAuthRefreshDatabaseURL = strings.TrimSpace(getenv("MENDER_OAUTH_REFRESH_DATABASE_URL"))
+		c.OAuthRefreshProviderID = strings.TrimSpace(getenv("MENDER_CONNECTION_OAUTH_PROVIDER_ID"))
+		c.OAuthRefreshAuthorizationURL = strings.TrimSpace(getenv("MENDER_CONNECTION_OAUTH_AUTHORIZATION_URL"))
+		c.OAuthRefreshTokenURL = strings.TrimSpace(getenv("MENDER_CONNECTION_OAUTH_TOKEN_URL"))
+		c.OAuthRefreshClientID = strings.TrimSpace(getenv("MENDER_CONNECTION_OAUTH_CLIENT_ID"))
+		c.OAuthRefreshClientSecretFile = strings.TrimSpace(getenv("MENDER_CONNECTION_OAUTH_CLIENT_SECRET_FILE"))
+		c.OAuthRefreshRedirectURL = strings.TrimSpace(getenv("MENDER_CONNECTION_OAUTH_REDIRECT_URL"))
+		c.OAuthRefreshSecretRoot = strings.TrimSpace(getenv("MENDER_CONNECTION_OAUTH_SECRET_ROOT"))
+		c.OAuthRefreshScopes, err = reviewedList(getenv("MENDER_CONNECTION_OAUTH_SCOPES"), 16)
+		if err != nil {
+			return ReviewedWorkerHostConfig{}, errors.New("OAuth refresh requires reviewed Connection OAuth scopes")
+		}
+		c.OAuthRefreshLeadTime = 5 * time.Minute
+		if raw := strings.TrimSpace(getenv("MENDER_OAUTH_REFRESH_LEAD_TIME")); raw != "" {
+			lead, parseErr := time.ParseDuration(raw)
+			if parseErr != nil || lead < time.Minute || lead > time.Hour {
+				return ReviewedWorkerHostConfig{}, errors.New("OAuth refresh lead time must be between 1m and 1h")
+			}
+			c.OAuthRefreshLeadTime = lead
+		}
+		if c.OAuthRefreshDatabaseURL == "" || c.OAuthRefreshProviderID == "" || c.OAuthRefreshAuthorizationURL == "" || c.OAuthRefreshTokenURL == "" || c.OAuthRefreshClientID == "" || c.OAuthRefreshClientSecretFile == "" || c.OAuthRefreshRedirectURL == "" || c.OAuthRefreshSecretRoot == "" {
+			return ReviewedWorkerHostConfig{}, errors.New("OAuth refresh requires refresher database, reviewed provider, mounted client secret and credential root")
 		}
 	}
 	return c, nil
@@ -237,7 +278,31 @@ func BuildReviewedWorkerServicesFromConfig(ctx context.Context, worker WorkerCon
 		}
 		closers = append(closers, closeArtifacts)
 	}
-	services, err := NewReviewedWorkerServices(dispatch, control, settlement, artifactObjects)
+	var oauthRefresh *ReviewedOAuthRefreshRuntime
+	if c.OAuthRefreshEnabled {
+		clientSecret, secretErr := loadMountedTextSecret(c.OAuthRefreshClientSecretFile, "OAuth refresh client secret")
+		if secretErr != nil {
+			return fail(secretErr)
+		}
+		provider, providerErr := connectionoauth.New(connectionoauth.Config{
+			ProviderID: c.OAuthRefreshProviderID, AuthorizationURL: c.OAuthRefreshAuthorizationURL, TokenURL: c.OAuthRefreshTokenURL,
+			ClientID: c.OAuthRefreshClientID, ClientSecret: clientSecret, RedirectURL: c.OAuthRefreshRedirectURL, Scopes: c.OAuthRefreshScopes,
+		}, nil)
+		if providerErr != nil {
+			return fail(providerErr)
+		}
+		vault, vaultErr := filesecret.New(c.OAuthRefreshSecretRoot)
+		if vaultErr != nil {
+			return fail(vaultErr)
+		}
+		var closeRefresh func()
+		oauthRefresh, closeRefresh, err = BuildOAuthRefreshRuntime(ctx, OAuthRefreshRuntimeConfig{DatabaseURL: c.OAuthRefreshDatabaseURL, LeadTime: c.OAuthRefreshLeadTime}, provider, connectionsupplycredentials.New(vault))
+		if err != nil {
+			return fail(err)
+		}
+		closers = append(closers, closeRefresh)
+	}
+	services, err := NewReviewedWorkerServicesWithOAuthRefresh(dispatch, control, settlement, oauthRefresh, artifactObjects)
 	if err != nil {
 		return fail(err)
 	}

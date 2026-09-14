@@ -26,6 +26,7 @@
     "db:grant-runtime": "node scripts/backend.mjs run ./cmd/operator grant-runtime",
     "db:grant-browser-session": "node scripts/backend.mjs run ./cmd/operator grant-browser-session",
     "db:grant-connection-manager": "node scripts/backend.mjs run ./cmd/operator grant-connection-manager",
+    "db:grant-oauth-refresher": "node scripts/backend.mjs run ./cmd/operator grant-oauth-refresher",
     "db:grant-catalog-manager": "node scripts/backend.mjs run ./cmd/operator grant-catalog-manager",
     "db:grant-governance-reviewer": "node scripts/backend.mjs run ./cmd/operator grant-governance-reviewer",
     "db:grant-governance-policy-manager": "node scripts/backend.mjs run ./cmd/operator grant-governance-policy-manager",

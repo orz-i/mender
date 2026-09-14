@@ -28,6 +28,7 @@
 | [2026-09-12 Console Usage Observability Alpha](2026-09-12-console-usage-observability-alpha.md) | `/usage` Budget/Usage 页面与 Run Explorer quota-cost 展示，micro string/BigInt 精度边界 |
 | [2026-09-12 Usage / Budget Observability Alpha](2026-09-12-usage-budget-observability-alpha.md) | Human Console 的只读 quota Budget/Usage 投影、精确 micro 字符串与独立 `commerce-observer` RLS 角色；明确不是支付账务 |
 | [2026-09-12 Run Quota Cost Alpha](2026-09-12-run-quota-cost-alpha.md) | 短期 Human Run delegation 保护的单 Run reservation/charge/release 投影；Commerce 保持数据所有权，Machine API 不虚构 cost route |
+| [2026-09-14 G3 Compatibility & Entry Matrix Alpha](2026-09-14-g3-compatibility-entry-matrix.md) | MCP current/legacy 分发矩阵、same-subject 三来源 Run/Artifact 收敛，以及 T07/T08 reviewed OAuth refresh CAS/rotation/scope/secret-isolation 自动化证据 |
 | [2026-09-14 G3 Compatibility & Entry Matrix Alpha](2026-09-14-g3-compatibility-entry-matrix.md) | MCP current/legacy 协议边界、Meta-tool/Fixed Toolset 分发兼容矩阵，以及同一主体 HTTP/MCP/Agent 三来源真实收敛证据 |
 
 工具链以根 [toolchain.versions.json](../../toolchain.versions.json) 为准，依赖由 pnpm 与 Go 锁文件固定。治理规则中的版本约束待 G0 评审。
