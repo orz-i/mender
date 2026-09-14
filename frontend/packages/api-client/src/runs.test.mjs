@@ -136,3 +136,24 @@ test('fails closed if a successful response crosses the requested workspace boun
   const client = createRunsClient('', async () => Response.json({ data: [{ ...run(), workspace_id: 'ws_other' }], meta: { request_id: 'req' } }));
   await assert.rejects(client.listRuns({ workspaceId: 'ws_a', token: 'mender_live_test.secret' }), /错误 Workspace/);
 });
+
+test('fails closed if Run surfaces leak Remote Agent or provider-control internals', async () => {
+  const access = { workspaceId: 'ws_a', token: 'mender_live_test.secret', runId: 'run_a' };
+  const leakedRun = createRunsClient('', async () => Response.json({
+    data: { ...run('running'), provider_request_id: 'agent/request-internal', deployment_revision: 'deploy_agent_internal' },
+    meta: { request_id: 'req_run_leak' },
+  }));
+  await assert.rejects(leakedRun.getRun(access), /无法识别的 Run/);
+
+  const leakedEvent = createRunsClient('', async () => Response.json({
+    data: [{ version: '2', event_type: 'run.state_changed', execution_state: 'reconciling', occurred_at: '2026-09-12T00:00:02Z', subject_id: 'worker', reason: '', external_task_id: 'agent/task-internal' }],
+    meta: { request_id: 'req_event_leak', next_cursor: null, through_version: '2' },
+  }));
+  await assert.rejects(leakedEvent.listRunEvents(access), /无法识别的 Run 事件/);
+
+  const leakedArtifact = createRunsClient('', async () => Response.json({
+    data: { artifact_id: 'artifact_a', kind: 'provider_result', media_type: 'application/json', size_bytes: 2, created_at: '2026-09-12T00:00:04Z', credential_version_ref: 'credv_internal' },
+    meta: { request_id: 'req_artifact_leak' },
+  }));
+  await assert.rejects(leakedArtifact.listRunArtifacts(access), /无法识别的 Artifact/);
+});

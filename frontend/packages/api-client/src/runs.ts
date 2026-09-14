@@ -209,11 +209,17 @@ function parseState(value: unknown): RunExecutionState {
 
 function parseRun(value: unknown): RunRecord {
   const raw = object(value);
+  exactKeys(raw, ['run_id', 'workspace_id', 'execution_state', 'version', 'created_at', 'updated_at'], '服务返回了无法识别的 Run');
+  const runId = string(raw.run_id);
+  const workspaceId = string(raw.workspace_id);
+  const version = string(raw.version);
+  if (!idPattern.test(runId) || !idPattern.test(workspaceId)) throw new Error('服务返回了无法识别的 Run');
+  revision(version, '服务返回了无效的 Run revision');
   return {
-    runId: string(raw.run_id),
-    workspaceId: string(raw.workspace_id),
+    runId,
+    workspaceId,
     executionState: parseState(raw.execution_state),
-    version: string(raw.version),
+    version,
     createdAt: string(raw.created_at),
     updatedAt: string(raw.updated_at),
   };
@@ -237,6 +243,7 @@ export function createConsoleRunsClient(baseUrl = '', fetcher: typeof fetch = fe
 
 function parseEvent(value: unknown): RunEventRecord {
   const raw = object(value);
+  exactKeys(raw, ['version', 'event_type', 'execution_state', 'occurred_at', 'subject_id', 'reason'], '服务返回了无法识别的 Run 事件');
   if (raw.event_type !== 'run.state_changed') throw new Error('服务返回了未知的 Run 事件');
   revision(raw.version, '服务返回了无效的 Run event revision');
   return {
@@ -249,8 +256,11 @@ function parseEvent(value: unknown): RunEventRecord {
   };
 }
 
-function parseArtifact(value: unknown): ArtifactRecord {
+function parseArtifact(value: unknown, detail = false): ArtifactRecord {
   const raw = object(value);
+  exactKeys(raw, detail
+    ? ['artifact_id', 'kind', 'media_type', 'size_bytes', 'created_at', 'content']
+    : ['artifact_id', 'kind', 'media_type', 'size_bytes', 'created_at'], '服务返回了无法识别的 Artifact');
   if (typeof raw.size_bytes !== 'number' || !Number.isSafeInteger(raw.size_bytes) || raw.size_bytes < 0) {
     throw new Error('服务返回了无法识别的 Artifact');
   }
@@ -360,15 +370,15 @@ export function createRunsClient(baseUrl = '', fetcher: typeof fetch = fetch, ap
       const raw = object(await jsonRequest(fetcher, `${runBase(request.workspaceId)}/${encodeURIComponent(request.runId)}/artifacts`, request, { signal: requestSignal(request.signal) }));
       if (!Array.isArray(raw.data)) throw new Error('服务返回了无法识别的 Artifact 列表');
       const meta = object(raw.meta);
-      return { items: raw.data.map(parseArtifact), nextCursor: null, requestId: string(meta.request_id) };
+      return { items: raw.data.map((item) => parseArtifact(item)), nextCursor: null, requestId: string(meta.request_id) };
     },
     async getRunArtifact(request: ArtifactRequest): Promise<ArtifactDetailRecord> {
       requireId(request.runId, 'Run ID');
       if (!artifactIdPattern.test(request.artifactId)) throw new Error('Artifact ID 格式无效');
       const raw = object(await jsonRequest(fetcher, `${runBase(request.workspaceId)}/${encodeURIComponent(request.runId)}/artifacts/${encodeURIComponent(request.artifactId)}`, request, { signal: requestSignal(request.signal) }));
       const data = object(raw.data);
-      const metadata = parseArtifact(data);
-      if (metadata.artifactId !== request.artifactId || !Object.prototype.hasOwnProperty.call(data, 'content')) throw new Error('服务返回了错误的 Artifact');
+      const metadata = parseArtifact(data, true);
+      if (metadata.artifactId !== request.artifactId) throw new Error('服务返回了错误的 Artifact');
       return { ...metadata, content: data.content };
     },
     async cancelRun(request: CancelRunRequest): Promise<RunRecord> {
