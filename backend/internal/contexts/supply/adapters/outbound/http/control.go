@@ -19,6 +19,91 @@ type ControlBroker interface {
 	PrepareControl(context.Context, application.InvocationRef, time.Time) (application.PreparedControl, error)
 }
 
+func validInputSubmission(input supply.InputSubmission) bool {
+	return validControlQuery(input.WorkspaceID, input.RunID, input.AttemptNo, input.ProviderID, input.ProviderRequestID, input.ExternalTaskID) &&
+		validObservationID(input.InputRequestID) && validCancelKey(input.SubmissionID) && len(input.AnswerJSON) >= 2 && len(input.AnswerJSON) <= 64<<10 && json.Valid([]byte(input.AnswerJSON))
+}
+
+func decodeInputAck(body []byte, expected string) (supply.InputResult, error) {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	token, err := decoder.Token()
+	if err != nil || token != json.Delim('{') {
+		return supply.InputResult{}, errors.New("invalid provider input response")
+	}
+	seen := map[string]bool{}
+	var accepted bool
+	var submissionID string
+	for decoder.More() {
+		keyToken, tokenErr := decoder.Token()
+		key, ok := keyToken.(string)
+		if tokenErr != nil || !ok || seen[key] {
+			return supply.InputResult{}, errors.New("invalid provider input response")
+		}
+		seen[key] = true
+		switch key {
+		case "accepted":
+			if err = decoder.Decode(&accepted); err != nil {
+				return supply.InputResult{}, errors.New("invalid provider input response")
+			}
+		case "submission_id":
+			if err = decoder.Decode(&submissionID); err != nil {
+				return supply.InputResult{}, errors.New("invalid provider input response")
+			}
+		default:
+			return supply.InputResult{}, errors.New("invalid provider input response")
+		}
+	}
+	if token, err = decoder.Token(); err != nil || token != json.Delim('}') || len(seen) != 2 || !accepted || submissionID != expected || !validCancelKey(submissionID) {
+		return supply.InputResult{}, errors.New("invalid provider input response")
+	}
+	if token, err = decoder.Token(); !errors.Is(err, io.EOF) || token != nil {
+		return supply.InputResult{}, errors.New("invalid provider input response")
+	}
+	return supply.InputResult{Disposition: supply.InputAccepted, SubmissionID: submissionID}, nil
+}
+
+func (e *Executor) SendInput(ctx context.Context, input supply.InputSubmission) (supply.InputResult, error) {
+	if err := ctx.Err(); err != nil {
+		return supply.InputResult{}, err
+	}
+	if !validInputSubmission(input) {
+		return supply.InputResult{}, supply.ErrProviderInputForbidden
+	}
+	prepared, err := e.prepareControl(ctx, input.WorkspaceID, input.RunID, input.ProviderID)
+	if err != nil || !prepared.Deployment.SupportsSupplementalInput() {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return supply.InputResult{}, err
+		}
+		return supply.InputResult{}, supply.ErrProviderInputUnavailable
+	}
+	var answer json.RawMessage = []byte(input.AnswerJSON)
+	body, err := json.Marshal(struct {
+		ProviderRequestID string          `json:"provider_request_id"`
+		ExternalTaskID    string          `json:"external_task_id"`
+		InputRequestID    string          `json:"input_request_id"`
+		SubmissionID      string          `json:"submission_id"`
+		Answer            json.RawMessage `json:"answer"`
+	}{input.ProviderRequestID, input.ExternalTaskID, input.InputRequestID, input.SubmissionID, answer})
+	if err != nil {
+		return supply.InputResult{}, supply.ErrProviderInputUnavailable
+	}
+	response, uncertain, err := e.doControlJSON(ctx, prepared, prepared.Deployment.InputEndpointURL, body, input.SubmissionID)
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return supply.InputResult{}, err
+		}
+		return supply.InputResult{}, supply.ErrProviderInputUnavailable
+	}
+	if uncertain {
+		return supply.InputResult{Disposition: supply.InputUnknown, SubmissionID: input.SubmissionID}, nil
+	}
+	result, err := decodeInputAck(response, input.SubmissionID)
+	if err != nil {
+		return supply.InputResult{Disposition: supply.InputUnknown, SubmissionID: input.SubmissionID}, nil
+	}
+	return result, nil
+}
+
 func decodeInputRequest(raw json.RawMessage) (id, prompt, schema string, ok bool) {
 	if len(raw) < 2 || len(raw) > 70<<10 {
 		return "", "", "", false

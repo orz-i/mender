@@ -44,7 +44,7 @@ func (a *Access) Authorize(ctx context.Context, c ports.Caller, action ports.Act
 			return ports.ErrForbidden
 		}
 		scope = string(ports.ReadRun)
-	case ports.ReadRun, ports.CancelRun:
+	case ports.ReadRun, ports.CancelRun, ports.InputRun:
 		if !id.IsValid() {
 			return ports.ErrForbidden
 		}

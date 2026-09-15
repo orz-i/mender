@@ -5,6 +5,7 @@ package integration_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -30,18 +31,31 @@ import (
 	"github.com/orz-i/mender/backend/migrations"
 )
 
+type agentInputAuthorizer struct{}
+
+func (agentInputAuthorizer) Authorize(_ context.Context, caller ports.Caller, action ports.Action, runID rundomain.RunID) error {
+	if caller.WorkspaceID != "ws_remote_agent" || caller.SubjectID != "sa_remote_agent" || caller.CredentialID != "key_remote_agent" || action != ports.InputRun || !runID.IsValid() {
+		return ports.ErrForbidden
+	}
+	return nil
+}
+
+var _ ports.Authorizer = agentInputAuthorizer{}
+
 func exerciseRemoteAgentRuntime(t *testing.T, ctx context.Context, owner *pgxpool.Pool, runtimeDSN string) {
 	t.Helper()
 	worker, workerDSN := openTemporaryRoleWithDSN(t, ctx, owner, runtimeDSN, "mender_agent_worker_", migrations.GrantWorker)
 	executorPool, executorDSN := openTemporaryRoleWithDSN(t, ctx, owner, runtimeDSN, "mender_agent_executor_", migrations.GrantExecutor)
 	reconcilerPool, reconcilerDSN := openTemporaryRoleWithDSN(t, ctx, owner, runtimeDSN, "mender_agent_reconciler_", migrations.GrantReconciler)
+	inputPool, inputDSN := openTemporaryRoleWithDSN(t, ctx, owner, runtimeDSN, "mender_agent_input_", migrations.GrantAgentInputSender)
 	cancelPool, _ := openTemporaryRole(t, ctx, owner, runtimeDSN, "mender_agent_cancel_", migrations.GrantCancellation)
 	must(t, database.WorkerRole(ctx, worker))
 	must(t, database.ExecutorRole(ctx, executorPool))
 	must(t, database.ReconcilerRole(ctx, reconcilerPool))
+	must(t, database.AgentInputSenderRole(ctx, inputPool))
 	must(t, database.CancellationRole(ctx, cancelPool))
 
-	var submitCalls, statusCalls, cancelCalls atomic.Int32
+	var submitCalls, statusCalls, cancelCalls, inputCalls, unknownInputCalls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer remote-agent-secret" {
 			t.Errorf("remote Agent runtime did not use the mounted current credential: %q", r.Header.Get("Authorization"))
@@ -66,6 +80,10 @@ func exerciseRemoteAgentRuntime(t *testing.T, ctx context.Context, owner *pgxpoo
 				_, _ = io.WriteString(w, `{"provider_request_id":"agent/request-success","external_task_id":"agent/task-success"}`)
 			case "mender.submit.run_agent_cancel.1":
 				_, _ = io.WriteString(w, `{"provider_request_id":"agent/request-cancel","external_task_id":"agent/task-cancel"}`)
+			case "mender.submit.run_agent_input.1":
+				_, _ = io.WriteString(w, `{"provider_request_id":"agent/request-input","external_task_id":"agent/task-input"}`)
+			case "mender.submit.run_agent_input_unknown.1":
+				_, _ = io.WriteString(w, `{"provider_request_id":"agent/request-input-unknown","external_task_id":"agent/task-input-unknown"}`)
 			default:
 				t.Errorf("unexpected Agent submission key: %q", key)
 				http.Error(w, "bad key", http.StatusBadRequest)
@@ -76,11 +94,25 @@ func exerciseRemoteAgentRuntime(t *testing.T, ctx context.Context, owner *pgxpoo
 				t.Errorf("status query unexpectedly carried idempotency key: %q", r.Header.Get("Idempotency-Key"))
 			}
 			var envelope map[string]any
-			if err := json.Unmarshal(body, &envelope); err != nil || envelope["provider_request_id"] != "agent/request-success" || envelope["external_task_id"] != "agent/task-success" {
+			if err := json.Unmarshal(body, &envelope); err != nil {
 				t.Errorf("unexpected Agent status request: %s", body)
 			}
 			observed := time.Now().UTC().Truncate(time.Microsecond).Format(time.RFC3339Nano)
-			_, _ = io.WriteString(w, `{"observation_id":"obs.agent.success","state":"succeeded","result":{"answer":"agent-done"},"observed_at":"`+observed+`"}`)
+			switch envelope["provider_request_id"] {
+			case "agent/request-success":
+				_, _ = io.WriteString(w, `{"observation_id":"obs.agent.success","state":"succeeded","result":{"answer":"agent-done"},"observed_at":"`+observed+`"}`)
+			case "agent/request-input":
+				if inputCalls.Load() == 0 {
+					_, _ = io.WriteString(w, `{"observation_id":"obs.agent.input","state":"input_required","input_request":{"input_request_id":"input.req.success","prompt":"Choose a region","input_schema":{"type":"object","properties":{"region":{"type":"string","enum":["us","eu"]}},"required":["region"],"additionalProperties":false}},"observed_at":"`+observed+`"}`)
+				} else {
+					_, _ = io.WriteString(w, `{"observation_id":"obs.agent.input.done","state":"succeeded","result":{"answer":"agent-input-done"},"observed_at":"`+observed+`"}`)
+				}
+			case "agent/request-input-unknown":
+				_, _ = io.WriteString(w, `{"observation_id":"obs.agent.input.unknown","state":"input_required","input_request":{"input_request_id":"input.req.unknown","prompt":"Approve continuation","input_schema":{"type":"object","properties":{"approved":{"type":"boolean"}},"required":["approved"],"additionalProperties":false}},"observed_at":"`+observed+`"}`)
+			default:
+				t.Errorf("unexpected Agent status provider request: %v", envelope["provider_request_id"])
+				http.Error(w, "bad provider request", http.StatusBadRequest)
+			}
 		case "/agent/cancel":
 			cancelCalls.Add(1)
 			var envelope map[string]any
@@ -89,6 +121,30 @@ func exerciseRemoteAgentRuntime(t *testing.T, ctx context.Context, owner *pgxpoo
 			}
 			observed := time.Now().UTC().Truncate(time.Microsecond).Format(time.RFC3339Nano)
 			_, _ = io.WriteString(w, `{"disposition":"acknowledged","observation_id":"obs.agent.cancel","observed_at":"`+observed+`"}`)
+		case "/agent/input":
+			var envelope struct {
+				ProviderRequestID string          `json:"provider_request_id"`
+				ExternalTaskID    string          `json:"external_task_id"`
+				InputRequestID    string          `json:"input_request_id"`
+				SubmissionID      string          `json:"submission_id"`
+				Answer            json.RawMessage `json:"answer"`
+			}
+			if err := json.Unmarshal(body, &envelope); err != nil || envelope.SubmissionID == "" || r.Header.Get("Idempotency-Key") != envelope.SubmissionID || strings.Contains(string(body), "ws_remote_agent") {
+				t.Errorf("unexpected Agent input request: %s key=%q", body, r.Header.Get("Idempotency-Key"))
+			}
+			switch envelope.InputRequestID {
+			case "input.req.success":
+				inputCalls.Add(1)
+				if envelope.ProviderRequestID != "agent/request-input" || envelope.ExternalTaskID != "agent/task-input" || string(envelope.Answer) != `{"region":"eu"}` {
+					t.Errorf("input request did not preserve server-owned provider binding: %s", body)
+				}
+				_, _ = io.WriteString(w, `{"accepted":true,"submission_id":"`+envelope.SubmissionID+`"}`)
+			case "input.req.unknown":
+				unknownInputCalls.Add(1)
+				http.Error(w, "provider timeout after receive", http.StatusGatewayTimeout)
+			default:
+				http.Error(w, "unknown input request", http.StatusBadRequest)
+			}
 		default:
 			http.NotFound(w, r)
 		}
@@ -101,10 +157,10 @@ func exerciseRemoteAgentRuntime(t *testing.T, ctx context.Context, owner *pgxpoo
 	_, err = owner.Exec(ctx, `INSERT INTO identity.workspaces(id,created_at) VALUES('ws_remote_agent',$1)`, base)
 	must(t, err)
 	_, err = owner.Exec(ctx, `INSERT INTO supply.deployments(
-	 revision,provider_id,transport_kind,endpoint_url,http_method,status_endpoint_url,status_http_method,cancel_endpoint_url,cancel_http_method,
+	 revision,provider_id,transport_kind,endpoint_url,http_method,status_endpoint_url,status_http_method,cancel_endpoint_url,cancel_http_method,input_endpoint_url,input_http_method,
 	 auth_mode,auth_header_name,idempotency_header,request_timeout_ms,max_request_bytes,max_response_bytes,state,created_at)
-	 VALUES('deploy_remote_agent','provider_remote_agent','agent_http',$1,'POST',$2,'POST',$3,'POST','bearer',NULL,'Idempotency-Key',1000,4096,8192,'active',$4)`,
-		server.URL+"/agent/submit", server.URL+"/agent/status", server.URL+"/agent/cancel", base)
+	 VALUES('deploy_remote_agent','provider_remote_agent','agent_http',$1,'POST',$2,'POST',$3,'POST',$4,'POST','bearer',NULL,'Idempotency-Key',1000,65536,8192,'active',$5)`,
+		server.URL+"/agent/submit", server.URL+"/agent/status", server.URL+"/agent/cancel", server.URL+"/agent/input", base)
 	must(t, err)
 	_, err = owner.Exec(ctx, `INSERT INTO connections.connections(workspace_id,id,provider_id,credential_version_ref,state,revision,created_at,expires_at)
 	 VALUES('ws_remote_agent','conn_remote_agent','provider_remote_agent','credv_remote_agent','active',1,$1,$2)`, base, base.Add(time.Hour))
@@ -128,6 +184,8 @@ func exerciseRemoteAgentRuntime(t *testing.T, ctx context.Context, owner *pgxpoo
 	}
 	seed("run_agent_success", 20)
 	seed("run_agent_cancel", 10)
+	seed("run_agent_input", 5)
+	seed("run_agent_input_unknown", 1)
 
 	secretRoot := t.TempDir()
 	secretName, err := filesecret.FileName(supplyapp.SecretRequest{
@@ -143,6 +201,11 @@ func exerciseRemoteAgentRuntime(t *testing.T, ctx context.Context, owner *pgxpoo
 	}, secrets)
 	must(t, err)
 	defer closeExecutor()
+	inputRuntime, closeInputRuntime, err := bootstrap.BuildAgentInputRuntime(ctx, bootstrap.AgentInputRuntimeConfig{
+		DatabaseURL: inputDSN, ExecutorDatabaseURL: executorDSN, ProviderIDs: []string{"provider_remote_agent"}, AllowedHosts: []string{serverURL.Hostname()}, AllowHTTP: true, AllowLoopback: true,
+	}, agentInputAuthorizer{}, secrets)
+	must(t, err)
+	defer closeInputRuntime()
 	services, closeServices, err := bootstrap.BuildReviewedWorkerServicesFromConfig(ctx, bootstrap.WorkerConfig{
 		ControlEnabled: true, DispatchEnabled: true, DatabaseURL: workerDSN, WorkerID: "worker_remote_agent",
 		Workspaces: []rundomain.WorkspaceID{"ws_remote_agent"}, DeploymentRevisions: []string{"deploy_remote_agent"},
@@ -226,8 +289,78 @@ func exerciseRemoteAgentRuntime(t *testing.T, ctx context.Context, owner *pgxpoo
 		t.Fatal("canceled remote Agent Run produced a success Artifact", canceledArtifacts)
 	}
 	if submitCalls.Load() != 2 {
+		t.Fatal("remote Agent initial submit count drifted before input scenarios", submitCalls.Load())
+	}
+
+	// Successful supplemental input: Provider status creates the one durable
+	// request, run:input submits one canonical answer exactly once, and the next
+	// provider status converges through the existing terminal Artifact path.
+	dispatch("run_agent_input")
+	cycle, err = bootstrap.RunReviewedRuntimeCycle(ctx, logger, []rundomain.WorkspaceID{"ws_remote_agent"}, services)
+	must(t, err)
+	if cycle.ProviderReconciliationsHandled != 1 || inputCalls.Load() != 0 {
+		t.Fatal("Agent input_required status did not converge before delivery", cycle, inputCalls.Load())
+	}
+	var inputState, inputRequestState, answerSHA string
+	must(t, owner.QueryRow(ctx, `SELECT r.state,i.state,coalesce(i.answer_sha256,'') FROM execution.runs r JOIN execution.agent_input_requests i ON (i.workspace_id,i.run_id)=(r.workspace_id,r.id) WHERE r.workspace_id='ws_remote_agent' AND r.id='run_agent_input'`).Scan(&inputState, &inputRequestState, &answerSHA))
+	if inputState != "waiting_input" || inputRequestState != "pending" || answerSHA != "" {
+		t.Fatal("Agent input request did not persist safe waiting facts", inputState, inputRequestState, answerSHA)
+	}
+	caller := ports.Caller{WorkspaceID: "ws_remote_agent", SubjectID: "sa_remote_agent", CredentialID: "key_remote_agent"}
+	if _, err = inputRuntime.Submit(ctx, ports.Caller{WorkspaceID: "ws_remote_agent", SubjectID: "sa_remote_agent", CredentialID: "key_without_input"}, "run_agent_input", "input.req.success", []byte(`{"region":"eu"}`)); !errors.Is(err, ports.ErrForbidden) || inputCalls.Load() != 0 {
+		t.Fatal("caller without explicit run:input reached provider", err, inputCalls.Load())
+	}
+	if _, err = inputRuntime.Submit(ctx, caller, "run_agent_input", "input.req.success", []byte(`{"region":"ap"}`)); !errors.Is(err, runapp.ErrAgentInputInvalid) || inputCalls.Load() != 0 {
+		t.Fatal("answer violating persisted provider schema reached provider", err, inputCalls.Load())
+	}
+	inputRecord, err := inputRuntime.Submit(ctx, caller, "run_agent_input", "input.req.success", []byte(`{"region":"eu"}`))
+	must(t, err)
+	if inputRecord.State != "submitted" || inputCalls.Load() != 1 {
+		t.Fatal("Agent supplemental input did not submit exactly once", inputRecord, inputCalls.Load())
+	}
+	replayed, err := inputRuntime.Submit(ctx, caller, "run_agent_input", "input.req.success", []byte(`{"region":"eu"}`))
+	must(t, err)
+	if replayed.State != "submitted" || inputCalls.Load() != 1 {
+		t.Fatal("Agent supplemental input replay repeated remote side effect", replayed, inputCalls.Load())
+	}
+	if _, err = inputRuntime.Submit(ctx, caller, "run_agent_input", "input.req.success", []byte(`{"region":"us"}`)); !errors.Is(err, runapp.ErrAgentInputConflict) {
+		t.Fatal("different Agent input answer did not conflict", err)
+	}
+	must(t, owner.QueryRow(ctx, `SELECT r.state,i.state,i.answer_sha256 FROM execution.runs r JOIN execution.agent_input_requests i ON (i.workspace_id,i.run_id)=(r.workspace_id,r.id) WHERE r.workspace_id='ws_remote_agent' AND r.id='run_agent_input'`).Scan(&inputState, &inputRequestState, &answerSHA))
+	if inputState != "running" || inputRequestState != "submitted" || len(answerSHA) != 64 {
+		t.Fatal("accepted Agent input did not resume without storing answer bytes", inputState, inputRequestState, answerSHA)
+	}
+	cycle, err = bootstrap.RunReviewedRuntimeCycle(ctx, logger, []rundomain.WorkspaceID{"ws_remote_agent"}, services)
+	must(t, err)
+	must(t, owner.QueryRow(ctx, `SELECT r.state,a.kind,a.content_json::text FROM execution.runs r JOIN execution.artifacts a ON (a.workspace_id,a.run_id)=(r.workspace_id,r.id) WHERE r.workspace_id='ws_remote_agent' AND r.id='run_agent_input'`).Scan(&inputState, &artifactKind, &artifactContent))
+	if inputState != "succeeded" || artifactKind != "provider_result" || !strings.Contains(artifactContent, "agent-input-done") {
+		t.Fatal("Agent input Run did not return to existing terminal Artifact truth", inputState, artifactKind, artifactContent)
+	}
+
+	// Unknown delivery never retries. The durable sending claim becomes unknown
+	// and the Run becomes reconciling; replay of the same answer is refused
+	// without another provider request.
+	dispatch("run_agent_input_unknown")
+	cycle, err = bootstrap.RunReviewedRuntimeCycle(ctx, logger, []rundomain.WorkspaceID{"ws_remote_agent"}, services)
+	must(t, err)
+	if cycle.ProviderReconciliationsHandled != 1 {
+		t.Fatal("unknown-input fixture did not enter waiting_input")
+	}
+	_, err = inputRuntime.Submit(ctx, caller, "run_agent_input_unknown", "input.req.unknown", []byte(`{"approved":true}`))
+	if !errors.Is(err, runapp.ErrAgentInputOutcomeUnknown) || unknownInputCalls.Load() != 1 {
+		t.Fatal("unknown Agent input outcome was not preserved", err, unknownInputCalls.Load())
+	}
+	_, err = inputRuntime.Submit(ctx, caller, "run_agent_input_unknown", "input.req.unknown", []byte(`{"approved":true}`))
+	if !errors.Is(err, runapp.ErrAgentInputOutcomeUnknown) || unknownInputCalls.Load() != 1 {
+		t.Fatal("unknown Agent input replay reissued remote side effect", err, unknownInputCalls.Load())
+	}
+	must(t, owner.QueryRow(ctx, `SELECT r.state,i.state FROM execution.runs r JOIN execution.agent_input_requests i ON (i.workspace_id,i.run_id)=(r.workspace_id,r.id) WHERE r.workspace_id='ws_remote_agent' AND r.id='run_agent_input_unknown'`).Scan(&inputState, &inputRequestState))
+	if inputState != "reconciling" || inputRequestState != "unknown" {
+		t.Fatal("unknown Agent input did not fail closed into reconciliation", inputState, inputRequestState)
+	}
+	if submitCalls.Load() != 4 {
 		t.Fatal("remote Agent submit was retried or skipped unexpectedly", submitCalls.Load())
 	}
 
-	t.Log("real PostgreSQL remote Agent runtime verified: reviewed agent_http submit, mounted secret boundary, durable external task, status/result Artifact convergence, cancellation, and existing Run/Job truth")
+	t.Log("real PostgreSQL remote Agent runtime verified: submit/status/cancel plus one-shot supplemental input, idempotent replay, unknown no-resend, mounted secret boundary, and existing Run/Artifact truth")
 }

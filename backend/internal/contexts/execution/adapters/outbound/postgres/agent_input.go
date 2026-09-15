@@ -45,11 +45,11 @@ func recordAgentInputRequestTx(ctx context.Context, tx pgx.Tx, request applicati
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return application.AgentInputRequestRecord{}, application.ErrAgentInputUnavailable
 	}
-	var outstanding bool
-	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM execution.agent_input_requests WHERE workspace_id=$1 AND run_id=$2 AND state IN ('pending','sending','unknown'))`, string(request.WorkspaceID), string(request.RunID)).Scan(&outstanding); err != nil {
+	var existingRequest bool
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM execution.agent_input_requests WHERE workspace_id=$1 AND run_id=$2)`, string(request.WorkspaceID), string(request.RunID)).Scan(&existingRequest); err != nil {
 		return application.AgentInputRequestRecord{}, application.ErrAgentInputUnavailable
 	}
-	if outstanding {
+	if existingRequest {
 		return application.AgentInputRequestRecord{}, application.ErrAgentInputConflict
 	}
 	if before.State == domain.Running {

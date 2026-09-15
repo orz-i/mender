@@ -41,6 +41,7 @@ type Action string
 const (
 	ReadRun       Action = "run:read"
 	CancelRun     Action = "run:cancel"
+	InputRun      Action = "run:input"
 	ListRuns      Action = "run:list"
 	ReadRunEvents Action = "run:events:read"
 )
