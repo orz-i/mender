@@ -27,13 +27,9 @@ func TestPluginManifestValidatesControlledReferences(t *testing.T) {
 	if err != nil || len(body) == 0 {
 		t.Fatalf("canonical manifest unavailable: %v", err)
 	}
-	digest, err := m.SHA256()
-	if err != nil || len(digest) != 64 {
-		t.Fatalf("manifest digest unavailable: %q %v", digest, err)
-	}
-	digest2, _ := m.SHA256()
-	if digest != digest2 {
-		t.Fatal("manifest digest is not deterministic")
+	body2, _ := m.CanonicalJSON()
+	if string(body) != string(body2) {
+		t.Fatal("canonical manifest JSON is not deterministic")
 	}
 }
 

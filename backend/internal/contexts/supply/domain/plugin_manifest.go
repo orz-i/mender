@@ -1,20 +1,13 @@
 package domain
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"regexp"
 	"strings"
 	"unicode/utf8"
 )
 
-var (
-	ErrInvalidPluginManifest = errors.New("invalid plugin manifest")
-	pluginIDPattern          = regexp.MustCompile(`^[a-z][a-z0-9.-]{2,127}$`)
-	semanticVersionPattern   = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$`)
-)
+var ErrInvalidPluginManifest = errors.New("invalid plugin manifest")
 
 const PluginManifestAPIVersion = "mender.io/plugin/v1alpha1"
 
@@ -72,8 +65,52 @@ func validManifestText(value string, maxRunes int, required bool) bool {
 	return !required || len([]rune(value)) > 0
 }
 
+func validPluginID(value string) bool {
+	if len(value) < 3 || len(value) > 128 || value[0] < 'a' || value[0] > 'z' {
+		return false
+	}
+	for i := 1; i < len(value); i++ {
+		ch := value[i]
+		if !(ch >= 'a' && ch <= 'z' || ch >= '0' && ch <= '9' || ch == '.' || ch == '-') {
+			return false
+		}
+	}
+	return true
+}
+
+func validSemanticVersion(value string) bool {
+	core, prerelease, hasPrerelease := strings.Cut(value, "-")
+	parts := strings.Split(core, ".")
+	if len(parts) != 3 {
+		return false
+	}
+	for _, part := range parts {
+		if part == "" {
+			return false
+		}
+		for i := 0; i < len(part); i++ {
+			if part[i] < '0' || part[i] > '9' {
+				return false
+			}
+		}
+	}
+	if !hasPrerelease {
+		return true
+	}
+	if prerelease == "" {
+		return false
+	}
+	for i := 0; i < len(prerelease); i++ {
+		ch := prerelease[i]
+		if !(ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9' || ch == '.' || ch == '-') {
+			return false
+		}
+	}
+	return true
+}
+
 func (m PluginManifest) Validate() error {
-	if m.APIVersion != PluginManifestAPIVersion || !pluginIDPattern.MatchString(m.PluginID) || !semanticVersionPattern.MatchString(m.Version) || !validID(m.PublisherID) {
+	if m.APIVersion != PluginManifestAPIVersion || !validPluginID(m.PluginID) || !validSemanticVersion(m.Version) || !validID(m.PublisherID) {
 		return ErrInvalidPluginManifest
 	}
 	if !validManifestText(m.DisplayName, 200, true) || !validManifestText(m.Description, 4000, false) || len(m.Capabilities) < 1 || len(m.Capabilities) > 64 {
@@ -98,15 +135,6 @@ func (m PluginManifest) CanonicalJSON() ([]byte, error) {
 		return nil, err
 	}
 	return json.Marshal(m)
-}
-
-func (m PluginManifest) SHA256() (string, error) {
-	body, err := m.CanonicalJSON()
-	if err != nil {
-		return "", err
-	}
-	sum := sha256.Sum256(body)
-	return hex.EncodeToString(sum[:]), nil
 }
 
 type PluginVersionState string

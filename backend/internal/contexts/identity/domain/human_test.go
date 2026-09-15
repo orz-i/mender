@@ -22,8 +22,14 @@ func TestCatalogWorkspaceAuthorization(t *testing.T) {
 		if !membership.Allows("catalog:read") {
 			t.Fatal("active workspace role lost Catalog read", tc.role)
 		}
+		if !membership.Allows("publisher:read") {
+			t.Fatal("active workspace role lost Publisher read", tc.role)
+		}
 		if got := membership.Allows("catalog:manage"); got != tc.canManage {
 			t.Fatal("unexpected Catalog manage authorization", tc.role, got)
+		}
+		if got := membership.Allows("publisher:manage"); got != tc.canManage {
+			t.Fatal("unexpected Publisher manage authorization", tc.role, got)
 		}
 		if got := membership.Allows("catalog:review"); got != tc.canReview {
 			t.Fatal("unexpected Catalog review authorization", tc.role, got)
@@ -39,7 +45,7 @@ func TestCatalogWorkspaceAuthorization(t *testing.T) {
 		}
 	}
 	disabled := WorkspaceMembership{WorkspaceID: "ws_catalog", UserID: "user_catalog", Role: RoleOwner, Disabled: true, CreatedAt: createdAt}
-	if disabled.Allows("catalog:read") || disabled.Allows("catalog:manage") || disabled.Allows("catalog:review") || disabled.Allows("catalog:audit") || disabled.Allows("catalog:policy") || disabled.Allows("execution:governance") {
+	if disabled.Allows("catalog:read") || disabled.Allows("catalog:manage") || disabled.Allows("publisher:read") || disabled.Allows("publisher:manage") || disabled.Allows("catalog:review") || disabled.Allows("catalog:audit") || disabled.Allows("catalog:policy") || disabled.Allows("execution:governance") {
 		t.Fatal("disabled membership retained Catalog authority")
 	}
 }
