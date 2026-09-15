@@ -29,8 +29,8 @@ func GrantGovernanceReviewer(ctx context.Context, pool *pgxpool.Pool, role strin
 	for _, sql := range []string{
 		"GRANT USAGE ON SCHEMA governance,mender_meta TO " + id,
 		"GRANT SELECT ON mender_meta.schema_migrations TO " + id,
-		"GRANT SELECT ON governance.catalog_publication_approvals,governance.catalog_publication_audit_events,governance.catalog_publication_policy_revisions,governance.catalog_publication_policy_decisions TO " + id,
-		"GRANT EXECUTE ON FUNCTION governance.approve_catalog_publication(text,text,text,timestamptz,text),governance.reject_catalog_publication(text,text,text,timestamptz,text) TO " + id,
+		"GRANT SELECT ON governance.catalog_publication_approvals,governance.catalog_publication_audit_events,governance.catalog_publication_policy_revisions,governance.catalog_publication_policy_decisions,governance.plugin_publication_approvals,governance.plugin_publication_audit_events TO " + id,
+		"GRANT EXECUTE ON FUNCTION governance.approve_catalog_publication(text,text,text,timestamptz,text),governance.reject_catalog_publication(text,text,text,timestamptz,text),governance.approve_plugin_publication(text,text,text,timestamptz,text),governance.reject_plugin_publication(text,text,text,timestamptz,text) TO " + id,
 	} {
 		if _, err = tx.Exec(ctx, sql); err != nil {
 			return errors.New("governance-reviewer grant failed")

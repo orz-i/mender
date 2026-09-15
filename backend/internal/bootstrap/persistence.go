@@ -43,7 +43,13 @@ import (
 	identitypg "github.com/orz-i/mender/backend/internal/contexts/identity/adapters/outbound/postgres"
 	"github.com/orz-i/mender/backend/internal/contexts/identity/adapters/outbound/sessioncodec"
 	identityapp "github.com/orz-i/mender/backend/internal/contexts/identity/application"
+	supplyhttp "github.com/orz-i/mender/backend/internal/contexts/supply/adapters/inbound/httpapi"
 	"github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/filesecret"
+	supplyidentity "github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/identityaccess"
+	supplymanifesthash "github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/manifesthash"
+	supplypg "github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/postgres"
+	supplyrandom "github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/random"
+	supplyapp "github.com/orz-i/mender/backend/internal/contexts/supply/application"
 	"github.com/orz-i/mender/backend/internal/platform/httpserver"
 	database "github.com/orz-i/mender/backend/internal/platform/postgres"
 	cancelfacade "github.com/orz-i/mender/backend/internal/processes/admission/adapters/inbound/cancellation"
@@ -126,7 +132,10 @@ type APIConfig struct {
 	ConnectionManagerDatabaseURL            string
 	ConsoleCatalogEnabled                   bool
 	CatalogManagerDatabaseURL               string
+	ConsolePublisherEnabled                 bool
+	PublisherManagerDatabaseURL             string
 	AdminCatalogReviewEnabled               bool
+	AdminPluginReviewEnabled                bool
 	GovernanceReviewerDatabaseURL           string
 	AdminCatalogPolicyEnabled               bool
 	GovernancePolicyManagerDatabaseURL      string
@@ -286,6 +295,20 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	default:
 		return c, errors.New("MENDER_CONSOLE_CATALOG_ENABLED must be true or false")
 	}
+	switch getenv("MENDER_CONSOLE_PUBLISHER_ENABLED") {
+	case "", "false":
+	case "true":
+		if !c.ConsoleOIDCEnabled {
+			return APIConfig{}, errors.New("Console Publisher requires Console OIDC")
+		}
+		c.ConsolePublisherEnabled = true
+		c.PublisherManagerDatabaseURL = strings.TrimSpace(getenv("MENDER_PUBLISHER_MANAGER_DATABASE_URL"))
+		if c.PublisherManagerDatabaseURL == "" {
+			return APIConfig{}, errors.New("Console Publisher requires a separate publisher-manager database role")
+		}
+	default:
+		return c, errors.New("MENDER_CONSOLE_PUBLISHER_ENABLED must be true or false")
+	}
 	switch getenv("MENDER_ADMIN_CATALOG_REVIEW_ENABLED") {
 	case "", "false":
 	case "true":
@@ -299,6 +322,24 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 		}
 	default:
 		return c, errors.New("MENDER_ADMIN_CATALOG_REVIEW_ENABLED must be true or false")
+	}
+	switch getenv("MENDER_ADMIN_PLUGIN_REVIEW_ENABLED") {
+	case "", "false":
+	case "true":
+		if !c.ConsoleOIDCEnabled || !c.ConsolePublisherEnabled {
+			return APIConfig{}, errors.New("Admin Plugin review requires Console OIDC and Console Publisher")
+		}
+		c.AdminPluginReviewEnabled = true
+		reviewerURL := strings.TrimSpace(getenv("MENDER_GOVERNANCE_REVIEWER_DATABASE_URL"))
+		if reviewerURL == "" {
+			return APIConfig{}, errors.New("Admin Plugin review requires a separate governance-reviewer database role")
+		}
+		if c.GovernanceReviewerDatabaseURL != "" && c.GovernanceReviewerDatabaseURL != reviewerURL {
+			return APIConfig{}, errors.New("publication review features must share the configured governance-reviewer role")
+		}
+		c.GovernanceReviewerDatabaseURL = reviewerURL
+	default:
+		return c, errors.New("MENDER_ADMIN_PLUGIN_REVIEW_ENABLED must be true or false")
 	}
 	switch getenv("MENDER_ADMIN_CATALOG_POLICY_ENABLED") {
 	case "", "false":
@@ -679,6 +720,7 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	var browserSessionPool *pgxpool.Pool
 	var connectionManagerPool *pgxpool.Pool
 	var catalogManagerPool *pgxpool.Pool
+	var publisherManagerPool *pgxpool.Pool
 	var governanceReviewerPool *pgxpool.Pool
 	var governancePolicyManagerPool *pgxpool.Pool
 	var callbackObserverPool *pgxpool.Pool
@@ -709,6 +751,9 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 		}
 		if governanceReviewerPool != nil {
 			governanceReviewerPool.Close()
+		}
+		if publisherManagerPool != nil {
+			publisherManagerPool.Close()
 		}
 		if catalogManagerPool != nil {
 			catalogManagerPool.Close()
@@ -1155,14 +1200,50 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 			}
 			registers = append(registers, openAPIImportHandler.Register)
 		}
-		if c.AdminCatalogReviewEnabled {
+		if c.ConsolePublisherEnabled {
+			publisherManagerPool, buildErr = database.Open(start, c.PublisherManagerDatabaseURL)
+			if buildErr != nil {
+				return failed(buildErr)
+			}
+			publisherCfg := publisherManagerPool.Config().ConnConfig
+			if readerCfg.Host != publisherCfg.Host || readerCfg.Port != publisherCfg.Port || readerCfg.Database != publisherCfg.Database || publisherCfg.User == readerCfg.User || publisherCfg.User == sessionCfg.User || (catalogManagerPool != nil && publisherCfg.User == catalogManagerPool.Config().ConnConfig.User) || (connectionManagerPool != nil && publisherCfg.User == connectionManagerPool.Config().ConnConfig.User) || (commerceObserverPool != nil && publisherCfg.User == commerceObserverPool.Config().ConnConfig.User) {
+				return failed(errors.New("Console Publisher requires the same database with a distinct restricted role"))
+			}
+			if buildErr = migrations.Verify(start, publisherManagerPool); buildErr != nil {
+				return failed(buildErr)
+			}
+			if buildErr = database.PublisherManagerRole(start, publisherManagerPool); buildErr != nil {
+				return failed(buildErr)
+			}
+			publisherAccess := supplyidentity.NewHuman(humanIdentity)
+			publisherRepository := supplypg.NewPublicationRepository(publisherManagerPool)
+			publisherService, serviceErr := supplyapp.NewPublisherService(publisherRepository, publisherAccess, supplymanifesthash.New())
+			if serviceErr != nil {
+				return failed(serviceErr)
+			}
+			publisherHandler, handlerErr := supplyhttp.NewPublication(publisherService, publisherAccess)
+			if handlerErr != nil {
+				return failed(handlerErr)
+			}
+			registers = append(registers, publisherHandler.Register)
+			publisherWorkflow, serviceErr := supplyapp.NewPublicationWorkflow(publisherRepository, publisherAccess, supplyrandom.PublicationIDs{}, systemClock{})
+			if serviceErr != nil {
+				return failed(serviceErr)
+			}
+			workflowHandler, handlerErr := supplyhttp.NewPublicationWorkflow(publisherWorkflow, publisherAccess)
+			if handlerErr != nil {
+				return failed(handlerErr)
+			}
+			registers = append(registers, workflowHandler.Register)
+		}
+		if c.AdminCatalogReviewEnabled || c.AdminPluginReviewEnabled {
 			governanceReviewerPool, buildErr = database.Open(start, c.GovernanceReviewerDatabaseURL)
 			if buildErr != nil {
 				return failed(buildErr)
 			}
 			reviewerCfg := governanceReviewerPool.Config().ConnConfig
-			if readerCfg.Host != reviewerCfg.Host || readerCfg.Port != reviewerCfg.Port || readerCfg.Database != reviewerCfg.Database || reviewerCfg.User == readerCfg.User || reviewerCfg.User == sessionCfg.User || (catalogManagerPool != nil && reviewerCfg.User == catalogManagerPool.Config().ConnConfig.User) || (connectionManagerPool != nil && reviewerCfg.User == connectionManagerPool.Config().ConnConfig.User) || (commerceObserverPool != nil && reviewerCfg.User == commerceObserverPool.Config().ConnConfig.User) {
-				return failed(errors.New("Admin Catalog review requires the same database with a distinct restricted role"))
+			if readerCfg.Host != reviewerCfg.Host || readerCfg.Port != reviewerCfg.Port || readerCfg.Database != reviewerCfg.Database || reviewerCfg.User == readerCfg.User || reviewerCfg.User == sessionCfg.User || (catalogManagerPool != nil && reviewerCfg.User == catalogManagerPool.Config().ConnConfig.User) || (publisherManagerPool != nil && reviewerCfg.User == publisherManagerPool.Config().ConnConfig.User) || (connectionManagerPool != nil && reviewerCfg.User == connectionManagerPool.Config().ConnConfig.User) || (commerceObserverPool != nil && reviewerCfg.User == commerceObserverPool.Config().ConnConfig.User) {
+				return failed(errors.New("Admin publication review requires the same database with a distinct restricted role"))
 			}
 			if buildErr = migrations.Verify(start, governanceReviewerPool); buildErr != nil {
 				return failed(buildErr)
@@ -1172,24 +1253,37 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 			}
 			reviewAccess := governanceidentity.New(humanIdentity)
 			reviewRepository := governancepg.NewPublicationReview(governanceReviewerPool)
-			reviewService, serviceErr := governanceapp.New(reviewRepository, reviewAccess, systemClock{})
-			if serviceErr != nil {
-				return failed(serviceErr)
+			if c.AdminCatalogReviewEnabled {
+				reviewService, serviceErr := governanceapp.New(reviewRepository, reviewAccess, systemClock{})
+				if serviceErr != nil {
+					return failed(serviceErr)
+				}
+				reviewHandler, handlerErr := governancehttp.NewPublicationReview(reviewService, reviewAccess)
+				if handlerErr != nil {
+					return failed(handlerErr)
+				}
+				registers = append(registers, reviewHandler.Register)
+				historyService, serviceErr := governanceapp.NewHistory(reviewRepository, reviewAccess)
+				if serviceErr != nil {
+					return failed(serviceErr)
+				}
+				historyHandler, handlerErr := governancehttp.NewPublicationHistory(historyService, reviewAccess)
+				if handlerErr != nil {
+					return failed(handlerErr)
+				}
+				registers = append(registers, historyHandler.Register)
 			}
-			reviewHandler, handlerErr := governancehttp.NewPublicationReview(reviewService, reviewAccess)
-			if handlerErr != nil {
-				return failed(handlerErr)
+			if c.AdminPluginReviewEnabled {
+				pluginReviewService, serviceErr := governanceapp.NewPluginPublicationReview(reviewRepository, reviewAccess, systemClock{})
+				if serviceErr != nil {
+					return failed(serviceErr)
+				}
+				pluginReviewHandler, handlerErr := governancehttp.NewPluginPublicationReview(pluginReviewService, reviewAccess)
+				if handlerErr != nil {
+					return failed(handlerErr)
+				}
+				registers = append(registers, pluginReviewHandler.Register)
 			}
-			registers = append(registers, reviewHandler.Register)
-			historyService, serviceErr := governanceapp.NewHistory(reviewRepository, reviewAccess)
-			if serviceErr != nil {
-				return failed(serviceErr)
-			}
-			historyHandler, handlerErr := governancehttp.NewPublicationHistory(historyService, reviewAccess)
-			if handlerErr != nil {
-				return failed(handlerErr)
-			}
-			registers = append(registers, historyHandler.Register)
 		}
 		if c.AdminCatalogPolicyEnabled {
 			governancePolicyManagerPool, buildErr = database.Open(start, c.GovernancePolicyManagerDatabaseURL)
@@ -1437,6 +1531,14 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 				return err
 			}
 			if err := database.CatalogManagerRole(ctx, catalogManagerPool); err != nil {
+				return err
+			}
+		}
+		if publisherManagerPool != nil {
+			if err := migrations.Verify(ctx, publisherManagerPool); err != nil {
+				return err
+			}
+			if err := database.PublisherManagerRole(ctx, publisherManagerPool); err != nil {
 				return err
 			}
 		}

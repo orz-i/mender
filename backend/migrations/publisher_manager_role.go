@@ -28,7 +28,7 @@ func GrantPublisherManager(ctx context.Context, pool *pgxpool.Pool, role string)
 	}
 	defer rollback(tx)
 	for _, sql := range []string{
-		"GRANT USAGE ON SCHEMA supply,mender_meta TO " + id,
+		"GRANT USAGE ON SCHEMA supply,governance,mender_meta TO " + id,
 		"GRANT SELECT ON mender_meta.schema_migrations TO " + id,
 		"GRANT SELECT ON supply.publishers,supply.plugins,supply.plugin_versions TO " + id,
 		"GRANT INSERT (workspace_id,id,owner_user_id,display_name) ON supply.publishers TO " + id,
@@ -38,6 +38,7 @@ func GrantPublisherManager(ctx context.Context, pool *pgxpool.Pool, role string)
 		"GRANT UPDATE (manifest_json,manifest_sha256) ON supply.plugin_versions TO " + id,
 		"GRANT DELETE ON supply.plugin_versions TO " + id,
 		"GRANT EXECUTE ON FUNCTION supply.plugin_version_publish_issues(text,text,text) TO " + id,
+		"GRANT EXECUTE ON FUNCTION governance.submit_plugin_publication(text,text,text,text,text,timestamptz,timestamptz),governance.publish_approved_plugin(text,text,text,text,timestamptz) TO " + id,
 	} {
 		if _, err = tx.Exec(ctx, sql); err != nil {
 			return errors.New("publisher-manager grant failed")

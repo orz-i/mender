@@ -339,4 +339,58 @@ func (r *PublicationRepository) PluginVersionPreflight(ctx context.Context, work
 	return result, nil
 }
 
+func fetchPluginVersion(ctx context.Context, tx pgx.Tx, workspace, pluginID, version string) (application.PluginVersion, error) {
+	item, err := scanPluginVersion(tx.QueryRow(ctx, `SELECT `+pluginVersionProjection+` FROM supply.plugin_versions WHERE workspace_id=$1 AND plugin_id=$2 AND version=$3`, workspace, pluginID, version))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return application.PluginVersion{}, application.ErrPublicationNotFound
+	}
+	if err != nil {
+		return application.PluginVersion{}, publicationWriteError(err)
+	}
+	return item, nil
+}
+
+func (r *PublicationRepository) SubmitPluginPublication(ctx context.Context, workspace, actor, pluginID, version, approvalID string, at, expires time.Time) (application.PluginVersion, error) {
+	tx, err := r.scoped(ctx, workspace)
+	if err != nil {
+		return application.PluginVersion{}, err
+	}
+	defer rollbackPublication(tx)
+	if _, err = tx.Exec(ctx, `SELECT governance.submit_plugin_publication($1,$2,$3,$4,$5,$6,$7)`, workspace, approvalID, pluginID, version, actor, at, expires); err != nil {
+		return application.PluginVersion{}, publicationWriteError(err)
+	}
+	item, err := fetchPluginVersion(ctx, tx, workspace, pluginID, version)
+	if err != nil {
+		return application.PluginVersion{}, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return application.PluginVersion{}, application.ErrPublicationUnavailable
+	}
+	return item, nil
+}
+
+func (r *PublicationRepository) PublishPluginPublication(ctx context.Context, workspace, actor, pluginID, version string, at time.Time) (string, application.PluginVersion, error) {
+	tx, err := r.scoped(ctx, workspace)
+	if err != nil {
+		return "", application.PluginVersion{}, err
+	}
+	defer rollbackPublication(tx)
+	var approvalID *string
+	if err = tx.QueryRow(ctx, `SELECT governance.publish_approved_plugin($1,$2,$3,$4,$5)`, workspace, pluginID, version, actor, at).Scan(&approvalID); err != nil {
+		return "", application.PluginVersion{}, publicationWriteError(err)
+	}
+	if approvalID == nil || *approvalID == "" {
+		return "", application.PluginVersion{}, application.ErrPublicationConflict
+	}
+	item, err := fetchPluginVersion(ctx, tx, workspace, pluginID, version)
+	if err != nil {
+		return "", application.PluginVersion{}, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return "", application.PluginVersion{}, application.ErrPublicationUnavailable
+	}
+	return *approvalID, item, nil
+}
+
 var _ application.PublisherRepository = (*PublicationRepository)(nil)
+var _ application.PluginPublicationWorkflowRepository = (*PublicationRepository)(nil)

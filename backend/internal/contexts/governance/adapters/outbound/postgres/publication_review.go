@@ -187,3 +187,79 @@ func (r *PublicationReviewRepository) ListPublicationHistory(ctx context.Context
 
 var _ application.Repository = (*PublicationReviewRepository)(nil)
 var _ application.HistoryRepository = (*PublicationReviewRepository)(nil)
+
+const pluginApprovalCols = `workspace_id,id,plugin_id,version,target_revision,requester_user_id,state,requested_at,expires_at,coalesce(reviewer_user_id,''),reviewed_at,decision_note,consumed_at`
+
+func scanPluginApproval(row pgx.Row) (application.PluginPublicationApproval, error) {
+	var a application.PluginPublicationApproval
+	var reviewed, consumed *time.Time
+	err := row.Scan(&a.WorkspaceID, &a.ID, &a.PluginID, &a.Version, &a.TargetRevision, &a.RequesterUserID, &a.State, &a.RequestedAt, &a.ExpiresAt, &a.ReviewerUserID, &reviewed, &a.DecisionNote, &consumed)
+	if reviewed != nil {
+		a.ReviewedAt = *reviewed
+	}
+	if consumed != nil {
+		a.ConsumedAt = *consumed
+	}
+	return a, mapErr(err)
+}
+
+func (r *PublicationReviewRepository) ListPluginPublicationApprovals(ctx context.Context, workspace string, at time.Time) ([]application.PluginPublicationApproval, error) {
+	tx, err := r.begin(ctx, workspace)
+	if err != nil {
+		return nil, err
+	}
+	defer rollback(tx)
+	rows, err := tx.Query(ctx, `SELECT workspace_id,id,plugin_id,version,target_revision,requester_user_id,CASE WHEN state IN ('pending','approved') AND expires_at<=$2 THEN 'expired' ELSE state END,requested_at,expires_at,coalesce(reviewer_user_id,''),reviewed_at,decision_note,consumed_at FROM governance.plugin_publication_approvals WHERE workspace_id=$1 ORDER BY requested_at DESC,id`, workspace, at)
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	defer rows.Close()
+	items := []application.PluginPublicationApproval{}
+	for rows.Next() {
+		a, scanErr := scanPluginApproval(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		items = append(items, a)
+	}
+	if rows.Err() != nil {
+		return nil, application.ErrUnavailable
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return nil, application.ErrUnavailable
+	}
+	return items, nil
+}
+
+func (r *PublicationReviewRepository) ApprovePluginPublication(ctx context.Context, workspace, id, reviewer, note string, at time.Time) (application.PluginPublicationApproval, error) {
+	return r.decidePlugin(ctx, workspace, id, reviewer, note, at, true)
+}
+
+func (r *PublicationReviewRepository) RejectPluginPublication(ctx context.Context, workspace, id, reviewer, note string, at time.Time) (application.PluginPublicationApproval, error) {
+	return r.decidePlugin(ctx, workspace, id, reviewer, note, at, false)
+}
+
+func (r *PublicationReviewRepository) decidePlugin(ctx context.Context, workspace, id, reviewer, note string, at time.Time, approve bool) (application.PluginPublicationApproval, error) {
+	tx, err := r.begin(ctx, workspace)
+	if err != nil {
+		return application.PluginPublicationApproval{}, err
+	}
+	defer rollback(tx)
+	statement := `SELECT governance.reject_plugin_publication($1,$2,$3,$4,$5)`
+	if approve {
+		statement = `SELECT governance.approve_plugin_publication($1,$2,$3,$4,$5)`
+	}
+	if _, err = tx.Exec(ctx, statement, workspace, id, reviewer, at, note); err != nil {
+		return application.PluginPublicationApproval{}, mapErr(err)
+	}
+	a, err := scanPluginApproval(tx.QueryRow(ctx, `SELECT `+pluginApprovalCols+` FROM governance.plugin_publication_approvals WHERE workspace_id=$1 AND id=$2`, workspace, id))
+	if err != nil {
+		return application.PluginPublicationApproval{}, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return application.PluginPublicationApproval{}, application.ErrUnavailable
+	}
+	return a, nil
+}
+
+var _ application.PluginPublicationReviewRepository = (*PublicationReviewRepository)(nil)
