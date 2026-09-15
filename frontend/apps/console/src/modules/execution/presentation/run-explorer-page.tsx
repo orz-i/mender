@@ -27,7 +27,7 @@ function stateLabel(state: RunState) { return stateLabels[state] ?? state; }
 const remoteStateFacts: Record<RunState, string> = {
   queued: '服务端已受理 Run，但尚未确认远程执行方已经接收任务。',
   running: '服务端已确认远程执行方受理。对于异步 Provider / Agent，这只表示任务已在上游运行，不代表已经完成。',
-  waiting_input: '服务端明确投影为等待输入；当前页面不会自行构造补充输入或假定远程任务仍可交互。',
+  waiting_input: '服务端明确投影为等待输入；只有服务端同时提供受保护的 supplemental input request 时，页面才允许按其 schema 提交一次输入。',
   cancel_requested: '服务端已经持久化取消意图，但远程 Provider / Agent 是否停止仍未确认。不要把该状态当作 canceled。',
   reconciling: '远程提交或结果存在不确定性，服务端正在收敛事实；Mender 不会把未知结果显示为成功，也不会盲目重发副作用请求。',
   succeeded: '服务端已经确认成功终态；受审远程结果通过既有 provider_result Artifact 暴露，而不是通过 Provider/Agent 内部任务句柄。',
@@ -75,6 +75,7 @@ export function RunExplorerPage({ gateway }: { gateway: RunGateway }) {
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
   const [selectedArtifact, setSelectedArtifact] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState('');
+  const [agentInputAnswer, setAgentInputAnswer] = useState('{}');
 
   const clearAccess = () => {
     void queryClient.cancelQueries({ queryKey: ['run-list'] });
@@ -84,6 +85,7 @@ export function RunExplorerPage({ gateway }: { gateway: RunGateway }) {
     void queryClient.cancelQueries({ queryKey: ['run-artifact-content'] });
     void queryClient.cancelQueries({ queryKey: ['run-artifact-object-status'] });
     void queryClient.cancelQueries({ queryKey: ['run-cost'] });
+    void queryClient.cancelQueries({ queryKey: ['run-agent-input'] });
     queryClient.removeQueries({ queryKey: ['run-list'] });
     queryClient.removeQueries({ queryKey: ['run-detail'] });
     queryClient.removeQueries({ queryKey: ['run-events'] });
@@ -91,7 +93,8 @@ export function RunExplorerPage({ gateway }: { gateway: RunGateway }) {
     queryClient.removeQueries({ queryKey: ['run-artifact-content'] });
     queryClient.removeQueries({ queryKey: ['run-artifact-object-status'] });
     queryClient.removeQueries({ queryKey: ['run-cost'] });
-    setAccess(null); setSelectedRun(null); setSelectedArtifact(null); setCursor(null); setCancelReason('');
+    queryClient.removeQueries({ queryKey: ['run-agent-input'] });
+    setAccess(null); setSelectedRun(null); setSelectedArtifact(null); setCursor(null); setCancelReason(''); setAgentInputAnswer('{}');
   };
 
   const connectMutation = useMutation({
@@ -104,6 +107,32 @@ export function RunExplorerPage({ gateway }: { gateway: RunGateway }) {
       clearAccess();
       setAccess({ ...delegation, sessionKey: accessRevision.current });
     },
+  });
+
+  const agentInputMutation = useMutation({
+    mutationFn: async () => {
+      if (!access || !selectedRun || !agentInputQuery.data) throw new Error('当前 Run 没有可提交的 supplemental input');
+      let answer: unknown;
+      try { answer = JSON.parse(agentInputAnswer); } catch { throw new Error('Supplemental input 必须是有效 JSON object'); }
+      if (typeof answer !== 'object' || answer === null || Array.isArray(answer)) throw new Error('Supplemental input 必须是 JSON object');
+      return gateway.submitAgentInput(access, selectedRun, agentInputQuery.data.inputRequestId, answer as Record<string, unknown>);
+    },
+    onSuccess: async () => {
+      setAgentInputAnswer('{}');
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['run-agent-input', access?.sessionKey] }),
+        queryClient.invalidateQueries({ queryKey: ['run-detail', access?.sessionKey] }),
+        queryClient.invalidateQueries({ queryKey: ['run-events', access?.sessionKey] }),
+        queryClient.invalidateQueries({ queryKey: ['run-list', access?.sessionKey] }),
+      ]);
+    },
+  });
+
+  const agentInputQuery = useQuery({
+    queryKey: ['run-agent-input', access?.sessionKey, access?.workspaceId, selectedRun],
+    enabled: access !== null && selectedRun !== null,
+    retry: false,
+    queryFn: ({ signal }) => gateway.agentInput(access!, selectedRun!, signal),
   });
 
   const costQuery = useQuery({
@@ -189,7 +218,9 @@ export function RunExplorerPage({ gateway }: { gateway: RunGateway }) {
   const eventThroughVersion = eventPages[0]?.throughVersion;
   const artifacts = artifactsQuery.data ?? [];
   const cost = costQuery.data;
+  const agentInput = agentInputQuery.data;
   const canCancel = Boolean(detail && access?.canCancel && canRequestCancellation(detail.state));
+  const canSubmitAgentInput = Boolean(detail?.state === 'waiting_input' && access?.canInput && agentInput?.state === 'pending');
   const activeNote = access ? `短期委托至 ${formatTime(access.expiresAt)}` : '尚未建立短期委托';
 
   return <>
@@ -197,9 +228,9 @@ export function RunExplorerPage({ gateway }: { gateway: RunGateway }) {
     <div className="page-heading-row"><div><h1>运行记录</h1><p className="lead">查看受保护的 Run 生命周期、事件与结果元数据。HTTP Tool 与受审 Remote Agent 共用同一 Run / Job / Artifact 真源；页面不会根据 Provider ID 或结果内容猜测上游终态。</p></div><span className="connection-state">{activeNote}</span></div>
 
     <section className="credential-panel" aria-labelledby="run-access-heading">
-      <div><h2 id="run-access-heading">短期 Run 委托</h2><p>浏览器先使用 HttpOnly 人类会话取得当前 Workspace 权限，再显式申请短时 Run delegation。OIDC Cookie 本身不能读取或取消 Run；delegation token 只保存在当前页面内存并自动过期。</p></div>
+      <div><h2 id="run-access-heading">短期 Run 委托</h2><p>浏览器先使用 HttpOnly 人类会话取得当前 Workspace 权限，再显式申请短时 Run delegation。OIDC Cookie 本身不能读取、取消或提交 supplemental input；delegation token 只保存在当前页面内存并自动过期。</p></div>
       <div className="credential-form run-delegation-form">
-        <div><span className="section-kicker">Workspace</span><strong className="mono">{workspace || '未选择'}</strong><p className="muted-copy">{access?.canCancel ? '当前委托：读取 + 取消' : access ? '当前委托：只读' : '权限范围会按当前 Membership 由服务端重新裁决。'}</p></div>
+        <div><span className="section-kicker">Workspace</span><strong className="mono">{workspace || '未选择'}</strong><p className="muted-copy">{access?.canInput ? '当前委托：读取 + 取消 + supplemental input' : access?.canCancel ? '当前委托：读取 + 取消' : access ? '当前委托：只读' : '权限范围会按当前 Membership 由服务端重新裁决。'}</p></div>
         <div className="credential-actions">{!access ? <Button type="button" disabled={!workspace || connectMutation.isPending} onClick={() => connectMutation.mutate()}>{connectMutation.isPending ? '正在建立…' : '建立短期访问'}</Button> : <Button type="button" variant="outline" disabled={disconnectMutation.isPending} onClick={() => disconnectMutation.mutate()}>{disconnectMutation.isPending ? '正在撤销…' : '撤销短期访问'}</Button>}<Button asChild type="button" variant="outline"><Link to="/workspaces">切换 Workspace</Link></Button></div>
         {connectMutation.error && <div className="error-panel" role="alert">{errorMessage(connectMutation.error)}</div>}
         {disconnectMutation.error && <div className="error-panel" role="alert">{errorMessage(disconnectMutation.error)}</div>}
@@ -215,7 +246,7 @@ export function RunExplorerPage({ gateway }: { gateway: RunGateway }) {
         {!access && <div className="empty-state"><strong>建立短期委托后读取 Run</strong><span>没有 Machine Key 输入，也不会把 OIDC Cookie 当作 Run 权限。</span></div>}
         {access && listQuery.isPending && <div className="empty-state"><strong>正在读取 Run…</strong></div>}
         {listQuery.error && <div className="error-panel" role="alert">{errorMessage(listQuery.error)}</div>}
-        {listQuery.data && <RunList items={listQuery.data.items} selected={selectedRun} onSelect={(id) => { setSelectedRun(id); setSelectedArtifact(null); }} />}
+        {listQuery.data && <RunList items={listQuery.data.items} selected={selectedRun} onSelect={(id) => { setSelectedRun(id); setSelectedArtifact(null); setAgentInputAnswer('{}'); }} />}
         {listQuery.data && <div className="pagination-row"><span>每页最多 20 项</span><div>{cursor && <Button type="button" variant="outline" onClick={() => { setCursor(null); setSelectedRun(null); }}>回到第一页</Button>} {listQuery.data.nextCursor && <Button type="button" variant="outline" onClick={() => { setCursor(listQuery.data.nextCursor); setSelectedRun(null); }}>下一页</Button>}</div></div>}
       </div>
 
@@ -227,6 +258,15 @@ export function RunExplorerPage({ gateway }: { gateway: RunGateway }) {
           <div className="detail-title"><div><p className="section-kicker">Run</p><h2 className="mono">{detail.id}</h2></div><span className={`state-badge state-${detail.state}`}>{stateLabel(detail.state)}</span></div>
           <div className="success-panel" role="note"><strong>服务端远程执行事实</strong><span>{remoteStateFacts[detail.state]}</span></div>
           <dl className="fact-grid"><div><dt>版本</dt><dd>v{detail.version}</dd></div><div><dt>创建</dt><dd>{formatTime(detail.createdAt)}</dd></div><div><dt>更新</dt><dd>{formatTime(detail.updatedAt)}</dd></div><div><dt>事件快照</dt><dd>{eventThroughVersion ? `v${eventThroughVersion}` : '—'}</dd></div></dl>
+          <section className="detail-section"><div className="detail-section-heading"><h3>Remote Agent supplemental input</h3><span className="muted-copy">服务端 request/schema 真源</span></div>
+            {agentInputQuery.isPending && <p className="muted-copy">正在读取 supplemental input 请求…</p>}
+            {agentInputQuery.error && <div className="error-panel" role="alert">{errorMessage(agentInputQuery.error)}</div>}
+            {!agentInputQuery.isPending && !agentInputQuery.error && !agentInput && <p className="muted-copy">该 Run 没有可读的 supplemental input 请求。页面不会从 waiting_input 文案或 Provider 信息自行构造请求。</p>}
+            {agentInput && <div className="empty-state compact"><strong>{agentInput.prompt}</strong><span>request <span className="mono">{agentInput.inputRequestId}</span> · state {agentInput.state} · {formatTime(agentInput.updatedAt)}</span><details><summary>服务端 JSON Schema</summary><pre>{JSON.stringify(agentInput.inputSchema, null, 2)}</pre></details>
+              {canSubmitAgentInput ? <><label className="cancel-reason">JSON object answer<textarea value={agentInputAnswer} onChange={(event) => setAgentInputAnswer(event.target.value)} maxLength={65536} spellCheck={false} placeholder='{"region":"eu"}' /></label><Button type="button" variant="outline" disabled={agentInputMutation.isPending} onClick={() => agentInputMutation.mutate()}>{agentInputMutation.isPending ? '正在提交…' : '提交 supplemental input'}</Button></> : <span>只有服务端 request state=pending、Run=waiting_input 且委托包含 run:input 时才允许提交。sending/unknown 不会提供“重试发送”按钮。</span>}
+              {agentInputMutation.error && <span className="error-panel" role="alert">{errorMessage(agentInputMutation.error)}</span>}
+            </div>}
+          </section>
           <section className="detail-section quota-cost-section"><div className="detail-section-heading"><h3>Quota cost</h3><span className="muted-copy">quota_only · 非支付账务</span></div>
             {costQuery.isPending && <p className="muted-copy">正在读取 reservation / settlement 事实…</p>}
             {costQuery.error && <div className="error-panel" role="alert">{errorMessage(costQuery.error)}</div>}

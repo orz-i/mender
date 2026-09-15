@@ -42,7 +42,26 @@ func scanAgentInputTarget(row rowScanner) (application.AgentInputSubmissionTarge
 
 func scanAgentInputSubmissionRecord(row rowScanner) (application.AgentInputSubmissionRecord, error) {
 	var record application.AgentInputSubmissionRecord
-	return record, row.Scan(&record.WorkspaceID, &record.RunID, &record.InputRequestID, &record.State, &record.RequestedAt, &record.UpdatedAt)
+	return record, row.Scan(&record.WorkspaceID, &record.RunID, &record.InputRequestID, &record.State, &record.Prompt, &record.InputSchemaJSON, &record.RequestedAt, &record.UpdatedAt)
+}
+
+func (r *AgentInputs) FindAgentInputPublic(ctx context.Context, workspace domain.WorkspaceID, runID domain.RunID) (application.AgentInputSubmissionRecord, error) {
+	tx, err := r.scoped(ctx, workspace)
+	if err != nil {
+		return application.AgentInputSubmissionRecord{}, err
+	}
+	defer rollback(tx)
+	record, err := scanAgentInputSubmissionRecord(tx.QueryRow(ctx, `SELECT workspace_id,run_id,input_request_id,state,prompt,input_schema_json::text,requested_at,updated_at FROM execution.agent_input_requests WHERE workspace_id=$1 AND run_id=$2`, string(workspace), string(runID)))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return application.AgentInputSubmissionRecord{}, application.ErrNoAgentInput
+	}
+	if err != nil {
+		return application.AgentInputSubmissionRecord{}, application.ErrAgentInputUnavailable
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return application.AgentInputSubmissionRecord{}, application.ErrAgentInputUnavailable
+	}
+	return record, nil
 }
 
 const agentInputTargetSQL = `SELECT workspace_id,run_id,attempt_no,input_request_id,provider_id,provider_request_id,external_task_id,input_schema_json::text,state,coalesce(answer_sha256,''),coalesce(submission_id,'') FROM execution.agent_input_requests WHERE workspace_id=$1 AND run_id=$2 AND input_request_id=$3`
@@ -78,7 +97,7 @@ func loadLockedAgentInput(ctx context.Context, tx pgx.Tx, target application.Age
 	if err != nil || !current.Valid() || !exactAgentInputTarget(current, target) {
 		return application.AgentInputSubmissionTarget{}, application.AgentInputSubmissionRecord{}, application.ErrAgentInputConflict
 	}
-	record, err := scanAgentInputSubmissionRecord(tx.QueryRow(ctx, `SELECT workspace_id,run_id,input_request_id,state,requested_at,updated_at FROM execution.agent_input_requests WHERE workspace_id=$1 AND run_id=$2 AND input_request_id=$3`, string(target.WorkspaceID), string(target.RunID), target.InputRequestID))
+	record, err := scanAgentInputSubmissionRecord(tx.QueryRow(ctx, `SELECT workspace_id,run_id,input_request_id,state,prompt,input_schema_json::text,requested_at,updated_at FROM execution.agent_input_requests WHERE workspace_id=$1 AND run_id=$2 AND input_request_id=$3`, string(target.WorkspaceID), string(target.RunID), target.InputRequestID))
 	if err != nil {
 		return application.AgentInputSubmissionTarget{}, application.AgentInputSubmissionRecord{}, application.ErrAgentInputUnavailable
 	}

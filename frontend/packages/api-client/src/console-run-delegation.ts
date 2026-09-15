@@ -1,6 +1,6 @@
 import { MenderApiError } from './runs.ts';
 
-export type RunDelegationScope = 'run:read' | 'run:cancel';
+export type RunDelegationScope = 'run:read' | 'run:cancel' | 'run:input';
 
 export interface ConsoleRunDelegation {
   delegationId: string;
@@ -34,7 +34,7 @@ async function errorFrom(response: Response) {
 }
 
 function validateScopes(scopes: RunDelegationScope[]) {
-  if (scopes.length < 1 || scopes.length > 2 || new Set(scopes).size !== scopes.length || scopes.some((scope) => scope !== 'run:read' && scope !== 'run:cancel')) {
+  if (scopes.length < 1 || scopes.length > 3 || new Set(scopes).size !== scopes.length || scopes.some((scope) => scope !== 'run:read' && scope !== 'run:cancel' && scope !== 'run:input')) {
     throw new Error('Run delegation scope 无效');
   }
 }

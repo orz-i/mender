@@ -80,6 +80,14 @@ import (
 type APIConfig struct {
 	RunAPIEnabled                           bool
 	RunReadAPIEnabled                       bool
+	AgentInputAPIEnabled                    bool
+	AgentInputDatabaseURL                   string
+	AgentInputExecutorDatabaseURL           string
+	AgentInputSecretRoot                    string
+	AgentInputProviderIDs                   []string
+	AgentInputAllowedHosts                  []string
+	AgentInputAllowHTTP                     bool
+	AgentInputAllowLoopback                 bool
 	DatabaseURL                             string
 	CursorSigningKey                        []byte
 	ArtifactObjectReadEnabled               bool
@@ -476,6 +484,36 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	default:
 		return c, errors.New("MENDER_RUN_READ_API_ENABLED must be true or false")
 	}
+	switch getenv("MENDER_AGENT_INPUT_API_ENABLED") {
+	case "", "false":
+	case "true":
+		c.AgentInputAPIEnabled = true
+		c.AgentInputDatabaseURL = strings.TrimSpace(getenv("MENDER_AGENT_INPUT_DATABASE_URL"))
+		c.AgentInputExecutorDatabaseURL = strings.TrimSpace(getenv("MENDER_AGENT_INPUT_EXECUTOR_DATABASE_URL"))
+		c.AgentInputSecretRoot = strings.TrimSpace(getenv("MENDER_AGENT_INPUT_SECRET_ROOT"))
+		var err error
+		c.AgentInputProviderIDs, err = reviewedList(getenv("MENDER_AGENT_INPUT_PROVIDER_IDS"), 256)
+		if err != nil {
+			return APIConfig{}, errors.New("Agent input API requires reviewed provider IDs")
+		}
+		c.AgentInputAllowedHosts, err = reviewedList(getenv("MENDER_AGENT_INPUT_ALLOWED_HOSTS"), 256)
+		if err != nil {
+			return APIConfig{}, errors.New("Agent input API requires an exact egress host allowlist")
+		}
+		c.AgentInputAllowHTTP, err = strictBool(getenv, "MENDER_AGENT_INPUT_ALLOW_HTTP")
+		if err != nil {
+			return APIConfig{}, err
+		}
+		c.AgentInputAllowLoopback, err = strictBool(getenv, "MENDER_AGENT_INPUT_ALLOW_LOOPBACK")
+		if err != nil {
+			return APIConfig{}, err
+		}
+		if !c.RunReadAPIEnabled || c.AgentInputDatabaseURL == "" || c.AgentInputExecutorDatabaseURL == "" || c.AgentInputSecretRoot == "" {
+			return APIConfig{}, errors.New("Agent input API requires Run read API, input-sender/executor database roles and mounted secret root")
+		}
+	default:
+		return c, errors.New("MENDER_AGENT_INPUT_API_ENABLED must be true or false")
+	}
 	switch getenv("MENDER_ARTIFACT_OBJECT_READ_ENABLED") {
 	case "", "false":
 	case "true":
@@ -542,7 +580,7 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	}
 	switch getenv("MENDER_RUN_API_ENABLED") {
 	case "", "false":
-		if c.RunReadAPIEnabled || c.ArtifactObjectReadEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.ProviderCallbackEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleExecutionRiskEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleCatalogEnabled || c.AdminCatalogReviewEnabled || c.AdminCatalogPolicyEnabled || c.AdminProviderCallbacksEnabled || c.ConsoleConnectionOAuthEnabled {
+		if c.RunReadAPIEnabled || c.AgentInputAPIEnabled || c.ArtifactObjectReadEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.ProviderCallbackEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleExecutionRiskEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleCatalogEnabled || c.AdminCatalogReviewEnabled || c.AdminCatalogPolicyEnabled || c.AdminProviderCallbacksEnabled || c.ConsoleConnectionOAuthEnabled {
 			return APIConfig{}, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return c, nil
@@ -576,7 +614,7 @@ func (systemClock) Now() time.Time { return time.Now().UTC().Truncate(time.Micro
 // BuildAPI never migrates, seeds data or falls back to a test repository.
 func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	if !c.RunAPIEnabled {
-		if c.RunReadAPIEnabled || c.ArtifactObjectReadEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.ProviderCallbackEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleExecutionRiskEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleCatalogEnabled || c.AdminCatalogReviewEnabled || c.AdminCatalogPolicyEnabled || c.AdminProviderCallbacksEnabled || c.ConsoleConnectionOAuthEnabled {
+		if c.RunReadAPIEnabled || c.AgentInputAPIEnabled || c.ArtifactObjectReadEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.ProviderCallbackEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleExecutionRiskEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleCatalogEnabled || c.AdminCatalogReviewEnabled || c.AdminCatalogPolicyEnabled || c.AdminProviderCallbacksEnabled || c.ConsoleConnectionOAuthEnabled {
 			return nil, nil, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return httpserver.NewRouter(), func() {}, nil
@@ -586,6 +624,9 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	}
 	if c.ConsoleRunDelegationEnabled && (!c.ConsoleOIDCEnabled || !c.RunReadAPIEnabled) {
 		return nil, nil, errors.New("Console Run delegation requires Console OIDC and Run read API")
+	}
+	if c.AgentInputAPIEnabled && !c.RunReadAPIEnabled {
+		return nil, nil, errors.New("Agent input API requires Run read API")
 	}
 	if c.ConsoleLaunchDiscoveryEnabled && !c.ConsoleOIDCEnabled {
 		return nil, nil, errors.New("Console launch discovery requires Console OIDC")
@@ -644,7 +685,13 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	var governanceExecutionConfirmerPool *pgxpool.Pool
 	var commerceObserverPool *pgxpool.Pool
 	var startDelegationFacade *facade.RunStartDelegations
+	var agentInputService *runapp.AgentInputSubmissions
+	var closeAgentInput func()
 	closePools := func() {
+		if closeAgentInput != nil {
+			closeAgentInput()
+			closeAgentInput = nil
+		}
 		if artifactObjectPool != nil {
 			artifactObjectPool.Close()
 		}
@@ -735,6 +782,25 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 		return failed(err)
 	}
 	registers := []func(*gin.Engine){handler.Register}
+	if c.AgentInputAPIEnabled {
+		secrets, secretErr := filesecret.New(c.AgentInputSecretRoot)
+		if secretErr != nil {
+			return failed(secretErr)
+		}
+		agentInputService, closeAgentInput, err = BuildAgentInputRuntime(start, AgentInputRuntimeConfig{
+			DatabaseURL: c.AgentInputDatabaseURL, ExecutorDatabaseURL: c.AgentInputExecutorDatabaseURL,
+			ProviderIDs: c.AgentInputProviderIDs, AllowedHosts: c.AgentInputAllowedHosts,
+			AllowHTTP: c.AgentInputAllowHTTP, AllowLoopback: c.AgentInputAllowLoopback,
+		}, access, secrets)
+		if err != nil {
+			return failed(err)
+		}
+		agentInputHandler, inputErr := runhttp.NewAgentInput(agentInputService, access)
+		if inputErr != nil {
+			return failed(inputErr)
+		}
+		registers = append(registers, agentInputHandler.Register)
+	}
 	var artifactObjectRepository *runpg.Repository
 	var artifactObjectStore *runobjectfs.Store
 	var artifactObjectCodec *runartifactcap.Codec
@@ -930,6 +996,17 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 			}
 
 			delegatedAccess := runidentityaccess.NewDelegated(delegationFacade)
+			if c.AgentInputAPIEnabled {
+				delegatedAgentInput, inputErr := agentInputService.ForAuthorizer(delegatedAccess)
+				if inputErr != nil {
+					return failed(inputErr)
+				}
+				delegatedAgentInputHandler, inputErr := runhttp.NewAgentInput(delegatedAgentInput, delegatedAccess)
+				if inputErr != nil {
+					return failed(inputErr)
+				}
+				registers = append(registers, func(router *gin.Engine) { delegatedAgentInputHandler.RegisterAt(router, "/api/console/v1") })
+			}
 			if c.ArtifactObjectReadEnabled {
 				delegatedObjectAccess, objectErr := runapp.NewArtifactObjectAccess(artifactObjectRepository, artifactObjectStore, delegatedAccess, artifactObjectCodec, systemClock{}, c.ArtifactObjectCapabilityTTL)
 				if objectErr != nil {

@@ -26,11 +26,11 @@ function evidenceRef(value, label) {
 }
 
 export function validateG3Manifest(manifest) {
-  exactKeys(manifest, ['schema_version', 'gate', 'as_of', 'requirements', 'mcp', 'entry_matrix', 'oauth_refresh', 'limits', 'document'], 'G3 manifest');
+  exactKeys(manifest, ['schema_version', 'gate', 'as_of', 'requirements', 'mcp', 'entry_matrix', 'oauth_refresh', 'remote_agent', 'limits', 'document'], 'G3 manifest');
   assert.equal(manifest.schema_version, 1);
   assert.equal(manifest.gate, 'G3');
-  assert.equal(manifest.as_of, '2026-09-14');
-  exactSet(manifest.requirements, ['S3-13', 'S3-14', 'S3-15', 'S3-18', 'T07', 'T08', 'T13', 'T14', 'T15', 'T16', 'T40'], 'G3 requirements');
+  assert.equal(manifest.as_of, '2026-09-15');
+  exactSet(manifest.requirements, ['S3-13', 'S3-14', 'S3-15', 'S3-18', 'T07', 'T08', 'T13', 'T14', 'T15', 'T16', 'T17', 'T40'], 'G3 requirements');
 
   exactKeys(manifest.mcp, ['certified_protocol_version', 'selected_legacy_protocol_version', 'sdk_harness', 'distributions', 'protocol_cases', 'evidence'], 'MCP evidence');
   assert.equal(manifest.mcp.certified_protocol_version, '2026-07-28');
@@ -89,6 +89,25 @@ export function validateG3Manifest(manifest) {
   assert.ok(Array.isArray(manifest.oauth_refresh.evidence) && manifest.oauth_refresh.evidence.length === 5, 'OAuth refresh evidence is incomplete');
   manifest.oauth_refresh.evidence.forEach((item, index) => evidenceRef(item, `OAuth refresh evidence[${index}]`));
 
+  exactKeys(manifest.remote_agent, ['status', 'interaction_scope', 'behaviors', 'evidence'], 'Remote Agent evidence');
+  assert.equal(manifest.remote_agent.status, 'covered-alpha');
+  assert.equal(manifest.remote_agent.interaction_scope, 'one-shot-supplemental-input');
+  exactSet(manifest.remote_agent.behaviors, [
+    'reviewed_submit_status_cancel',
+    'input_required_poll',
+    'signed_input_required_callback',
+    'run_input_authorization',
+    'server_schema_validation',
+    'answer_digest_only',
+    'idempotent_answer_replay',
+    'unknown_no_resend',
+    'waiting_input_resume',
+    'artifact_convergence',
+    'least_privilege',
+  ], 'Remote Agent behaviors');
+  assert.ok(Array.isArray(manifest.remote_agent.evidence) && manifest.remote_agent.evidence.length === 4, 'Remote Agent evidence is incomplete');
+  manifest.remote_agent.evidence.forEach((item, index) => evidenceRef(item, `Remote Agent evidence[${index}]`));
+
   exactKeys(manifest.limits, ['third_party_clients_certified', 'legacy_protocol_compatibility', 'a2a_protocol', 'multi_turn_agent', 'payment_accounting', 'production_proxy_certified'], 'G3 limits');
   assert.deepEqual(manifest.limits.third_party_clients_certified, [], 'No third-party MCP client is certified by this evidence package');
   for (const key of ['legacy_protocol_compatibility', 'a2a_protocol', 'multi_turn_agent', 'payment_accounting', 'production_proxy_certified']) {
@@ -110,13 +129,13 @@ export function validateG3EvidenceFiles(manifest, root = projectRoot) {
   const handler = readFileSync(localFile(root, 'backend/internal/processes/mcpbridge/adapters/inbound/httpapi/handler.go'), 'utf8');
   assert.match(handler, /ProtocolVersion\s*=\s*"2026-07-28"/, 'Certified MCP protocol drifted from implementation');
 
-  for (const ref of [...manifest.mcp.evidence, ...manifest.entry_matrix.evidence, ...manifest.oauth_refresh.evidence]) {
+  for (const ref of [...manifest.mcp.evidence, ...manifest.entry_matrix.evidence, ...manifest.oauth_refresh.evidence, ...manifest.remote_agent.evidence]) {
     const content = readFileSync(localFile(root, ref.file), 'utf8');
     assert.ok(content.includes(`func ${ref.symbol}(`), `Missing G3 evidence symbol ${ref.symbol} in ${ref.file}`);
     if (ref.subtest !== undefined) assert.ok(content.includes(ref.subtest), `Missing G3 evidence subtest ${ref.subtest} in ${ref.file}`);
   }
   const document = readFileSync(localFile(root, manifest.document), 'utf8');
-  for (const required of ['2026-07-28', '2025-11-25', 'v1.7.0', 'automated harness', 'not certified', 'ws_g3_matrix', 'T07', 'T08', 'OAuth refresh', 'invalid_grant', 'scope']) {
+  for (const required of ['2026-07-28', '2025-11-25', 'v1.7.0', 'automated harness', 'not certified', 'ws_g3_matrix', 'T07', 'T08', 'T17', 'OAuth refresh', 'one-shot supplemental input', 'unknown no-resend', 'invalid_grant', 'scope']) {
     assert.ok(document.includes(required), `G3 evidence document is missing required boundary text: ${required}`);
   }
 }
@@ -134,6 +153,6 @@ export function checkG3Evidence(root = projectRoot) {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const manifest = checkG3Evidence();
-  console.log(`PASS: ${manifest.gate} evidence certifies MCP ${manifest.mcp.certified_protocol_version} on ${manifest.mcp.distributions.length} distributions, ${manifest.entry_matrix.sources.length} real entry sources, and automated OAuth refresh T07/T08 semantics.`);
+  console.log(`PASS: ${manifest.gate} evidence certifies MCP ${manifest.mcp.certified_protocol_version} on ${manifest.mcp.distributions.length} distributions, ${manifest.entry_matrix.sources.length} real entry sources, automated OAuth refresh T07/T08, and Remote Agent T17 one-shot supplemental-input semantics.`);
   console.log('LIMIT: certification is the pinned automated Go SDK harness plus local real-PostgreSQL fixtures; no third-party MCP client, legacy protocol, A2A, multi-turn Agent, payment accounting or production proxy is certified.');
 }

@@ -20,6 +20,31 @@ type PreparedAgentInput struct {
 	SubmissionID string
 }
 
+func (s *AgentInputSubmissions) Get(ctx context.Context, caller ports.Caller, runID domain.RunID) (AgentInputSubmissionRecord, error) {
+	if err := ctx.Err(); err != nil {
+		return AgentInputSubmissionRecord{}, err
+	}
+	if !caller.WorkspaceID.IsValid() || !runID.IsValid() || caller.SubjectID == "" || caller.CredentialID == "" {
+		return AgentInputSubmissionRecord{}, ErrAgentInputInvalid
+	}
+	if err := s.authorizer.Authorize(ctx, caller, ports.ReadRun, runID); err != nil {
+		return AgentInputSubmissionRecord{}, err
+	}
+	record, err := s.repository.FindAgentInputPublic(ctx, caller.WorkspaceID, runID)
+	if err != nil {
+		return AgentInputSubmissionRecord{}, err
+	}
+	if record.WorkspaceID != string(caller.WorkspaceID) || record.RunID != string(runID) || !validAgentInputID(record.InputRequestID, 200, true) || !validAgentInputPrompt(record.Prompt) || validateAgentInputSchema(record.InputSchemaJSON) != nil || record.RequestedAt.IsZero() || record.UpdatedAt.Before(record.RequestedAt) {
+		return AgentInputSubmissionRecord{}, ErrAgentInputUnavailable
+	}
+	switch record.State {
+	case "pending", "sending", "unknown", "submitted":
+		return record, nil
+	default:
+		return AgentInputSubmissionRecord{}, ErrAgentInputUnavailable
+	}
+}
+
 func (p PreparedAgentInput) Valid() bool {
 	return len(p.AnswerJSON) >= 2 && len(p.AnswerJSON) <= 64<<10 && len(p.AnswerSHA256) == 64 && validAgentInputID(p.SubmissionID, 200, true)
 }
@@ -57,12 +82,14 @@ func (t AgentInputSubmissionTarget) Valid() bool {
 }
 
 type AgentInputSubmissionRecord struct {
-	WorkspaceID    string
-	RunID          string
-	InputRequestID string
-	State          string
-	RequestedAt    time.Time
-	UpdatedAt      time.Time
+	WorkspaceID     string
+	RunID           string
+	InputRequestID  string
+	State           string
+	Prompt          string
+	InputSchemaJSON string
+	RequestedAt     time.Time
+	UpdatedAt       time.Time
 }
 
 type AgentInputClaim struct {
@@ -72,6 +99,7 @@ type AgentInputClaim struct {
 }
 
 type AgentInputSubmissionRepository interface {
+	FindAgentInputPublic(context.Context, domain.WorkspaceID, domain.RunID) (AgentInputSubmissionRecord, error)
 	FindAgentInputTarget(context.Context, domain.WorkspaceID, domain.RunID, string) (AgentInputSubmissionTarget, error)
 	ClaimAgentInput(context.Context, AgentInputSubmissionTarget, PreparedAgentInput, time.Time) (AgentInputClaim, error)
 	RecordAgentInputAccepted(context.Context, AgentInputSubmissionTarget, PreparedAgentInput, time.Time) (AgentInputSubmissionRecord, error)
@@ -107,6 +135,16 @@ func NewAgentInputSubmissions(authorizer ports.Authorizer, repository AgentInput
 		return nil, ErrAgentInputUnavailable
 	}
 	return &AgentInputSubmissions{authorizer: authorizer, repository: repository, preparer: preparer, source: source, clock: clock}, nil
+}
+
+// ForAuthorizer reuses the same reviewed storage/transport runtime with a
+// different authenticated principal projection. It never widens repository or
+// provider capabilities; only the consumer-side authorization port changes.
+func (s *AgentInputSubmissions) ForAuthorizer(authorizer ports.Authorizer) (*AgentInputSubmissions, error) {
+	if s == nil || authorizer == nil || s.repository == nil || s.preparer == nil || s.source == nil || s.clock == nil {
+		return nil, ErrAgentInputUnavailable
+	}
+	return &AgentInputSubmissions{authorizer: authorizer, repository: s.repository, preparer: s.preparer, source: s.source, clock: s.clock}, nil
 }
 
 func agentInputNow(clock interface{ Now() time.Time }) (time.Time, error) {

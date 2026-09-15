@@ -18,6 +18,37 @@ export interface RunRecord {
   updatedAt: string;
 }
 
+function parseAgentInput(value: unknown): AgentInputRecord {
+  const raw = object(value, '服务返回了无法识别的 Agent supplemental input');
+  exactKeys(raw, ['input_request_id', 'state', 'prompt', 'input_schema', 'requested_at', 'updated_at'], '服务返回了无法识别的 Agent supplemental input');
+  const inputRequestId = string(raw.input_request_id);
+  const state = string(raw.state) as AgentInputState;
+  const prompt = string(raw.prompt);
+  const inputSchema = object(raw.input_schema, '服务返回了无效的 Agent input schema');
+  if (!agentInputIdPattern.test(inputRequestId) || !['pending', 'sending', 'unknown', 'submitted'].includes(state) || prompt.length < 1 || prompt.length > 2000) {
+    throw new Error('服务返回了无法识别的 Agent supplemental input');
+  }
+  return {
+    inputRequestId,
+    state,
+    prompt,
+    inputSchema,
+    requestedAt: validTimestamp(raw.requested_at, '服务返回了无效的 Agent input 时间'),
+    updatedAt: validTimestamp(raw.updated_at, '服务返回了无效的 Agent input 时间'),
+  };
+}
+
+export type AgentInputState = 'pending' | 'sending' | 'unknown' | 'submitted';
+
+export interface AgentInputRecord {
+  inputRequestId: string;
+  state: AgentInputState;
+  prompt: string;
+  inputSchema: Record<string, unknown>;
+  requestedAt: string;
+  updatedAt: string;
+}
+
 function validTimestamp(value: unknown, message: string) {
   const raw = string(value, message);
   if (raw.length < 1 || raw.length > 64 || Number.isNaN(Date.parse(raw))) throw new Error(message);
@@ -208,8 +239,14 @@ interface CancelRunRequest extends RunRequest {
   reason: string;
 }
 
+interface SubmitAgentInputRequest extends RunRequest {
+  inputRequestId: string;
+  answer: Record<string, unknown>;
+}
+
 const idPattern = /^[A-Za-z0-9_-]{1,128}$/;
 const artifactIdPattern = /^[A-Za-z0-9._:-]{1,160}$/;
+const agentInputIdPattern = /^[A-Za-z0-9._:-]{1,200}$/;
 const states = new Set<RunExecutionState>([
   'queued', 'running', 'waiting_input', 'cancel_requested', 'reconciling',
   'succeeded', 'failed', 'canceled', 'timed_out',
@@ -285,6 +322,25 @@ export function createConsoleRunsClient(baseUrl = '', fetcher: typeof fetch = fe
       const item = parseRunCost(raw.data);
       if (item.runId !== request.runId) throw new Error('服务返回了错误的 Run quota cost');
       return item;
+    },
+    async getAgentInput(request: RunRequest): Promise<AgentInputRecord> {
+      requireId(request.runId, 'Run ID');
+      const raw = object(await jsonRequest(fetcher, `${runBase(request.workspaceId)}/${encodeURIComponent(request.runId)}/input`, request, { signal: requestSignal(request.signal) }));
+      return parseAgentInput(raw.data);
+    },
+    async submitAgentInput(request: SubmitAgentInputRequest): Promise<AgentInputRecord> {
+      requireId(request.runId, 'Run ID');
+      if (!agentInputIdPattern.test(request.inputRequestId)) throw new Error('Agent input request ID 格式无效');
+      if (typeof request.answer !== 'object' || request.answer === null || Array.isArray(request.answer)) throw new Error('Agent supplemental input 必须是 JSON object');
+      const encoded = JSON.stringify(request.answer);
+      if (encoded.length < 2 || new TextEncoder().encode(encoded).byteLength > 64 * 1024) throw new Error('Agent supplemental input 超过大小限制');
+      const raw = object(await jsonRequest(fetcher, `${runBase(request.workspaceId)}/${encodeURIComponent(request.runId)}/input`, request, {
+        method: 'POST', signal: requestSignal(request.signal), headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input_request_id: request.inputRequestId, answer: request.answer }),
+      }));
+      const record = parseAgentInput(raw.data);
+      if (record.inputRequestId !== request.inputRequestId) throw new Error('服务返回了错误的 Agent input request');
+      return record;
     },
   };
 }

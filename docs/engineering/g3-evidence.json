@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "gate": "G3",
-  "as_of": "2026-09-14",
-  "requirements": ["S3-13", "S3-14", "S3-15", "S3-18", "T07", "T08", "T13", "T14", "T15", "T16", "T40"],
+  "as_of": "2026-09-15",
+  "requirements": ["S3-13", "S3-14", "S3-15", "S3-18", "T07", "T08", "T13", "T14", "T15", "T16", "T17", "T40"],
   "mcp": {
     "certified_protocol_version": "2026-07-28",
     "selected_legacy_protocol_version": "2025-11-25",
@@ -100,6 +100,42 @@
         "file": "backend/tests/integration/postgres_test.go",
         "symbol": "TestPostgresRuntimeContract",
         "subtest": "reviewed OAuth refresh CAS and token isolation"
+      }
+    ]
+  },
+  "remote_agent": {
+    "status": "covered-alpha",
+    "interaction_scope": "one-shot-supplemental-input",
+    "behaviors": [
+      "reviewed_submit_status_cancel",
+      "input_required_poll",
+      "signed_input_required_callback",
+      "run_input_authorization",
+      "server_schema_validation",
+      "answer_digest_only",
+      "idempotent_answer_replay",
+      "unknown_no_resend",
+      "waiting_input_resume",
+      "artifact_convergence",
+      "least_privilege"
+    ],
+    "evidence": [
+      {
+        "file": "backend/tests/integration/remote_agent_runtime_test.go",
+        "symbol": "exerciseRemoteAgentRuntime"
+      },
+      {
+        "file": "backend/internal/contexts/supply/adapters/outbound/http/executor_agent_test.go",
+        "symbol": "TestAgentHTTPStatusInputRequiredNeedsReviewedInputEndpoint"
+      },
+      {
+        "file": "backend/internal/processes/providercallback/adapters/inbound/httpapi/handler_test.go",
+        "symbol": "TestCallbackAcceptsStrictAgentInputRequiredEvent"
+      },
+      {
+        "file": "backend/tests/integration/postgres_test.go",
+        "symbol": "TestPostgresRuntimeContract",
+        "subtest": "reviewed remote Agent runtime"
       }
     ]
   },

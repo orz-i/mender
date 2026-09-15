@@ -9,7 +9,7 @@
 
 选定旧版 **2025-11-25** 在本阶段是明确的 rejected 组合，不是兼容版本。服务端要求 `Mcp-Protocol-Version: 2026-07-28`，并在认证和 SDK 之前检查 initialize body 中的 `protocolVersion`；current header 不能掩盖 legacy initialize body，legacy header 也不能通过 current body 绕过入口边界。协议 header 或 initialize version 不匹配不会进入身份认证，更不会进入 Admission。
 
-当前没有 third-party MCP client 被本证据包认证。官方 Go SDK v1.7.0 只是 automated harness，不可外推为 Claude、Cursor、其他 MCP client 或旧协议版本的兼容声明。A2A、multi-turn Agent supplemental input、payment accounting 与 production proxy 同样 not certified。
+当前没有 third-party MCP client 被本证据包认证。官方 Go SDK v1.7.0 只是 automated harness，不可外推为 Claude、Cursor、其他 MCP client 或旧协议版本的兼容声明。Remote Agent 的 **T17 one-shot supplemental input** 已有仓库自动化证据，但 A2A、multi-turn Agent resume / conversation、payment accounting 与 production proxy 仍然 not certified。
 
 ## MCP 协议与分发矩阵
 
@@ -40,6 +40,14 @@
 
 Provider ID、provider request ID、external task ID 与 mounted supplier secret 只存在于受控内部事实。受保护 Run/Artifact API 再读同一三个结果时不得出现这些 adapter-specific handles；另一个 Workspace 的凭据读取 `ws_g3_matrix` Run 必须返回 403。
 
+## T17 Remote Agent one-shot supplemental input Alpha
+
+T17 现在补齐 reviewed `agent_http` 的提交、轮询、取消、重复 callback、取消未确认、Artifact 以及 **one-shot supplemental input** 合同。Provider status 或已验签 `provider.input_required` callback 只能在既有 Attempt 的 `workspace/run/attempt/provider_id/provider_request_id/external_task_id` 精确绑定下创建 input request；服务端把 Run 投影为 `waiting_input`，只持久化 bounded prompt、JSON Schema、request ID 与时间元数据，不把 Provider credential、endpoint 或 raw answer 写入普通 Run/Artifact/Governance projection。
+
+调用方必须持有显式 `run:input` scope。Machine Key 和短期 Human Run delegation 都重新经过服务端授权；`run:read` 或 `run:cancel` 不隐式授予输入权限。answer 必须是 ≤64 KiB JSON object，并通过服务端保存的 Provider schema；Execution 数据库只记录 SHA-256 answer digest 与 deterministic submission ID。合法发送通过固定 reviewed Agent input endpoint，沿用现有 mounted Secret、host allowlist 与 SSRF 边界，浏览器不能提交 Provider URL 或 handle。
+
+真实 isolated PostgreSQL + local Agent server 覆盖 accepted 与 unknown 两条路径：accepted 后 `waiting_input → running`，相同 request + answer replay 不重复网络副作用，不同 answer 冲突；若 Provider 在可能收到 answer 后返回不确定结果，则 input request 进入 `unknown`、Run 进入 `reconciling`，相同 answer 再提交仍 **unknown no-resend**。成功后继续通过既有 ProviderObservation → `provider_result` Artifact 收敛。当前 Alpha 对每个 Run 最多允许一个 supplemental input request，因此这里不认证 multi-turn Agent conversation、任意 resume loop 或 A2A。
+
 ## T07 / T08 Reviewed OAuth Refresh Alpha
 
 G3 证据现在补充 **T07 / T08** 的自动化 OAuth refresh 语义，但这里仍然是 `covered-alpha`，不是某个第三方 OAuth Provider 的生产认证。初始授权只有在 `MENDER_CONNECTION_OAUTH_REFRESH_ENABLED=true` 时才要求并保存 refresh token；后台刷新还必须单独启用 `MENDER_REVIEWED_OAUTH_REFRESH_ENABLED=true`，并提供独立 `oauth-refresher` 数据库角色。两个开关默认都是 false。
@@ -55,10 +63,11 @@ Connection revoke 会同步把 refresh sidecar 置为 revoked；被撤销 Connec
 ## 需求与证据映射
 
 - **S3-14 / T07 / T08**：`backend/tests/connections/oauth_http_test.go`、`backend/internal/contexts/connections/adapters/outbound/oauth/client_test.go`、`backend/tests/integration/oauth_refresh_runtime_test.go`。覆盖初始 refresh secret capture、reviewed token endpoint、并发 CAS、rotation/no-rotation、scope shrink、invalid_grant、瞬时重试、revoke、Secret Vault 隔离与最小权限。
+- **S3-07 / S3-11 / S3-14 / T17**：`backend/tests/integration/remote_agent_runtime_test.go`、`backend/internal/contexts/supply/adapters/outbound/http/executor_agent_test.go`、`backend/internal/processes/providercallback/adapters/inbound/httpapi/handler_test.go` 与 protected Run input API/client。覆盖 reviewed Agent submit/status/cancel、signed input callback、`run:input`、schema validation、digest-only persistence、idempotent replay、unknown no-resend、waiting_input resume 与 Artifact 收敛。
 - **S3-13 / T13–T16 / T40**：`backend/tests/mcp/protocol_test.go`、`backend/tests/mcp/compatibility_matrix_test.go`、`backend/tests/mcp/fixed_toolset_test.go`。覆盖官方 SDK current-version 会话、两种分发、header/body 协议一致性、错误版本和认证边界。
 - **S3-15**：`backend/tests/integration/g3_entry_matrix_test.go` 由 `TestPostgresRuntimeContract` 的 `G3 same-subject three-source Entry Run Artifact convergence matrix` 子测试执行，覆盖 same Workspace/subject 的 HTTP、upstream MCP、Remote Agent 三来源闭环。
 - **S3-18**：本文件和 `g3-evidence.json` 是当前 supported-client / limit 证据。当前 supported harness 只有 Go SDK v1.7.0；third-party client 列表为空。
 
 ## 不在本证据包中的声明
 
-本阶段没有增加 2025-11-25 compatibility，没有 A2A adapter、多轮 Agent resume、任意脚本／表达式运行时、生产代理或公网兼容实验，也没有 payment accounting。Provider Callback、Artifact Object Lifecycle 与其他 G3 相邻能力继续由各自 integration/engineering 证据覆盖；OAuth refresh 仅增加上述 T07/T08 自动化语义，不把单一 reviewed test provider 扩写成第三方 Provider 生产认证。
+本阶段没有增加 2025-11-25 compatibility，没有 A2A adapter、多轮 Agent resume / conversation、任意脚本／表达式运行时、生产代理或公网兼容实验，也没有 payment accounting。T17 只认证上述 one-shot supplemental input；Provider Callback、Artifact Object Lifecycle 与其他 G3 相邻能力继续由各自 integration/engineering 证据覆盖；OAuth refresh 仅增加上述 T07/T08 自动化语义，不把单一 reviewed test provider 扩写成第三方 Provider 生产认证。

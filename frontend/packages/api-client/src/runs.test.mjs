@@ -198,3 +198,42 @@ test('fails closed if Run surfaces leak Remote Agent or provider-control interna
   }));
   await assert.rejects(leakedArtifact.listRunArtifacts(access), /无法识别的 Artifact/);
 });
+
+test('Agent supplemental input uses exact safe projection and never exposes provider delivery internals', async () => {
+  const calls = [];
+  const client = createConsoleRunsClient('', async (url, init) => {
+    calls.push({ url, init });
+    if (init?.method === 'POST') {
+      assert.equal(init.body, JSON.stringify({ input_request_id: 'input.req.1', answer: { region: 'eu' } }));
+      return Response.json({ data: {
+        input_request_id: 'input.req.1', state: 'submitted', prompt: 'Choose region',
+        input_schema: { type: 'object', properties: { region: { type: 'string' } } },
+        requested_at: '2026-09-15T04:00:00Z', updated_at: '2026-09-15T04:01:00Z',
+      }, meta: { request_id: 'req_input_submit' } });
+    }
+    return Response.json({ data: {
+      input_request_id: 'input.req.1', state: 'pending', prompt: 'Choose region',
+      input_schema: { type: 'object', properties: { region: { type: 'string' } } },
+      requested_at: '2026-09-15T04:00:00Z', updated_at: '2026-09-15T04:00:00Z',
+    }, meta: { request_id: 'req_input_get' } });
+  });
+  const access = { workspaceId: 'ws_a', token: 'short_lived_delegation', runId: 'run_a' };
+  const pending = await client.getAgentInput(access);
+  assert.equal(pending.state, 'pending');
+  const submitted = await client.submitAgentInput({ ...access, inputRequestId: 'input.req.1', answer: { region: 'eu' } });
+  assert.equal(submitted.state, 'submitted');
+  assert.equal(calls[0].url, '/api/console/v1/workspaces/ws_a/runs/run_a/input');
+  assert.equal(calls[1].url, '/api/console/v1/workspaces/ws_a/runs/run_a/input');
+  for (const call of calls) {
+    assert.equal(new Headers(call.init.headers).get('Authorization'), 'Bearer short_lived_delegation');
+    assert.equal(call.init.credentials, 'omit');
+  }
+
+  for (const leakedField of ['provider_request_id', 'external_task_id', 'answer_sha256', 'submission_id', 'input_endpoint_url']) {
+    const leaked = createConsoleRunsClient('', async () => Response.json({ data: {
+      input_request_id: 'input.req.1', state: 'pending', prompt: 'Choose region', input_schema: { type: 'object' },
+      requested_at: '2026-09-15T04:00:00Z', updated_at: '2026-09-15T04:00:00Z', [leakedField]: 'internal',
+    }, meta: { request_id: 'req_leak' } }));
+    await assert.rejects(leaked.getAgentInput(access), /Agent supplemental input/);
+  }
+});

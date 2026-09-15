@@ -1,6 +1,6 @@
 import { createConsoleIdentityClient, createConsoleRunDelegationClient, createConsoleRunsClient, MenderApiError, type ConsoleWorkspaceRecord, type RunDelegationScope } from '@mender/api-client';
 import type { RunGateway } from '../application/run-gateway';
-import type { Run, RunArtifact, RunArtifactDetail, RunEvent, RunQuotaCost } from '../domain/run';
+import type { Run, RunAgentInput, RunArtifact, RunArtifactDetail, RunEvent, RunQuotaCost } from '../domain/run';
 
 function run(value: Awaited<ReturnType<ReturnType<typeof createConsoleRunsClient>['getRun']>>): Run {
   return {
@@ -66,7 +66,11 @@ function readCSRFCookie() {
 }
 
 function scopesFor(role: ConsoleWorkspaceRecord['role']): RunDelegationScope[] {
-  return role === 'viewer' ? ['run:read'] : ['run:read', 'run:cancel'];
+  return role === 'viewer' ? ['run:read'] : ['run:read', 'run:cancel', 'run:input'];
+}
+
+function agentInput(value: Awaited<ReturnType<ReturnType<typeof createConsoleRunsClient>['getAgentInput']>>): RunAgentInput {
+  return { inputRequestId: value.inputRequestId, state: value.state, prompt: value.prompt, inputSchema: value.inputSchema, requestedAt: value.requestedAt, updatedAt: value.updatedAt };
 }
 
 export function createRunGateway(): RunGateway {
@@ -87,6 +91,7 @@ export function createRunGateway(): RunGateway {
         delegationId: delegation.delegationId,
         expiresAt: delegation.expiresAt,
         canCancel: delegation.scopes.includes('run:cancel'),
+        canInput: delegation.scopes.includes('run:input'),
       };
     },
     async disconnect(access, signal) {
@@ -150,6 +155,18 @@ export function createRunGateway(): RunGateway {
     async cancel(access, runId, reason, signal) {
       if (!access.canCancel) throw new Error('当前 Workspace 角色没有 Run 取消权限');
       return run(await client.cancelRun({ workspaceId: access.workspaceId, token: access.delegatedToken, runId, reason, signal }));
+    },
+    async agentInput(access, runId, signal) {
+      try {
+        return agentInput(await client.getAgentInput({ workspaceId: access.workspaceId, token: access.delegatedToken, runId, signal }));
+      } catch (error) {
+        if (error instanceof MenderApiError && error.status === 404) return null;
+        throw error;
+      }
+    },
+    async submitAgentInput(access, runId, inputRequestId, answer, signal) {
+      if (!access.canInput) throw new Error('当前 Workspace 角色没有 Run supplemental input 权限');
+      return agentInput(await client.submitAgentInput({ workspaceId: access.workspaceId, token: access.delegatedToken, runId, inputRequestId, answer, signal }));
     },
   };
 }

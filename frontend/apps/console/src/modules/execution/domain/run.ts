@@ -18,6 +18,15 @@ export interface Run {
   updatedAt: string;
 }
 
+export interface RunAgentInput {
+  inputRequestId: string;
+  state: 'pending' | 'sending' | 'unknown' | 'submitted';
+  prompt: string;
+  inputSchema: Record<string, unknown>;
+  requestedAt: string;
+  updatedAt: string;
+}
+
 export interface RunEvent {
   version: string;
   state: RunState;

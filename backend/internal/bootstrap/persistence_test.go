@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"net/http/httptest"
 	"testing"
 )
@@ -38,6 +39,46 @@ func TestRunAPIDefaultIsClosedAndBadConfigFails(t *testing.T) {
 	}
 	if h, _, err = BuildAPI(context.Background(), APIConfig{RunAPIEnabled: true}); err == nil || h != nil {
 		t.Fatal("enabled API silently fell back")
+	}
+}
+
+func TestAgentInputAPIConfigIsExplicitAndFailsClosed(t *testing.T) {
+	base := map[string]string{
+		"MENDER_RUN_API_ENABLED":                   "true",
+		"MENDER_RUN_READ_API_ENABLED":              "true",
+		"MENDER_CURSOR_SIGNING_KEY":                base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32)),
+		"MENDER_DATABASE_URL":                      "postgres://runtime:pw@127.0.0.1:5432/mender?sslmode=disable",
+		"MENDER_AGENT_INPUT_API_ENABLED":           "true",
+		"MENDER_AGENT_INPUT_DATABASE_URL":          "postgres://agent_input:pw@127.0.0.1:5432/mender?sslmode=disable",
+		"MENDER_AGENT_INPUT_EXECUTOR_DATABASE_URL": "postgres://executor:pw@127.0.0.1:5432/mender?sslmode=disable",
+		"MENDER_AGENT_INPUT_SECRET_ROOT":           `C:\mounted-agent-secrets`,
+		"MENDER_AGENT_INPUT_PROVIDER_IDS":          "provider_agent",
+		"MENDER_AGENT_INPUT_ALLOWED_HOSTS":         "agent.example",
+	}
+	get := func(values map[string]string) func(string) string {
+		return func(key string) string { return values[key] }
+	}
+	cfg, err := LoadAPIConfig(get(base))
+	if err != nil || !cfg.AgentInputAPIEnabled || len(cfg.AgentInputProviderIDs) != 1 || len(cfg.AgentInputAllowedHosts) != 1 || cfg.AgentInputAllowHTTP || cfg.AgentInputAllowLoopback {
+		t.Fatal(cfg, err)
+	}
+	for _, key := range []string{"MENDER_AGENT_INPUT_DATABASE_URL", "MENDER_AGENT_INPUT_EXECUTOR_DATABASE_URL", "MENDER_AGENT_INPUT_SECRET_ROOT", "MENDER_AGENT_INPUT_PROVIDER_IDS", "MENDER_AGENT_INPUT_ALLOWED_HOSTS"} {
+		values := map[string]string{}
+		for k, v := range base {
+			values[k] = v
+		}
+		delete(values, key)
+		if _, err = LoadAPIConfig(get(values)); err == nil {
+			t.Fatal("Agent input API accepted missing required configuration", key)
+		}
+	}
+	values := map[string]string{}
+	for k, v := range base {
+		values[k] = v
+	}
+	values["MENDER_AGENT_INPUT_ALLOW_HTTP"] = "yes"
+	if _, err = LoadAPIConfig(get(values)); err == nil {
+		t.Fatal("Agent input API accepted non-strict egress boolean")
 	}
 }
 

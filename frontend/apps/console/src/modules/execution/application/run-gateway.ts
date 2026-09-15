@@ -1,4 +1,4 @@
-import type { Run, RunArtifact, RunArtifactDetail, RunArtifactObjectContent, RunArtifactObjectStatus, RunEvent, RunQuotaCost, RunState } from '../domain/run';
+import type { Run, RunAgentInput, RunArtifact, RunArtifactDetail, RunArtifactObjectContent, RunArtifactObjectStatus, RunEvent, RunQuotaCost, RunState } from '../domain/run';
 
 export interface RunAccess {
   workspaceId: string;
@@ -6,6 +6,7 @@ export interface RunAccess {
   delegationId: string;
   expiresAt: string;
   canCancel: boolean;
+  canInput: boolean;
 }
 
 export interface RunPage {
@@ -31,4 +32,6 @@ export interface RunGateway {
   artifactObjectContent(access: RunAccess, runId: string, artifactId: string, signal?: AbortSignal): Promise<RunArtifactObjectContent>;
   cost(access: RunAccess, runId: string, signal?: AbortSignal): Promise<RunQuotaCost | null>;
   cancel(access: RunAccess, runId: string, reason: string, signal?: AbortSignal): Promise<Run>;
+  agentInput(access: RunAccess, runId: string, signal?: AbortSignal): Promise<RunAgentInput | null>;
+  submitAgentInput(access: RunAccess, runId: string, inputRequestId: string, answer: Record<string, unknown>, signal?: AbortSignal): Promise<RunAgentInput>;
 }

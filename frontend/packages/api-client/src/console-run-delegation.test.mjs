@@ -11,7 +11,7 @@ test('human Run delegation is minted with browser session + CSRF but returned to
     if (String(input).endsWith('/run-delegations')) {
       return new Response(JSON.stringify({ data: {
         delegation_id: 'rd_alpha', workspace_id: 'ws_alpha', token,
-        scopes: ['run:read', 'run:cancel'], expires_at: '2026-09-12T11:00:00Z',
+        scopes: ['run:read', 'run:cancel', 'run:input'], expires_at: '2026-09-12T11:00:00Z',
       } }), { status: 201, headers: { 'Content-Type': 'application/json' } });
     }
     if (String(input).includes('/runs?')) {
@@ -21,12 +21,12 @@ test('human Run delegation is minted with browser session + CSRF but returned to
   };
 
   const delegations = createConsoleRunDelegationClient('', fetcher);
-  const issued = await delegations.issue('ws_alpha', ['run:read', 'run:cancel'], 'csrf_alpha');
+  const issued = await delegations.issue('ws_alpha', ['run:read', 'run:cancel', 'run:input'], 'csrf_alpha');
   assert.equal(issued.token, token);
   assert.equal(calls[0].init.credentials, 'same-origin');
   assert.equal(new Headers(calls[0].init.headers).get('Authorization'), null);
   assert.equal(new Headers(calls[0].init.headers).get('X-Mender-CSRF'), 'csrf_alpha');
-  assert.deepEqual(JSON.parse(calls[0].init.body), { scopes: ['run:read', 'run:cancel'] });
+  assert.deepEqual(JSON.parse(calls[0].init.body), { scopes: ['run:read', 'run:cancel', 'run:input'] });
 
   const runs = createConsoleRunsClient('', fetcher);
   await runs.listRuns({ workspaceId: 'ws_alpha', token, limit: 20 });
