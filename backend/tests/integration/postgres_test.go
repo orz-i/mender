@@ -274,6 +274,9 @@ func TestPostgresRuntimeContract(t *testing.T) {
 	t.Run("Catalog Toolset management role RLS and immutable publication facts", func(t *testing.T) {
 		exerciseCatalogManagementFoundation(t, ctx, owner, runtime, runtimeURL.String())
 	})
+	t.Run("governed Plugin Publisher manifest and maker checker publication", func(t *testing.T) {
+		exercisePluginPublication(t, ctx, owner, runtimeURL.String())
+	})
 	t.Run("execution risk policy decisions and exact human confirmations", func(t *testing.T) {
 		exerciseExecutionRiskGovernance(t, ctx, owner, runtimeURL.String())
 	})

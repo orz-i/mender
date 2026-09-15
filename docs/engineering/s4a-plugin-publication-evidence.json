@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "as_of": "2026-09-15",
+  "work_package": "S4-A",
+  "status": "complete",
+  "manifest": {
+    "api_version": "mender.io/plugin/v1alpha1",
+    "allowed_capability_kinds": ["api_tool", "mcp_tool", "agent"],
+    "arbitrary_executable_artifacts_allowed": false,
+    "arbitrary_scripts_allowed": false,
+    "secrets_allowed": false,
+    "client_controlled_permissions_allowed": false
+  },
+  "publication": {
+    "states": ["draft", "submitted", "approved", "published", "deprecated", "disabled"],
+    "published_manifest_immutable": true,
+    "publisher_workspace_owned": true,
+    "exact_revision_approval_binding": true,
+    "capability_preflight_on_submit": true,
+    "capability_preflight_on_publish": true
+  },
+  "governance": {
+    "maker_checker": true,
+    "self_approval_allowed": false,
+    "append_only_audit": true,
+    "publisher_can_approve": false,
+    "reviewer_can_publish": false
+  },
+  "security": {
+    "force_rls": true,
+    "publisher_manager_least_privilege": true,
+    "governance_reviewer_least_privilege": true,
+    "browser_projection_exposes_owner_user_id": false,
+    "browser_projection_revision_encoding": "decimal-string"
+  },
+  "surfaces": {
+    "publisher_console_api": "implemented",
+    "admin_review_api": "implemented",
+    "publisher_frontend_workbench": "deferred",
+    "admin_frontend_review_workbench": "deferred"
+  },
+  "verification": {
+    "real_postgres_test": "backend/tests/integration/plugin_publication_test.go",
+    "contract_schema": "contracts/plugin-manifest.schema.json",
+    "supply_migration": "backend/migrations/0039_supply_plugin_publication.sql",
+    "governance_migration": "backend/migrations/0040_governance_plugin_publication.sql"
+  },
+  "deferred": [
+    "release-canary",
+    "release-drain",
+    "release-rollback",
+    "emergency-disable-admission",
+    "publisher-frontend-workbench",
+    "admin-frontend-review-workbench",
+    "commercial-accounting",
+    "payment-adapter",
+    "cli-skill-distribution",
+    "production-deploy"
+  ],
+  "next_work_package": "S4-B-release-governance",
+  "document": "docs/engineering/2026-09-15-s4a-plugin-publication-boundary.md"
+}
+
