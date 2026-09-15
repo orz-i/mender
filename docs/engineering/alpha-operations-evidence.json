@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "gate": "G3",
+  "as_of": "2026-09-15",
+  "status": "alpha-bounded",
+  "s3_16": {
+    "status": "covered-alpha-production-proxy-deferred",
+    "mcp_transport": "stateless-streamable-http-json-response",
+    "application_run_events": "finite-json-pagination",
+    "egress_policy": "exact-host-allowlist",
+    "request_timeout_min_ms": 100,
+    "request_timeout_max_ms": 300000,
+    "http_default": false,
+    "loopback_default": false,
+    "production_streaming_proxy_certified": false,
+    "standalone_sse_certified": false,
+    "application_sse_certified": false
+  },
+  "s3_17": {
+    "status": "covered-alpha-alert-transport-deferred",
+    "artifact_retention_default_hours": 24,
+    "artifact_retention_min_hours": 1,
+    "artifact_retention_max_hours": 2160,
+    "artifact_expiry_order": "physical-delete-before-expired",
+    "callback_failure_observability": "durable-inbox-admin-safe-projection",
+    "callback_alert_transport_certified": false
+  },
+  "evidence": [
+    {
+      "file": "backend/internal/bootstrap/reviewed_worker_host_test.go",
+      "symbol": "TestReviewedWorkerHostConfigScopesArtifactObjectRuntime"
+    },
+    {
+      "file": "backend/internal/bootstrap/reviewed_worker_host_test.go",
+      "symbol": "TestReviewedWorkerHostConfigRequiresExplicitLocationsAndAllowlists"
+    },
+    {
+      "file": "backend/internal/contexts/execution/application/artifact_objects_test.go",
+      "symbol": "TestArtifactObjectMaterializerExpiresOnlyAfterPhysicalDelete"
+    },
+    {
+      "file": "backend/tests/integration/provider_callback_runtime_test.go",
+      "symbol": "exerciseProviderCallbackRuntime"
+    }
+  ],
+  "limits": [
+    "no-production-streaming-proxy-certification",
+    "no-standalone-sse-certification",
+    "no-application-sse-certification",
+    "no-external-callback-alert-transport-certification",
+    "no-cloud-object-storage-certification"
+  ],
+  "document": "docs/engineering/2026-09-15-alpha-operations-boundary.md"
+}
