@@ -48,6 +48,14 @@ T17 现在补齐 reviewed `agent_http` 的提交、轮询、取消、重复 call
 
 真实 isolated PostgreSQL + local Agent server 覆盖 accepted 与 unknown 两条路径：accepted 后 `waiting_input → running`，相同 request + answer replay 不重复网络副作用，不同 answer 冲突；若 Provider 在可能收到 answer 后返回不确定结果，则 input request 进入 `unknown`、Run 进入 `reconciling`，相同 answer 再提交仍 **unknown no-resend**。成功后继续通过既有 ProviderObservation → `provider_result` Artifact 收敛。当前 Alpha 对每个 Run 最多允许一个 supplemental input request，因此这里不认证 multi-turn Agent conversation、任意 resume loop 或 A2A。
 
+## T40 MCP request cancellation 与 durable Run 边界
+
+当前 G3 认证的是 stateless Streamable HTTP、JSON response 的 MCP surface。两类分发都启用 SDK `PropagateRequestCancellation=true`；自动化测试让一个 `tools/call` use case 阻塞直到 context 被取消，随后确认 **request cancellation** 会到达当前 use case，并且被取消的 RPC 不会伪装成成功响应。
+
+显式 `mender_run_start` 的生命周期不同。测试在 Starter 已模拟 durable commit、但 HTTP/MCP 响应尚未返回时取消当前调用；Mender 不会因此隐式调用 `mender_run_cancel` 或删除已持久化 Run。官方 Go SDK v1.7.0 在被取消的 `tools/call` 后会关闭当前 ClientSession，因此恢复流程明确使用 **fresh MCP connection**，再用相同 `idempotency_key` 调用 `mender_run_start`；返回同一个 `run_id` 且 `replayed=true`。真实 PostgreSQL MCP Gateway 与 Fixed Toolset integration 另外验证相同 idempotency key 只对应一个 Admission/Run，业务参数变化则冲突。
+
+这项 T40 证据不声明 standalone SSE、反向代理断流、LB idle timeout 或公网 streaming proxy 已认证；这些属于 S3-16 的独立运维边界。当前 Alpha 只认证“当前 RPC cancellation 可传播”与“durable async Run 不随连接丢失而删除”这两个不变量。
+
 ## T28 Trusted Provider Callback / Inbox Alpha
 
 T28 的 callback ingress 只认证 reviewed Provider 的固定入口，不是用户可配置 Webhook。HTTP adapter 必须先对**原始 body**执行 **raw-body HMAC** 验证，再做严格 JSON 解析；timestamp、key-id 和签名失败、重复字段或篡改都不会进入 receiver。真实 PostgreSQL Inbox 按 Provider event identity 记录安全元数据；相同 event/body 重放只增加 delivery count，不重复 ProviderObservation 或 Artifact。
@@ -80,9 +88,10 @@ Connection revoke 会同步把 refresh sidecar 置为 revoked；被撤销 Connec
 
 - **S3-14 / T07 / T08**：`backend/tests/connections/oauth_http_test.go`、`backend/internal/contexts/connections/adapters/outbound/oauth/client_test.go`、`backend/tests/integration/oauth_refresh_runtime_test.go`。覆盖初始 refresh secret capture、reviewed token endpoint、并发 CAS、rotation/no-rotation、scope shrink、invalid_grant、瞬时重试、revoke、Secret Vault 隔离与最小权限。
 - **S3-07 / S3-11 / S3-14 / T17**：`backend/tests/integration/remote_agent_runtime_test.go`、`backend/internal/contexts/supply/adapters/outbound/http/executor_agent_test.go`、`backend/internal/processes/providercallback/adapters/inbound/httpapi/handler_test.go` 与 protected Run input API/client。覆盖 reviewed Agent submit/status/cancel、signed input callback、`run:input`、schema validation、digest-only persistence、idempotent replay、unknown no-resend、waiting_input resume 与 Artifact 收敛。
+- **S3-08 / S3-13 / T40**：`backend/tests/mcp/tools_test.go`、`backend/tests/integration/mcp_gateway_test.go` 与 `backend/tests/integration/fixed_toolset_mcp_test.go`。覆盖 request context cancellation、durable run_start 不隐式取消、fresh MCP connection + idempotency recovery，以及 Fixed Toolset async receipt replay。
 - **S3-04 / S3-14 / T28**：`backend/internal/processes/providercallback/adapters/inbound/httpapi/handler_test.go` 与 `backend/tests/integration/provider_callback_runtime_test.go`。覆盖 raw-body HMAC、tamper/stale signature、duplicate delivery、event-id conflict、Attempt binding、out-of-order/terminal replay quarantine、Workspace RLS、least-privilege observer 与 Run/Artifact convergence。
 - **S3-03 / S3-14 / S3-17 / T30**：`backend/internal/contexts/execution/application/artifact_objects_test.go` 与 `backend/tests/integration/artifact_result_test.go`。覆盖 object materialization、run:read、short-lived capability、digest/size 重验、跨 Workspace deny、physical delete、expiry 与旧 capability Gone。
-- **S3-13 / T13–T16 / T40**：`backend/tests/mcp/protocol_test.go`、`backend/tests/mcp/compatibility_matrix_test.go`、`backend/tests/mcp/fixed_toolset_test.go`。覆盖官方 SDK current-version 会话、两种分发、header/body 协议一致性、错误版本和认证边界。
+- **S3-13 / T13–T16**：`backend/tests/mcp/protocol_test.go`、`backend/tests/mcp/compatibility_matrix_test.go`、`backend/tests/mcp/fixed_toolset_test.go`。覆盖官方 SDK current-version 会话、两种分发、header/body 协议一致性、错误版本和认证边界。
 - **S3-15**：`backend/tests/integration/g3_entry_matrix_test.go` 由 `TestPostgresRuntimeContract` 的 `G3 same-subject three-source Entry Run Artifact convergence matrix` 子测试执行，覆盖 same Workspace/subject 的 HTTP、upstream MCP、Remote Agent 三来源闭环。
 - **S3-18**：本文件和 `g3-evidence.json` 是当前 supported-client / limit 证据。当前 supported harness 只有 Go SDK v1.7.0；third-party client 列表为空。
 

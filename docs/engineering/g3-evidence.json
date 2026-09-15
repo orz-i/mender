@@ -139,6 +139,34 @@
       }
     ]
   },
+  "mcp_cancellation": {
+    "status": "covered-alpha",
+    "transport_scope": "stateless-streamable-http-json-response",
+    "behaviors": [
+      "request_context_cancellation",
+      "persistent_run_start_no_implicit_cancel",
+      "reconnect_idempotent_recovery",
+      "fixed_tool_async_receipt_replay"
+    ],
+    "evidence": [
+      {
+        "file": "backend/tests/mcp/tools_test.go",
+        "symbol": "TestMCPRequestCancellationPropagatesToCurrentToolCall"
+      },
+      {
+        "file": "backend/tests/mcp/tools_test.go",
+        "symbol": "TestMCPRunStartDisconnectDoesNotCancelDurableRunAndRetryRecoversReceipt"
+      },
+      {
+        "file": "backend/tests/integration/mcp_gateway_test.go",
+        "symbol": "exerciseMCPGateway"
+      },
+      {
+        "file": "backend/tests/integration/fixed_toolset_mcp_test.go",
+        "symbol": "exerciseFixedToolsetMCP"
+      }
+    ]
+  },
   "provider_callback": {
     "status": "covered-alpha",
     "ingress_scope": "reviewed-signed-inbox",

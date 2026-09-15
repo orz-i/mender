@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,6 +20,143 @@ type captureStarter struct {
 	caller application.Caller
 	input  application.StartRequest
 	calls  int
+}
+
+func TestMCPRequestCancellationPropagatesToCurrentToolCall(t *testing.T) {
+	runs := &cancellationRuns{started: make(chan struct{}), canceled: make(chan struct{})}
+	session, closeSession := connectTools(t, &captureStarter{}, runs)
+	defer closeSession()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		_, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "mender_run_get", Arguments: map[string]any{"run_id": "run_cancel_probe"}})
+		done <- err
+	}()
+	select {
+	case <-runs.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("MCP tool call never reached the use case")
+	}
+	cancel()
+	select {
+	case <-runs.canceled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("MCP request cancellation did not propagate to the active tool call")
+	}
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("canceled MCP tool call reported success")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("canceled MCP tool call did not return")
+	}
+}
+
+func TestMCPRunStartDisconnectDoesNotCancelDurableRunAndRetryRecoversReceipt(t *testing.T) {
+	starter := &durableCanceledStarter{committed: make(chan struct{}), canceled: make(chan struct{})}
+	runs := &captureRuns{}
+	session, closeSession := connectTools(t, starter, runs)
+	args := map[string]any{
+		"idempotency_key": "operation-disconnect-0001", "tool_id": "tool_a", "tool_version": "1.0.0", "toolset_id": "set_a", "connection_id": "conn_a",
+		"arguments": map[string]any{"query": "persist me"}, "currency": "USD", "max_charge_micro": "100000",
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		_, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "mender_run_start", Arguments: args})
+		done <- err
+	}()
+	select {
+	case <-starter.committed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("run_start never reached its durable commit boundary")
+	}
+	cancel()
+	select {
+	case <-starter.canceled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("run_start request cancellation did not reach the current RPC")
+	}
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("disconnected run_start unexpectedly reported a response")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("disconnected run_start did not return")
+	}
+	if runs.cancelCaller.WorkspaceID != "" {
+		t.Fatal("request disconnect implicitly invoked persistent Run cancellation", runs.cancelCaller)
+	}
+
+	// The official SDK closes the current ClientSession after a canceled
+	// tools/call. T40 recovery therefore models a real reconnect, not reuse of a
+	// half-closed transport. The durable Start use case remains the same logical
+	// backend and must replay the persisted receipt by idempotency key.
+	closeSession()
+	retrySession, closeRetry := connectTools(t, starter, runs)
+	defer closeRetry()
+	replayed, err := retrySession.CallTool(context.Background(), &mcp.CallToolParams{Name: "mender_run_start", Arguments: args})
+	if err != nil || replayed.IsError {
+		t.Fatal("run_start retry did not recover durable receipt", replayed, err)
+	}
+	text := replayed.Content[0].(*mcp.TextContent).Text
+	if !strings.Contains(text, `"run_id":"run_persisted_after_disconnect"`) || !strings.Contains(text, `"replayed":true`) {
+		t.Fatal("run_start retry did not identify the persisted Run", text)
+	}
+	starter.mu.Lock()
+	calls := starter.calls
+	starter.mu.Unlock()
+	if calls != 2 || runs.cancelCaller.WorkspaceID != "" {
+		t.Fatal("run_start recovery changed cancellation semantics", calls, runs.cancelCaller)
+	}
+}
+
+type cancellationRuns struct {
+	started  chan struct{}
+	canceled chan struct{}
+}
+
+func (r *cancellationRuns) GetRun(ctx context.Context, _ application.Caller, _ string) (application.Run, error) {
+	close(r.started)
+	<-ctx.Done()
+	close(r.canceled)
+	return application.Run{}, ctx.Err()
+}
+func (*cancellationRuns) CancelRun(context.Context, application.Caller, string, string) (application.Run, error) {
+	return application.Run{}, application.ErrUnavailable
+}
+func (*cancellationRuns) GetArtifact(context.Context, application.Caller, string, string) (application.Artifact, error) {
+	return application.Artifact{}, application.ErrUnavailable
+}
+
+type durableCanceledStarter struct {
+	mu        sync.Mutex
+	receipt   *application.StartReceipt
+	committed chan struct{}
+	canceled  chan struct{}
+	calls     int
+}
+
+func (s *durableCanceledStarter) Start(ctx context.Context, c application.Caller, q application.StartRequest) (application.StartReceipt, error) {
+	s.mu.Lock()
+	s.calls++
+	if s.receipt != nil {
+		receipt := *s.receipt
+		receipt.Replayed = true
+		s.mu.Unlock()
+		return receipt, nil
+	}
+	receipt := application.StartReceipt{WorkspaceID: c.WorkspaceID, RunID: "run_persisted_after_disconnect", ReservationID: "res_persisted_after_disconnect", Currency: q.Currency, ReservedMicro: 70000}
+	s.receipt = &receipt
+	close(s.committed)
+	s.mu.Unlock()
+	<-ctx.Done()
+	close(s.canceled)
+	return application.StartReceipt{}, ctx.Err()
 }
 
 func (s *captureStarter) Start(_ context.Context, c application.Caller, q application.StartRequest) (application.StartReceipt, error) {
