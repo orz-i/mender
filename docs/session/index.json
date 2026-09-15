@@ -97,9 +97,9 @@
     "ses_b24b820ad024447d944a6fc31c6c5964": {
       "path": "docs/session/ses_b24b820ad024447d944a6fc31c6c5964.md",
       "title": "Reviewed OAuth Refresh Alpha",
-      "status": "active",
+      "status": "completed",
       "created_at": "unix:1789392868",
-      "updated_at": "unix:1789434959",
+      "updated_at": "unix:1789435115",
       "parent_session_id": "ses_ca840dfb85e2495e94c8037401927c36"
     },
     "ses_b73cf5f6073d42c5861409ba81162d3b": {
