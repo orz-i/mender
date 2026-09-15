@@ -48,7 +48,7 @@ func TestHumanRunDelegationIsExplicitScopedAndRevocable(t *testing.T) {
 	router := gin.New()
 	handler.Register(router)
 
-	request := httptest.NewRequest(http.MethodPost, "/api/console/v1/workspaces/ws_alpha/run-delegations", strings.NewReader(`{"scopes":["run:read","run:cancel"]}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/console/v1/workspaces/ws_alpha/run-delegations", strings.NewReader(`{"scopes":["run:read","run:cancel","run:input"]}`))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("X-Mender-CSRF", issuedSession.CSRFToken)
 	request.AddCookie(&http.Cookie{Name: "mender_session", Value: issuedSession.SessionToken})
@@ -77,6 +77,9 @@ func TestHumanRunDelegationIsExplicitScopedAndRevocable(t *testing.T) {
 	}
 	if err = delegations.Authorize(context.Background(), principal, "ws_alpha", "run:cancel"); err != nil {
 		t.Fatal("delegation lost cancel scope", err)
+	}
+	if err = delegations.Authorize(context.Background(), principal, "ws_alpha", "run:input"); err != nil {
+		t.Fatal("delegation lost supplemental-input scope", err)
 	}
 	if err = delegations.Authorize(context.Background(), principal, "ws_alpha", "run:create"); err == nil {
 		t.Fatal("delegation unexpectedly gained run:create")

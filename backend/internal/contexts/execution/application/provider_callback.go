@@ -5,6 +5,8 @@ import (
 	"errors"
 	"time"
 	"unicode/utf8"
+
+	"github.com/orz-i/mender/backend/internal/contexts/execution/domain"
 )
 
 var (
@@ -14,11 +16,12 @@ var (
 )
 
 type ProviderCallback struct {
-	ProviderID, EventID, BodySHA256, KeyID, WorkspaceID, RunID string
-	AttemptNo                                                  uint32
-	ProviderRequestID, ExternalTaskID, ObservationID           string
-	State, ResultJSON, ErrorCode                               string
-	SignedAt, ReceivedAt, ObservedAt                           time.Time
+	ProviderID, EventType, EventID, BodySHA256, KeyID, WorkspaceID, RunID string
+	AttemptNo                                                             uint32
+	ProviderRequestID, ExternalTaskID, ObservationID                      string
+	State, ResultJSON, ErrorCode                                          string
+	InputRequestID, InputPrompt, InputSchemaJSON                          string
+	SignedAt, ReceivedAt, ObservedAt                                      time.Time
 }
 
 type ProviderCallbackDisposition string
@@ -94,7 +97,19 @@ func validProviderCallback(callback ProviderCallback) bool {
 			return false
 		}
 	}
-	return true
+	switch callback.EventType {
+	case "provider.observation":
+		return callback.InputRequestID == "" && callback.InputPrompt == "" && callback.InputSchemaJSON == ""
+	case "provider.input_required":
+		request := AgentInputRequest{
+			WorkspaceID: domain.WorkspaceID(callback.WorkspaceID), RunID: domain.RunID(callback.RunID), AttemptNo: callback.AttemptNo,
+			ProviderID: callback.ProviderID, ProviderRequestID: callback.ProviderRequestID, ExternalTaskID: callback.ExternalTaskID,
+			InputRequestID: callback.InputRequestID, Prompt: callback.InputPrompt, InputSchemaJSON: callback.InputSchemaJSON, RequestedAt: callback.ObservedAt,
+		}
+		return callback.State == "input_required" && callback.ObservationID == callback.InputRequestID && callback.ResultJSON == "" && callback.ErrorCode == "" && request.Validate() == nil
+	default:
+		return false
+	}
 }
 
 func (s *ProviderCallbackService) Ingest(ctx context.Context, callback ProviderCallback) (ProviderCallbackReceipt, error) {

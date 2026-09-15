@@ -14,10 +14,11 @@ var (
 type ProviderStatusState string
 
 const (
-	StatusPending   ProviderStatusState = "pending"
-	StatusSucceeded ProviderStatusState = "succeeded"
-	StatusFailed    ProviderStatusState = "failed"
-	StatusCanceled  ProviderStatusState = "canceled"
+	StatusPending       ProviderStatusState = "pending"
+	StatusInputRequired ProviderStatusState = "input_required"
+	StatusSucceeded     ProviderStatusState = "succeeded"
+	StatusFailed        ProviderStatusState = "failed"
+	StatusCanceled      ProviderStatusState = "canceled"
 )
 
 type StatusQuery struct {
@@ -27,11 +28,14 @@ type StatusQuery struct {
 }
 
 type StatusObservation struct {
-	ObservationID string
-	State         ProviderStatusState
-	ResultJSON    string
-	ErrorCode     string
-	ObservedAt    time.Time
+	ObservationID   string
+	State           ProviderStatusState
+	ResultJSON      string
+	ErrorCode       string
+	InputRequestID  string
+	InputPrompt     string
+	InputSchemaJSON string
+	ObservedAt      time.Time
 }
 
 type ProviderStatusReader interface {

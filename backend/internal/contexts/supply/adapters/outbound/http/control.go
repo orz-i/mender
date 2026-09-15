@@ -19,6 +19,29 @@ type ControlBroker interface {
 	PrepareControl(context.Context, application.InvocationRef, time.Time) (application.PreparedControl, error)
 }
 
+func decodeInputRequest(raw json.RawMessage) (id, prompt, schema string, ok bool) {
+	if len(raw) < 2 || len(raw) > 70<<10 {
+		return "", "", "", false
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil || len(fields) != 3 || fields["input_request_id"] == nil || fields["prompt"] == nil || fields["input_schema"] == nil {
+		return "", "", "", false
+	}
+	var requestID, inputPrompt string
+	if json.Unmarshal(fields["input_request_id"], &requestID) != nil || json.Unmarshal(fields["prompt"], &inputPrompt) != nil || !validObservationID(requestID) || len(inputPrompt) < 1 || len(inputPrompt) > 2000 || len(fields["input_schema"]) < 2 || len(fields["input_schema"]) > 64<<10 || !json.Valid(fields["input_schema"]) || bytes.Equal(bytes.TrimSpace(fields["input_schema"]), []byte("null")) {
+		return "", "", "", false
+	}
+	var object map[string]any
+	if json.Unmarshal(fields["input_schema"], &object) != nil || object == nil {
+		return "", "", "", false
+	}
+	canonical, err := json.Marshal(object)
+	if err != nil || len(canonical) > 64<<10 {
+		return "", "", "", false
+	}
+	return requestID, inputPrompt, string(canonical), true
+}
+
 func validControlHandle(value string, required bool) bool {
 	if value == "" {
 		return !required
@@ -203,6 +226,16 @@ func decodeStatus(body []byte) (supply.StatusObservation, error) {
 			if err = decoder.Decode(&observedAt); err != nil {
 				return supply.StatusObservation{}, errors.New("invalid provider status response")
 			}
+		case "input_request":
+			var raw json.RawMessage
+			if err = decoder.Decode(&raw); err != nil {
+				return supply.StatusObservation{}, errors.New("invalid provider status response")
+			}
+			var ok bool
+			observation.InputRequestID, observation.InputPrompt, observation.InputSchemaJSON, ok = decodeInputRequest(raw)
+			if !ok {
+				return supply.StatusObservation{}, errors.New("invalid provider status response")
+			}
 		default:
 			return supply.StatusObservation{}, errors.New("invalid provider status response")
 		}
@@ -223,22 +256,27 @@ func decodeStatus(body []byte) (supply.StatusObservation, error) {
 	observation.ObservedAt = parsedAt
 	switch supply.ProviderStatusState(state) {
 	case supply.StatusPending:
-		if observation.ResultJSON != "" || observation.ErrorCode != "" {
+		if observation.ResultJSON != "" || observation.ErrorCode != "" || observation.InputRequestID != "" {
 			return supply.StatusObservation{}, errors.New("invalid provider status response")
 		}
 		observation.State = supply.StatusPending
+	case supply.StatusInputRequired:
+		if observation.ResultJSON != "" || observation.ErrorCode != "" || observation.InputRequestID == "" || observation.InputPrompt == "" || observation.InputSchemaJSON == "" {
+			return supply.StatusObservation{}, errors.New("invalid provider status response")
+		}
+		observation.State = supply.StatusInputRequired
 	case supply.StatusSucceeded:
-		if observation.ResultJSON == "" || observation.ErrorCode != "" {
+		if observation.ResultJSON == "" || observation.ErrorCode != "" || observation.InputRequestID != "" {
 			return supply.StatusObservation{}, errors.New("invalid provider status response")
 		}
 		observation.State = supply.StatusSucceeded
 	case supply.StatusFailed:
-		if observation.ResultJSON != "" || !validErrorCode(observation.ErrorCode) {
+		if observation.ResultJSON != "" || !validErrorCode(observation.ErrorCode) || observation.InputRequestID != "" {
 			return supply.StatusObservation{}, errors.New("invalid provider status response")
 		}
 		observation.State = supply.StatusFailed
 	case supply.StatusCanceled:
-		if observation.ResultJSON != "" || observation.ErrorCode != "" {
+		if observation.ResultJSON != "" || observation.ErrorCode != "" || observation.InputRequestID != "" {
 			return supply.StatusObservation{}, errors.New("invalid provider status response")
 		}
 		observation.State = supply.StatusCanceled
@@ -278,6 +316,9 @@ func (e *Executor) QueryStatus(ctx context.Context, query supply.StatusQuery) (s
 	}
 	observation, err := decodeStatus(response)
 	if err != nil {
+		return supply.StatusObservation{}, supply.ErrProviderStatusUnavailable
+	}
+	if observation.State == supply.StatusInputRequired && !prepared.Deployment.SupportsSupplementalInput() {
 		return supply.StatusObservation{}, supply.ErrProviderStatusUnavailable
 	}
 	return observation, nil

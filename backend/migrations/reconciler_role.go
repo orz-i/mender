@@ -28,8 +28,8 @@ func GrantReconciler(ctx context.Context, pool *pgxpool.Pool, role string) error
 	defer rollback(tx)
 	for _, sql := range []string{
 		"GRANT USAGE ON SCHEMA execution,mender_meta TO " + id,
-		"GRANT SELECT ON mender_meta.schema_migrations,execution.runs,execution.jobs,execution.run_attempts,execution.provider_observations,execution.provider_cancel_intents,execution.artifacts TO " + id,
-		"GRANT INSERT ON execution.provider_observations,execution.run_events TO " + id,
+		"GRANT SELECT ON mender_meta.schema_migrations,execution.runs,execution.jobs,execution.run_attempts,execution.provider_observations,execution.provider_cancel_intents,execution.artifacts,execution.agent_input_requests TO " + id,
+		"GRANT INSERT ON execution.provider_observations,execution.run_events,execution.agent_input_requests TO " + id,
 		"GRANT INSERT ON execution.settlement_jobs,execution.artifacts TO " + id,
 		"GRANT UPDATE (state,version,updated_at) ON execution.runs TO " + id,
 		"GRANT UPDATE (state,blocked_reason,updated_at,stopped_at) ON execution.jobs TO " + id,

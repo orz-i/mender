@@ -21,7 +21,7 @@ func ValidID(value string) bool {
 }
 
 func ValidScope(scope string) bool {
-	return scope == "run:read" || scope == "run:cancel" || scope == "run:create"
+	return scope == "run:read" || scope == "run:cancel" || scope == "run:create" || scope == "run:input"
 }
 
 // Credential is a detached authorization record. It never stores the raw secret.

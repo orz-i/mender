@@ -45,14 +45,14 @@ func NewRunDelegationService(repository RunDelegationRepository, sessions *Human
 }
 
 func normalizeDelegationScopes(scopes []string) ([]string, error) {
-	if len(scopes) < 1 || len(scopes) > 2 {
+	if len(scopes) < 1 || len(scopes) > 3 {
 		return nil, ErrForbidden
 	}
 	seen := map[string]bool{}
 	result := make([]string, 0, len(scopes))
 	for _, raw := range scopes {
 		scope := strings.TrimSpace(raw)
-		if scope != "run:read" && scope != "run:cancel" || seen[scope] {
+		if scope != "run:read" && scope != "run:cancel" && scope != "run:input" || seen[scope] {
 			return nil, ErrForbidden
 		}
 		seen[scope] = true
@@ -116,7 +116,7 @@ func (s *RunDelegationService) Authorize(ctx context.Context, principal RunDeleg
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if !domain.ValidID(principal.DelegationID) || !domain.ValidID(principal.UserID) || !domain.ValidID(workspace) || workspace != principal.WorkspaceID || action != "run:read" && action != "run:cancel" {
+	if !domain.ValidID(principal.DelegationID) || !domain.ValidID(principal.UserID) || !domain.ValidID(workspace) || workspace != principal.WorkspaceID || action != "run:read" && action != "run:cancel" && action != "run:input" {
 		return ErrForbidden
 	}
 	delegation, err := s.repository.FindRunDelegationByID(ctx, principal.DelegationID)

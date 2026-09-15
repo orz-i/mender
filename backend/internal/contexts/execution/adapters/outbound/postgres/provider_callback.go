@@ -176,8 +176,24 @@ func (r *ProviderCallbacks) IngestProviderCallback(ctx context.Context, callback
 	if err := ctx.Err(); err != nil {
 		return application.ProviderCallbackReceipt{}, err
 	}
-	observation := callbackObservation(callback)
-	if observation.Validate() != nil {
+	var observation domain.ProviderObservation
+	var inputRequest application.AgentInputRequest
+	switch callback.EventType {
+	case "provider.observation":
+		observation = callbackObservation(callback)
+		if observation.Validate() != nil {
+			return application.ProviderCallbackReceipt{}, application.ErrProviderCallbackInvalid
+		}
+	case "provider.input_required":
+		inputRequest = application.AgentInputRequest{
+			WorkspaceID: domain.WorkspaceID(callback.WorkspaceID), RunID: domain.RunID(callback.RunID), AttemptNo: callback.AttemptNo,
+			ProviderID: callback.ProviderID, ProviderRequestID: callback.ProviderRequestID, ExternalTaskID: callback.ExternalTaskID,
+			InputRequestID: callback.InputRequestID, Prompt: callback.InputPrompt, InputSchemaJSON: callback.InputSchemaJSON, RequestedAt: callback.ObservedAt,
+		}
+		if inputRequest.Validate() != nil {
+			return application.ProviderCallbackReceipt{}, application.ErrProviderCallbackInvalid
+		}
+	default:
 		return application.ProviderCallbackReceipt{}, application.ErrProviderCallbackInvalid
 	}
 	tx, err := r.scoped(ctx, callback.WorkspaceID)
@@ -252,16 +268,29 @@ func (r *ProviderCallbacks) IngestProviderCallback(ctx context.Context, callback
 		return quarantineCallback(ctx, tx, callback, existing.ReceiptID, reason)
 	}
 
-	if _, err = recordProviderObservationTx(ctx, tx, observation); err != nil {
-		switch {
-		case errors.Is(err, application.ErrProviderAlreadyTerminal):
-			return quarantineCallback(ctx, tx, callback, existing.ReceiptID, "terminal_replay")
-		case errors.Is(err, application.ErrProviderResultConflict), errors.Is(err, domain.ErrInvalidProviderObservation):
-			return quarantineCallback(ctx, tx, callback, existing.ReceiptID, "execution_conflict")
-		case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
-			return application.ProviderCallbackReceipt{}, err
-		default:
-			return application.ProviderCallbackReceipt{}, keepCallbackPending(ctx, tx)
+	if callback.EventType == "provider.input_required" {
+		if _, err = recordAgentInputRequestTx(ctx, tx, inputRequest); err != nil {
+			switch {
+			case errors.Is(err, application.ErrAgentInputConflict), errors.Is(err, application.ErrAgentInputInvalid):
+				return quarantineCallback(ctx, tx, callback, existing.ReceiptID, "execution_conflict")
+			case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+				return application.ProviderCallbackReceipt{}, err
+			default:
+				return application.ProviderCallbackReceipt{}, keepCallbackPending(ctx, tx)
+			}
+		}
+	} else {
+		if _, err = recordProviderObservationTx(ctx, tx, observation); err != nil {
+			switch {
+			case errors.Is(err, application.ErrProviderAlreadyTerminal):
+				return quarantineCallback(ctx, tx, callback, existing.ReceiptID, "terminal_replay")
+			case errors.Is(err, application.ErrProviderResultConflict), errors.Is(err, domain.ErrInvalidProviderObservation):
+				return quarantineCallback(ctx, tx, callback, existing.ReceiptID, "execution_conflict")
+			case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+				return application.ProviderCallbackReceipt{}, err
+			default:
+				return application.ProviderCallbackReceipt{}, keepCallbackPending(ctx, tx)
+			}
 		}
 	}
 	if err = markCallback(ctx, tx, callback, existing.ReceiptID, "accepted", ""); err != nil {

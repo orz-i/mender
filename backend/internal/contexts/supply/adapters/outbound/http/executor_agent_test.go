@@ -2,6 +2,7 @@ package httpexecutor
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -17,8 +18,57 @@ type agentBroker struct {
 	deployment domain.Deployment
 }
 
+func TestAgentHTTPStatusInputRequiredNeedsReviewedInputEndpoint(t *testing.T) {
+	payload := []byte(`{"observation_id":"obs.input.1","state":"input_required","input_request":{"input_request_id":"input.req.1","prompt":"Choose a region","input_schema":{"type":"object","properties":{"region":{"type":"string"}},"required":["region"]}},"observed_at":"2026-09-15T04:00:00Z"}`)
+	decoded, err := decodeStatus(payload)
+	if err != nil || decoded.State != supply.StatusInputRequired || decoded.InputRequestID != "input.req.1" {
+		t.Fatal("input-required status decoder rejected reviewed shape", decoded, err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/status" {
+			http.Error(w, "unexpected path", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(payload)
+	}))
+	defer server.Close()
+	policy := EgressPolicy{AllowedHosts: []string{"127.0.0.1"}, AllowHTTP: true, AllowLoopback: true}
+	query := supply.StatusQuery{WorkspaceID: "ws_agent", RunID: "run_agent", AttemptNo: 1, ProviderID: "provider_agent", ProviderRequestID: "request-agent", ExternalTaskID: "task-agent"}
+
+	withoutInput, err := NewForTransports(agentBroker{deployment: agentDeployment(server.URL)}, policy, []string{domain.TransportAgentHTTP}, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = withoutInput.QueryStatus(context.Background(), query); !errors.Is(err, supply.ErrProviderStatusUnavailable) {
+		t.Fatal("agent status created input request without reviewed input endpoint", err)
+	}
+
+	deployment := agentDeployment(server.URL)
+	deployment.InputEndpointURL, deployment.InputHTTPMethod = server.URL+"/input", "POST"
+	if deployment.Validate() != nil || !deployment.SupportsSupplementalInput() {
+		t.Fatal("reviewed Agent deployment did not retain supplemental-input capability", deployment.Validate())
+	}
+	withInput, err := NewForTransports(agentBroker{deployment: deployment}, policy, []string{domain.TransportAgentHTTP}, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	observation, err := withInput.QueryStatus(context.Background(), query)
+	if err != nil || observation.State != supply.StatusInputRequired || observation.InputRequestID != "input.req.1" || observation.InputPrompt != "Choose a region" || observation.InputSchemaJSON == "" {
+		t.Fatal("reviewed agent input-required status was not preserved", observation, err)
+	}
+
+	if _, err = decodeStatus([]byte(`{"observation_id":"obs.input.2","state":"input_required","input_request":{"input_request_id":"input.req.2","prompt":"x","input_schema":{"type":"object"},"unexpected":true},"observed_at":"2026-09-15T04:00:00Z"}`)); err == nil {
+		t.Fatal("input-required status accepted extra input_request fields")
+	}
+}
+
 func (b agentBroker) Prepare(_ context.Context, ref application.InvocationRef, _ time.Time) (application.PreparedInvocation, error) {
 	return application.PreparedInvocation{WorkspaceID: ref.WorkspaceID, RunID: ref.RunID, ToolVersionID: "tv_agent", Deployment: b.deployment, CanonicalArguments: `{"prompt":"hello"}`}, nil
+}
+
+func (b agentBroker) PrepareControl(_ context.Context, ref application.InvocationRef, _ time.Time) (application.PreparedControl, error) {
+	return application.PreparedControl{WorkspaceID: ref.WorkspaceID, RunID: ref.RunID, Deployment: b.deployment}, nil
 }
 
 func agentDeployment(serverURL string) domain.Deployment {

@@ -18,6 +18,35 @@ type reconciliationTargetsFake struct {
 	err    error
 }
 
+func TestProviderReconcilerRoutesAgentInputRequestThroughExecutionSink(t *testing.T) {
+	at := time.Date(2026, 9, 15, 4, 0, 0, 0, time.UTC)
+	target := reconciliationTarget()
+	status := &providerStatusSourceFake{status: app.ProviderStatus{
+		ObservationID: "input.status.1", ObservedAt: at,
+		InputRequest: &app.AgentInputRequest{InputRequestID: "input.req.1", Prompt: "Choose a region", InputSchemaJSON: `{"type":"object","properties":{"region":{"type":"string"}},"required":["region"]}`, RequestedAt: at},
+	}}
+	sink := &providerResultSinkFake{}
+	reconciler, err := app.NewProviderReconciler(&reconciliationTargetsFake{target: target, found: true}, status, sink)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = reconciler.ReconcileOne(context.Background(), target.WorkspaceID); err != nil {
+		t.Fatal(err)
+	}
+	if sink.calls != 0 || sink.inputCalls != 1 || sink.input.WorkspaceID != target.WorkspaceID || sink.input.RunID != target.RunID || sink.input.AttemptNo != target.AttemptNo || sink.input.ProviderID != target.ProviderID || sink.input.ProviderRequestID != target.ProviderRequestID || sink.input.ExternalTaskID != target.ExternalTaskID || sink.input.InputRequestID != "input.req.1" {
+		t.Fatal("agent input request did not preserve durable provider binding", sink.calls, sink.inputCalls, sink.input)
+	}
+}
+
+func (f *providerResultSinkFake) ObserveAgentInputRequest(_ context.Context, request app.AgentInputRequest) (app.AgentInputRequestRecord, error) {
+	f.inputCalls++
+	f.input = request
+	if f.err != nil {
+		return app.AgentInputRequestRecord{}, f.err
+	}
+	return app.AgentInputRequestRecord{WorkspaceID: string(request.WorkspaceID), RunID: string(request.RunID), InputRequestID: request.InputRequestID, State: "pending", Prompt: request.Prompt, InputSchemaJSON: request.InputSchemaJSON, RequestedAt: request.RequestedAt, UpdatedAt: request.RequestedAt}, nil
+}
+
 func TestProviderReconcilerBoundsProviderTimeByDurableSubmissionEvidence(t *testing.T) {
 	evidenceAt := time.Date(2026, 9, 10, 22, 0, 2, 0, time.UTC)
 	providerAt := evidenceAt.Add(-2 * time.Second)
@@ -71,9 +100,11 @@ func (f *providerStatusSourceFake) QueryProviderStatus(_ context.Context, target
 }
 
 type providerResultSinkFake struct {
-	calls int
-	last  domain.ProviderObservation
-	err   error
+	calls      int
+	last       domain.ProviderObservation
+	inputCalls int
+	input      app.AgentInputRequest
+	err        error
 }
 
 func (f *providerResultSinkFake) Observe(_ context.Context, observation domain.ProviderObservation) (app.ProviderResultRecord, error) {

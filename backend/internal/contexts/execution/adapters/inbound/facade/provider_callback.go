@@ -21,10 +21,11 @@ func (f *ProviderCallbacks) IngestProviderCallback(ctx context.Context, callback
 		return execution.ProviderCallbackReceipt{}, execution.ErrProviderCallbackUnavailable
 	}
 	receipt, err := f.service.Ingest(ctx, application.ProviderCallback{
-		ProviderID: callback.ProviderID, EventID: callback.EventID, BodySHA256: callback.BodySHA256, KeyID: callback.KeyID,
+		ProviderID: callback.ProviderID, EventType: callback.EventType, EventID: callback.EventID, BodySHA256: callback.BodySHA256, KeyID: callback.KeyID,
 		WorkspaceID: callback.WorkspaceID, RunID: callback.RunID, AttemptNo: callback.AttemptNo,
 		ProviderRequestID: callback.ProviderRequestID, ExternalTaskID: callback.ExternalTaskID, ObservationID: callback.ObservationID,
 		State: callback.State, ResultJSON: callback.ResultJSON, ErrorCode: callback.ErrorCode,
+		InputRequestID: callback.InputRequestID, InputPrompt: callback.InputPrompt, InputSchemaJSON: callback.InputSchemaJSON,
 		SignedAt: callback.SignedAt, ReceivedAt: callback.ReceivedAt, ObservedAt: callback.ObservedAt,
 	})
 	if err != nil {

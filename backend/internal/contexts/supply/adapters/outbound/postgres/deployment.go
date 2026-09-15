@@ -21,9 +21,9 @@ func (r *Deployments) FindDeployment(ctx context.Context, revision string) (doma
 	}
 	var d domain.Deployment
 	var timeoutMS int
-	var authHeader, idempotencyHeader, statusEndpoint, statusMethod, cancelEndpoint, cancelMethod, mcpProtocol *string
+	var authHeader, idempotencyHeader, statusEndpoint, statusMethod, cancelEndpoint, cancelMethod, inputEndpoint, inputMethod, mcpProtocol *string
 	var mcpStateless *bool
-	err := r.pool.QueryRow(ctx, `SELECT revision,provider_id,transport_kind,endpoint_url,http_method,status_endpoint_url,status_http_method,cancel_endpoint_url,cancel_http_method,auth_mode,auth_header_name,idempotency_header,mcp_protocol_version,mcp_stateless,request_timeout_ms,max_request_bytes,max_response_bytes,state,created_at FROM supply.deployments WHERE revision=$1`, revision).Scan(&d.Revision, &d.ProviderID, &d.TransportKind, &d.EndpointURL, &d.HTTPMethod, &statusEndpoint, &statusMethod, &cancelEndpoint, &cancelMethod, &d.AuthMode, &authHeader, &idempotencyHeader, &mcpProtocol, &mcpStateless, &timeoutMS, &d.MaxRequestBytes, &d.MaxResponseBytes, &d.State, &d.CreatedAt)
+	err := r.pool.QueryRow(ctx, `SELECT revision,provider_id,transport_kind,endpoint_url,http_method,status_endpoint_url,status_http_method,cancel_endpoint_url,cancel_http_method,input_endpoint_url,input_http_method,auth_mode,auth_header_name,idempotency_header,mcp_protocol_version,mcp_stateless,request_timeout_ms,max_request_bytes,max_response_bytes,state,created_at FROM supply.deployments WHERE revision=$1`, revision).Scan(&d.Revision, &d.ProviderID, &d.TransportKind, &d.EndpointURL, &d.HTTPMethod, &statusEndpoint, &statusMethod, &cancelEndpoint, &cancelMethod, &inputEndpoint, &inputMethod, &d.AuthMode, &authHeader, &idempotencyHeader, &mcpProtocol, &mcpStateless, &timeoutMS, &d.MaxRequestBytes, &d.MaxResponseBytes, &d.State, &d.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Deployment{}, application.ErrInvocationForbidden
 	}
@@ -53,6 +53,12 @@ func (r *Deployments) FindDeployment(ctx context.Context, revision string) (doma
 	}
 	if cancelMethod != nil {
 		d.CancelHTTPMethod = *cancelMethod
+	}
+	if inputEndpoint != nil {
+		d.InputEndpointURL = *inputEndpoint
+	}
+	if inputMethod != nil {
+		d.InputHTTPMethod = *inputMethod
 	}
 	d.RequestTimeout = time.Duration(timeoutMS) * time.Millisecond
 	if d.Validate() != nil {

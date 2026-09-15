@@ -13,11 +13,12 @@ var (
 )
 
 type ProviderCallback struct {
-	ProviderID, EventID, BodySHA256, KeyID, WorkspaceID, RunID string
-	AttemptNo                                                  uint32
-	ProviderRequestID, ExternalTaskID, ObservationID           string
-	State, ResultJSON, ErrorCode                               string
-	SignedAt, ReceivedAt, ObservedAt                           time.Time
+	ProviderID, EventType, EventID, BodySHA256, KeyID, WorkspaceID, RunID string
+	AttemptNo                                                             uint32
+	ProviderRequestID, ExternalTaskID, ObservationID                      string
+	State, ResultJSON, ErrorCode                                          string
+	InputRequestID, InputPrompt, InputSchemaJSON                          string
+	SignedAt, ReceivedAt, ObservedAt                                      time.Time
 }
 
 type ProviderCallbackDisposition string

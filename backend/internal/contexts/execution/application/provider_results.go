@@ -19,6 +19,20 @@ type ProviderResultRecord struct {
 	Observation domain.ProviderObservation
 }
 
+func (s *ProviderResults) ObserveAgentInputRequest(ctx context.Context, request AgentInputRequest) (AgentInputRequestRecord, error) {
+	if err := ctx.Err(); err != nil {
+		return AgentInputRequestRecord{}, err
+	}
+	if request.Validate() != nil {
+		return AgentInputRequestRecord{}, ErrAgentInputInvalid
+	}
+	repository, ok := s.repository.(AgentInputRequestRepository)
+	if !ok {
+		return AgentInputRequestRecord{}, ErrAgentInputUnavailable
+	}
+	return repository.RecordAgentInputRequest(ctx, request)
+}
+
 type ProviderResultRepository interface {
 	RecordProviderObservation(context.Context, domain.ProviderObservation) (ProviderResultRecord, error)
 }

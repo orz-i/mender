@@ -50,6 +50,11 @@ func (s *Source) QueryProviderStatus(ctx context.Context, target application.Pro
 	switch value.State {
 	case supply.StatusPending:
 		state = domain.ProviderPending
+	case supply.StatusInputRequired:
+		return application.ProviderStatus{
+			ObservationID: value.ObservationID, ObservedAt: value.ObservedAt,
+			InputRequest: &application.AgentInputRequest{InputRequestID: value.InputRequestID, Prompt: value.InputPrompt, InputSchemaJSON: value.InputSchemaJSON, RequestedAt: value.ObservedAt},
+		}, nil
 	case supply.StatusSucceeded:
 		state = domain.ProviderSucceeded
 	case supply.StatusFailed:

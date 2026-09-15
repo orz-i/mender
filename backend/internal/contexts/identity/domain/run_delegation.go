@@ -16,12 +16,12 @@ type RunDelegation struct {
 }
 
 func (d RunDelegation) Validate() bool {
-	if !ValidID(d.ID) || len(d.Digest) != 64 || !ValidID(d.WorkspaceID) || !ValidID(d.UserID) || d.CreatedAt.IsZero() || !d.ExpiresAt.After(d.CreatedAt) || len(d.Scopes) < 1 || len(d.Scopes) > 2 {
+	if !ValidID(d.ID) || len(d.Digest) != 64 || !ValidID(d.WorkspaceID) || !ValidID(d.UserID) || d.CreatedAt.IsZero() || !d.ExpiresAt.After(d.CreatedAt) || len(d.Scopes) < 1 || len(d.Scopes) > 3 {
 		return false
 	}
 	seen := map[string]bool{}
 	for _, scope := range d.Scopes {
-		if scope != "run:read" && scope != "run:cancel" || seen[scope] {
+		if scope != "run:read" && scope != "run:cancel" && scope != "run:input" || seen[scope] {
 			return false
 		}
 		seen[scope] = true
@@ -42,7 +42,7 @@ func (d RunDelegation) Allows(scope string, at time.Time) bool {
 			switch scope {
 			case "run:read":
 				return true
-			case "run:cancel":
+			case "run:cancel", "run:input":
 				return d.MembershipRole == RoleOwner || d.MembershipRole == RoleAdmin || d.MembershipRole == RoleDeveloper
 			}
 		}

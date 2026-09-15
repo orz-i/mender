@@ -94,6 +94,14 @@
       "created_at": "unix:1788947826",
       "updated_at": "unix:1789025134"
     },
+    "ses_97e75755ae184ab3a49b7c4dab5ec367": {
+      "path": "docs/session/ses_97e75755ae184ab3a49b7c4dab5ec367.md",
+      "title": "Remote Agent Supplemental Input Alpha",
+      "status": "active",
+      "created_at": "unix:1789447986",
+      "updated_at": "unix:1789449426",
+      "parent_session_id": "ses_b24b820ad024447d944a6fc31c6c5964"
+    },
     "ses_b24b820ad024447d944a6fc31c6c5964": {
       "path": "docs/session/ses_b24b820ad024447d944a6fc31c6c5964.md",
       "title": "Reviewed OAuth Refresh Alpha",
@@ -170,6 +178,6 @@
     "host-session:be22f26ebb1fb1dcd7490beb19b7d96a9c0380da14161fce6912b89779e7b9d6": "ses_ecbf2ba5ef77446a97478cb1f13a4c51",
     "host-session:c53bc646420f50ff80a09d952e02f152a0df5b2ff8de8ca08ba0290a7c708939": "ses_8e2a42283ec744f5940c1dc762d2e187",
     "host-session:f0dc32257f053fdad6fcdd105ee0cbd89e45535e508e8f6b9baa3068c6ba38ce": "ses_2f17c97012894567b7429bfba5d52c62",
-    "host-session:f469a465ece78120da5de60df27407ac2fb02c786dfd8fc9bd42ee7a3f475fab": "ses_b24b820ad024447d944a6fc31c6c5964"
+    "host-session:f469a465ece78120da5de60df27407ac2fb02c786dfd8fc9bd42ee7a3f475fab": "ses_97e75755ae184ab3a49b7c4dab5ec367"
   }
 }

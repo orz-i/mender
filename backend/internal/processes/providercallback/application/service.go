@@ -46,11 +46,12 @@ type Verifier interface {
 }
 
 type Callback struct {
-	ProviderID, EventID, BodySHA256, KeyID, WorkspaceID, RunID string
-	AttemptNo                                                  uint32
-	ProviderRequestID, ExternalTaskID, ObservationID           string
-	State, ResultJSON, ErrorCode                               string
-	SignedAt, ReceivedAt, ObservedAt                           time.Time
+	ProviderID, EventType, EventID, BodySHA256, KeyID, WorkspaceID, RunID string
+	AttemptNo                                                             uint32
+	ProviderRequestID, ExternalTaskID, ObservationID                      string
+	State, ResultJSON, ErrorCode                                          string
+	InputRequestID, InputPrompt, InputSchemaJSON                           string
+	SignedAt, ReceivedAt, ObservedAt                                      time.Time
 }
 
 type Disposition string
@@ -151,17 +152,28 @@ func decodeString(raw json.RawMessage, nullable bool) (string, bool) {
 
 func decodePayload(provider, keyID, bodyHash string, signedAt, receivedAt time.Time, canonical []byte) (Callback, error) {
 	var raw map[string]json.RawMessage
-	if json.Unmarshal(canonical, &raw) != nil || !exactKeys(raw,
-		"schema_version", "event_type", "event_id", "workspace_id", "run_id", "attempt_no", "provider_request_id", "external_task_id", "observation_id", "state", "result", "error_code", "occurred_at") {
+	if json.Unmarshal(canonical, &raw) != nil {
+		return Callback{}, ErrInvalid
+	}
+	eventType, ok := decodeString(raw["event_type"], false)
+	if !ok {
+		return Callback{}, ErrInvalid
+	}
+	switch eventType {
+	case "provider.observation":
+		if !exactKeys(raw, "schema_version", "event_type", "event_id", "workspace_id", "run_id", "attempt_no", "provider_request_id", "external_task_id", "observation_id", "state", "result", "error_code", "occurred_at") {
+			return Callback{}, ErrInvalid
+		}
+	case "provider.input_required":
+		if !exactKeys(raw, "schema_version", "event_type", "event_id", "workspace_id", "run_id", "attempt_no", "provider_request_id", "external_task_id", "input_request_id", "prompt", "input_schema", "occurred_at") {
+			return Callback{}, ErrInvalid
+		}
+	default:
 		return Callback{}, ErrInvalid
 	}
 	var version int
 	var attempt uint32
 	if json.Unmarshal(raw["schema_version"], &version) != nil || version != 1 || json.Unmarshal(raw["attempt_no"], &attempt) != nil || attempt == 0 || attempt > 100 {
-		return Callback{}, ErrInvalid
-	}
-	eventType, ok := decodeString(raw["event_type"], false)
-	if !ok || eventType != "provider.observation" {
 		return Callback{}, ErrInvalid
 	}
 	eventID, ok := decodeString(raw["event_id"], false)
@@ -180,20 +192,8 @@ func decodePayload(provider, keyID, bodyHash string, signedAt, receivedAt time.T
 	if !ok || !validHandle(providerRequestID, true) {
 		return Callback{}, ErrInvalid
 	}
-	externalTaskID, ok := decodeString(raw["external_task_id"], true)
-	if !ok || !validHandle(externalTaskID, false) {
-		return Callback{}, ErrInvalid
-	}
-	observationID, ok := decodeString(raw["observation_id"], false)
-	if !ok || !validCallbackID(observationID, 200) {
-		return Callback{}, ErrInvalid
-	}
-	state, ok := decodeString(raw["state"], false)
-	if !ok {
-		return Callback{}, ErrInvalid
-	}
-	errorCode, ok := decodeString(raw["error_code"], true)
-	if !ok || errorCode != "" && !validCallbackID(errorCode, 128) {
+	externalTaskID, ok := decodeString(raw["external_task_id"], eventType == "provider.observation")
+	if !ok || !validHandle(externalTaskID, eventType == "provider.input_required") {
 		return Callback{}, ErrInvalid
 	}
 	occurredRaw, ok := decodeString(raw["occurred_at"], false)
@@ -206,6 +206,50 @@ func decodePayload(provider, keyID, bodyHash string, signedAt, receivedAt time.T
 	}
 	observedAt = observedAt.UTC().Truncate(time.Microsecond)
 	if observedAt.IsZero() || observedAt.After(receivedAt.Add(time.Minute)) {
+		return Callback{}, ErrInvalid
+	}
+	callback := Callback{
+		ProviderID: provider, EventType: eventType, EventID: eventID, BodySHA256: bodyHash, KeyID: keyID,
+		WorkspaceID: workspace, RunID: runID, AttemptNo: attempt, ProviderRequestID: providerRequestID,
+		ExternalTaskID: externalTaskID, SignedAt: signedAt, ReceivedAt: receivedAt, ObservedAt: observedAt,
+	}
+	if eventType == "provider.input_required" {
+		inputRequestID, inputOK := decodeString(raw["input_request_id"], false)
+		prompt, promptOK := decodeString(raw["prompt"], false)
+		if !inputOK || !validCallbackID(inputRequestID, 200) || !promptOK || len(prompt) < 1 || len(prompt) > 2000 || !utf8.ValidString(prompt) {
+			return Callback{}, ErrInvalid
+		}
+		for _, ch := range prompt {
+			if ch == 0x7f || ch < 0x20 && ch != '\n' && ch != '\r' && ch != '\t' {
+				return Callback{}, ErrInvalid
+			}
+		}
+		if len(raw["input_schema"]) < 2 || len(raw["input_schema"]) > 64<<10 || !json.Valid(raw["input_schema"]) || bytes.Equal(bytes.TrimSpace(raw["input_schema"]), []byte("null")) {
+			return Callback{}, ErrInvalid
+		}
+		var schema map[string]any
+		if json.Unmarshal(raw["input_schema"], &schema) != nil || schema == nil {
+			return Callback{}, ErrInvalid
+		}
+		encoded, err := json.Marshal(schema)
+		if err != nil || len(encoded) > 64<<10 {
+			return Callback{}, ErrInvalid
+		}
+		callback.ObservationID, callback.State = inputRequestID, "input_required"
+		callback.InputRequestID, callback.InputPrompt, callback.InputSchemaJSON = inputRequestID, prompt, string(encoded)
+		return callback, nil
+	}
+
+	observationID, ok := decodeString(raw["observation_id"], false)
+	if !ok || !validCallbackID(observationID, 200) {
+		return Callback{}, ErrInvalid
+	}
+	state, ok := decodeString(raw["state"], false)
+	if !ok {
+		return Callback{}, ErrInvalid
+	}
+	errorCode, ok := decodeString(raw["error_code"], true)
+	if !ok || errorCode != "" && !validCallbackID(errorCode, 128) {
 		return Callback{}, ErrInvalid
 	}
 	resultJSON := ""
@@ -232,12 +276,8 @@ func decodePayload(provider, keyID, bodyHash string, signedAt, receivedAt time.T
 	default:
 		return Callback{}, ErrInvalid
 	}
-	return Callback{
-		ProviderID: provider, EventID: eventID, BodySHA256: bodyHash, KeyID: keyID,
-		WorkspaceID: workspace, RunID: runID, AttemptNo: attempt, ProviderRequestID: providerRequestID,
-		ExternalTaskID: externalTaskID, ObservationID: observationID, State: state, ResultJSON: resultJSON,
-		ErrorCode: errorCode, SignedAt: signedAt, ReceivedAt: receivedAt, ObservedAt: observedAt,
-	}, nil
+	callback.ObservationID, callback.State, callback.ResultJSON, callback.ErrorCode = observationID, state, resultJSON, errorCode
+	return callback, nil
 }
 
 func (s *Service) Handle(ctx context.Context, provider, keyID, timestamp, signature string, raw []byte) (Receipt, error) {

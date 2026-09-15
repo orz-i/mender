@@ -23,6 +23,27 @@ type testVerifier struct {
 	calls        int
 }
 
+func TestCallbackAcceptsStrictAgentInputRequiredEvent(t *testing.T) {
+	at := time.Date(2026, 9, 15, 4, 2, 0, 0, time.UTC)
+	verifier := &testVerifier{verification: application.Verification{SignedAt: time.Date(2026, 9, 15, 4, 0, 0, 0, time.UTC), BodySHA256: strings.Repeat("b", 64)}}
+	receiver := &testReceiver{receipt: application.Receipt{EventID: "evt.agent.input.1", Disposition: application.Accepted}}
+	router := testHandler(t, receiver, verifier, at)
+	body := `{"schema_version":1,"event_type":"provider.input_required","event_id":"evt.agent.input.1","workspace_id":"ws_agent","run_id":"run_agent","attempt_no":1,"provider_request_id":"agent/request-1","external_task_id":"agent/task-1","input_request_id":"input.req.1","prompt":"Choose a region","input_schema":{"type":"object","properties":{"region":{"type":"string"}},"required":["region"]},"occurred_at":"2026-09-15T04:00:00Z"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/provider-callbacks/v1/providers/provider_agent", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Mender-Callback-Key-Id", "key_current")
+	req.Header.Set("X-Mender-Callback-Timestamp", "1789444800")
+	req.Header.Set("X-Mender-Callback-Signature", "opaque-signature")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusAccepted || receiver.calls != 1 || receiver.callback.EventType != "provider.input_required" || receiver.callback.State != "input_required" || receiver.callback.InputRequestID != "input.req.1" || receiver.callback.ObservationID != "input.req.1" || receiver.callback.InputPrompt != "Choose a region" || receiver.callback.InputSchemaJSON == "" {
+		t.Fatal(w.Code, w.Body.String(), receiver.callback)
+	}
+	if receiver.callback.ResultJSON != "" || receiver.callback.ErrorCode != "" || strings.Contains(w.Body.String(), "Choose a region") || strings.Contains(w.Body.String(), "input_schema") {
+		t.Fatal("input-required callback leaked provider metadata in response", w.Body.String())
+	}
+}
+
 func (v *testVerifier) Verify(context.Context, string, string, string, string, []byte, time.Time) (application.Verification, error) {
 	v.calls++
 	return v.verification, v.err

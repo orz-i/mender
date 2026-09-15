@@ -35,17 +35,18 @@ func CallbackIngestorRole(ctx context.Context, pool *pgxpool.Pool) error {
 	 AND has_table_privilege(current_user,'execution.run_attempts','SELECT')
 	 AND has_table_privilege(current_user,'execution.runs','SELECT')
 	 AND has_table_privilege(current_user,'execution.jobs','SELECT')
-	 AND has_table_privilege(current_user,'execution.artifacts','SELECT,INSERT')`).Scan(&ok); err != nil || !ok {
+	 AND has_table_privilege(current_user,'execution.artifacts','SELECT,INSERT')
+	 AND has_table_privilege(current_user,'execution.agent_input_requests','SELECT,INSERT')`).Scan(&ok); err != nil || !ok {
 		return errors.New("callback-ingestor required grants are missing")
 	}
-	for _, table := range []string{"execution.run_attempts", "execution.provider_observations", "execution.run_events", "execution.artifacts"} {
+	for _, table := range []string{"execution.run_attempts", "execution.provider_observations", "execution.run_events", "execution.artifacts", "execution.agent_input_requests"} {
 		var unsafe bool
 		if err := pool.QueryRow(ctx, `SELECT has_table_privilege(current_user,$1,'UPDATE,DELETE,TRUNCATE') OR has_any_column_privilege(current_user,$1,'UPDATE')`, table).Scan(&unsafe); err != nil || unsafe {
 			return errors.New("callback-ingestor immutable execution facts are mutable")
 		}
 	}
 	var rls int
-	if err := pool.QueryRow(ctx, `SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='execution' AND c.relname IN('runs','jobs','run_attempts','provider_observations','provider_cancel_intents','settlement_jobs','artifacts','provider_callback_inbox') AND c.relrowsecurity AND c.relforcerowsecurity`).Scan(&rls); err != nil || rls != 8 {
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='execution' AND c.relname IN('runs','jobs','run_attempts','provider_observations','provider_cancel_intents','settlement_jobs','artifacts','provider_callback_inbox','agent_input_requests') AND c.relrowsecurity AND c.relforcerowsecurity`).Scan(&rls); err != nil || rls != 9 {
 		return errors.New("callback-ingestor RLS safeguards missing")
 	}
 	return nil

@@ -16,15 +16,16 @@ const (
 )
 
 type Deployment struct {
-	Revision, ProviderID, TransportKind, EndpointURL, HTTPMethod  string
-	StatusEndpointURL, StatusHTTPMethod, CancelEndpointURL        string
-	CancelHTTPMethod, AuthMode, AuthHeaderName, IdempotencyHeader string
-	MCPProtocolVersion                                            string
-	MCPStateless                                                  bool
-	RequestTimeout                                                time.Duration
-	MaxRequestBytes, MaxResponseBytes                             int
-	State                                                         string
-	CreatedAt                                                     time.Time
+	Revision, ProviderID, TransportKind, EndpointURL, HTTPMethod string
+	StatusEndpointURL, StatusHTTPMethod, CancelEndpointURL       string
+	CancelHTTPMethod, InputEndpointURL, InputHTTPMethod          string
+	AuthMode, AuthHeaderName, IdempotencyHeader                  string
+	MCPProtocolVersion                                           string
+	MCPStateless                                                 bool
+	RequestTimeout                                               time.Duration
+	MaxRequestBytes, MaxResponseBytes                            int
+	State                                                        string
+	CreatedAt                                                    time.Time
 }
 
 func reservedHTTPHeader(value string) bool {
@@ -75,13 +76,16 @@ func (d Deployment) Validate() error {
 			return ErrInvalidDeployment
 		}
 	case TransportMCPStreamableHTTP:
-		if d.IdempotencyHeader != "" || d.MCPProtocolVersion != "2026-07-28" || !d.MCPStateless || d.StatusEndpointURL != "" || d.StatusHTTPMethod != "" || d.CancelEndpointURL != "" || d.CancelHTTPMethod != "" {
+		if d.IdempotencyHeader != "" || d.MCPProtocolVersion != "2026-07-28" || !d.MCPStateless || d.StatusEndpointURL != "" || d.StatusHTTPMethod != "" || d.CancelEndpointURL != "" || d.CancelHTTPMethod != "" || d.InputEndpointURL != "" || d.InputHTTPMethod != "" {
 			return ErrInvalidDeployment
 		}
 	default:
 		return ErrInvalidDeployment
 	}
-	if !validOptionalControlEndpoint(d.StatusEndpointURL, d.StatusHTTPMethod) || !validOptionalControlEndpoint(d.CancelEndpointURL, d.CancelHTTPMethod) {
+	if d.TransportKind != TransportAgentHTTP && (d.InputEndpointURL != "" || d.InputHTTPMethod != "") {
+		return ErrInvalidDeployment
+	}
+	if !validOptionalControlEndpoint(d.StatusEndpointURL, d.StatusHTTPMethod) || !validOptionalControlEndpoint(d.CancelEndpointURL, d.CancelHTTPMethod) || !validOptionalControlEndpoint(d.InputEndpointURL, d.InputHTTPMethod) {
 		return ErrInvalidDeployment
 	}
 	switch d.State {
@@ -131,6 +135,10 @@ func (d Deployment) SupportsStatusQuery() bool {
 
 func (d Deployment) SupportsCancellation() bool {
 	return d.CancelEndpointURL != "" && d.CancelHTTPMethod == "POST"
+}
+
+func (d Deployment) SupportsSupplementalInput() bool {
+	return d.Validate() == nil && d.TransportKind == TransportAgentHTTP && d.InputEndpointURL != "" && d.InputHTTPMethod == "POST"
 }
 
 func (d Deployment) SupportsMCPTools() bool {

@@ -52,6 +52,7 @@ type ProviderStatus struct {
 	State         domain.ProviderResultState
 	ResultJSON    string
 	ErrorCode     string
+	InputRequest  *AgentInputRequest
 	ObservedAt    time.Time
 }
 
@@ -103,6 +104,25 @@ func (r *ProviderReconciler) ReconcileOne(ctx context.Context, workspace domain.
 			return ProviderResultRecord{}, err
 		}
 		return ProviderResultRecord{}, ErrProviderStatusUnavailable
+	}
+	if status.InputRequest != nil {
+		request := *status.InputRequest
+		request.WorkspaceID, request.RunID, request.AttemptNo = target.WorkspaceID, target.RunID, target.AttemptNo
+		request.ProviderID, request.ProviderRequestID, request.ExternalTaskID = target.ProviderID, target.ProviderRequestID, target.ExternalTaskID
+		if request.RequestedAt.IsZero() {
+			request.RequestedAt = status.ObservedAt
+		}
+		if !target.EvidenceAt.IsZero() && request.RequestedAt.Before(target.EvidenceAt) {
+			request.RequestedAt = target.EvidenceAt
+		}
+		sink, ok := r.results.(ProviderInputRequestSink)
+		if !ok || request.Validate() != nil {
+			return ProviderResultRecord{}, ErrInvalidProviderStatus
+		}
+		if _, err = sink.ObserveAgentInputRequest(ctx, request); err != nil {
+			return ProviderResultRecord{}, err
+		}
+		return ProviderResultRecord{}, nil
 	}
 	observedAt := status.ObservedAt
 	if !target.EvidenceAt.IsZero() && observedAt.Before(target.EvidenceAt) {

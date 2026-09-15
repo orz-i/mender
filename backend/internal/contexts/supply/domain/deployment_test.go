@@ -16,10 +16,30 @@ func validAgentDeployment() Deployment {
 	}
 }
 
+func TestHTTPDeploymentCannotClaimAgentSupplementalInputEndpoint(t *testing.T) {
+	d := validAgentDeployment()
+	d.TransportKind = TransportHTTP
+	d.InputEndpointURL, d.InputHTTPMethod = "https://agent.example/v1/tasks/input", "POST"
+	if d.Validate() == nil || d.SupportsSupplementalInput() {
+		t.Fatal("ordinary HTTP deployment accepted an Agent supplemental-input endpoint")
+	}
+}
+
 func TestRemoteAgentDeploymentRequiresAsyncControlContract(t *testing.T) {
 	d := validAgentDeployment()
 	if d.Validate() != nil || !d.SupportsRemoteAgent() {
 		t.Fatal("valid remote Agent deployment rejected")
+	}
+	if d.SupportsSupplementalInput() {
+		t.Fatal("remote Agent deployment without input endpoint claimed supplemental-input support")
+	}
+	d.InputEndpointURL, d.InputHTTPMethod = "https://agent.example/v1/tasks/input", "POST"
+	if d.Validate() != nil || !d.SupportsSupplementalInput() {
+		t.Fatal("reviewed remote Agent input endpoint was rejected")
+	}
+	d.InputHTTPMethod = "GET"
+	if d.Validate() == nil || d.SupportsSupplementalInput() {
+		t.Fatal("unsafe remote Agent input method was accepted")
 	}
 	d.StatusEndpointURL, d.StatusHTTPMethod = "", ""
 	if d.Validate() == nil || d.SupportsRemoteAgent() {
