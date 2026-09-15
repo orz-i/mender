@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "as_of": "2026-09-15",
+  "release_stage": "core-alpha",
+  "decision": {
+    "core_alpha": "complete",
+    "g3_internal_integration": "complete",
+    "g3_gate": "scoped-go",
+    "external_client_interoperability": "deferred",
+    "production_operational_certification": "deferred"
+  },
+  "certified_client_matrix": [
+    {
+      "id": "go-sdk-v1.7.0-automated-harness",
+      "kind": "automated-harness",
+      "protocol_version": "2026-07-28",
+      "distributions": ["meta_tools", "fixed_toolset"],
+      "status": "certified"
+    }
+  ],
+  "third_party_clients_certified": [],
+  "user_feedback_status": "not-collected-external-acceptance-deferred",
+  "entry_sources": ["http", "mcp_streamable_http", "agent_http"],
+  "required_tests": ["T07", "T08", "T13", "T14", "T15", "T16", "T17", "T28", "T30", "T40"],
+  "evidence_packages": [
+    "docs/engineering/g3-evidence.json",
+    "docs/engineering/alpha-operations-evidence.json"
+  ],
+  "deferred": [
+    "third-party-mcp-client-interoperability",
+    "external-user-acceptance-feedback",
+    "production-streaming-proxy",
+    "standalone-mcp-sse",
+    "application-run-event-sse",
+    "external-callback-alert-transport",
+    "cloud-object-storage-certification",
+    "a2a-protocol",
+    "multi-turn-agent",
+    "payment-accounting"
+  ],
+  "next_phase": "s4-governed-commercialization-prep",
+  "document": "docs/engineering/2026-09-15-core-alpha-g3-decision.md"
+}
