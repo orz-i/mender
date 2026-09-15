@@ -1,6 +1,5 @@
 """Offline structural checks for Mender design examples; not conformance or system tests."""
 from pathlib import Path
-import hashlib
 import json
 import re
 import sys
@@ -42,11 +41,10 @@ def check():
     Draft202012Validator(config).validate({"credential_ref":"conn_example"})
     checks.append("PASS: Connection config schema and reference-only example")
     manifest = read_json("plugin-manifest.example.json")
-    artifact = safe_local(manifest["artifact"]["file"])
-    assert hashlib.sha256(artifact.read_bytes()).hexdigest() == manifest["artifact"]["sha256"]
-    for name in [manifest["config_schema_file"], manifest["ui"]["schema_file"], *manifest["tool_files"]]:
-        safe_local(name)
-    checks.append("PASS: Confined local references and SHA-256 artifact digest")
+    assert {capability["kind"] for capability in manifest["capabilities"]} == {"api_tool", "mcp_tool", "agent"}
+    for forbidden in ("artifact", "script", "endpoint", "permissions", "secret", "config_schema_file", "ui"):
+        assert forbidden not in manifest
+    checks.append("PASS: Plugin manifest is declarative capability references only; no executable artifact, endpoint, permission or secret fields")
     tool = read_json("tool.example.json")
     for key in ("input_schema", "output_schema"):
         Draft202012Validator.check_schema(tool[key])

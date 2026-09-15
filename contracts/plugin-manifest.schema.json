@@ -1,18 +1,17 @@
 {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.example.test/mender/plugin-manifest-v1alpha1.json",
+  "title": "Mender governed PluginManifest v1alpha1",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "apiVersion",
     "plugin_id",
     "version",
-    "kind",
-    "kernel_abi",
-    "artifact",
-    "config_schema_file",
-    "tool_files",
-    "permissions",
-    "limits",
-    "ui"
+    "publisher_id",
+    "display_name",
+    "description",
+    "capabilities"
   ],
   "properties": {
     "apiVersion": {
@@ -26,160 +25,63 @@
       "type": "string",
       "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?$"
     },
-    "kind": {
-      "enum": [
-        "declarative-http"
-      ]
-    },
-    "kernel_abi": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "major",
-        "min_minor"
-      ],
-      "properties": {
-        "major": {
-          "const": 1
-        },
-        "min_minor": {
-          "type": "integer",
-          "minimum": 0
-        }
-      }
-    },
-    "artifact": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "file",
-        "media_type",
-        "sha256"
-      ],
-      "properties": {
-        "file": {
-          "type": "string",
-          "minLength": 1
-        },
-        "media_type": {
-          "const": "application/vnd.mender.declarative+json"
-        },
-        "sha256": {
-          "type": "string",
-          "pattern": "^[a-f0-9]{64}$"
-        }
-      }
-    },
-    "config_schema_file": {
+    "publisher_id": {
       "type": "string",
-      "minLength": 1
+      "pattern": "^[A-Za-z0-9_-]{1,128}$"
     },
-    "tool_files": {
+    "display_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 4000
+    },
+    "capabilities": {
       "type": "array",
       "minItems": 1,
-      "uniqueItems": true,
+      "maxItems": 64,
       "items": {
-        "type": "string",
-        "minLength": 1
-      }
-    },
-    "permissions": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "egress",
-        "secret_capabilities",
-        "filesystem"
-      ],
-      "properties": {
-        "egress": {
-          "type": "array",
-          "items": {
+        "oneOf": [
+          {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "scheme",
-              "host",
-              "ports"
-            ],
+            "required": ["kind", "tool_version_id"],
             "properties": {
-              "scheme": {
-                "const": "https"
-              },
-              "host": {
+              "kind": { "const": "api_tool" },
+              "tool_version_id": {
                 "type": "string",
-                "minLength": 1
-              },
-              "ports": {
-                "type": "array",
-                "minItems": 1,
-                "uniqueItems": true,
-                "items": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 65535
-                }
+                "pattern": "^[A-Za-z0-9_-]{1,128}$"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "tool_version_id"],
+            "properties": {
+              "kind": { "const": "mcp_tool" },
+              "tool_version_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,128}$"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "deployment_revision"],
+            "properties": {
+              "kind": { "const": "agent" },
+              "deployment_revision": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,128}$"
               }
             }
           }
-        },
-        "secret_capabilities": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
-        },
-        "filesystem": {
-          "const": "none"
-        }
-      }
-    },
-    "limits": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "timeout_ms",
-        "max_request_bytes",
-        "max_response_bytes",
-        "max_results"
-      ],
-      "properties": {
-        "timeout_ms": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 300000
-        },
-        "max_request_bytes": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "max_response_bytes": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "max_results": {
-          "type": "integer",
-          "minimum": 1
-        }
-      }
-    },
-    "ui": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "schema_file"
-      ],
-      "properties": {
-        "schema_file": {
-          "type": "string",
-          "minLength": 1
-        }
+        ]
       }
     }
-  },
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.example.test/mender/plugin-manifest-v1alpha1.json",
-  "title": "Mender PluginManifest v1alpha1 — design sample"
+  }
 }

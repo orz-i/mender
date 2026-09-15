@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
-import { readFileSync, statSync } from 'node:fs';
-import { isAbsolute, join, relative, resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Ajv2020 from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
@@ -17,20 +16,13 @@ function validate(schema, value, name) {
   const validator = ajv.compile(schema);
   assert.ok(validator(value), `${name}: ${ajv.errorsText(validator.errors)}`);
 }
-function localFile(name) {
-  const path = resolve(root, name);
-  const within = relative(root, path);
-  assert.ok(!within.startsWith('..') && !isAbsolute(within) && statSync(path).isFile(), `Invalid artifact ${name}`);
-  return path;
-}
 for (const stem of ['plugin-manifest', 'event-envelope']) {
   validate(json(`${stem}.schema.json`), json(stem === 'event-envelope' ? 'event.example.json' : `${stem}.example.json`), stem);
 }
 validate(json('connection-config.schema.json'), { credential_ref: 'conn_example' }, 'connection-config');
 const manifest = json('plugin-manifest.example.json');
-const digest = createHash('sha256').update(readFileSync(localFile(manifest.artifact.file))).digest('hex');
-assert.equal(digest, manifest.artifact.sha256, 'Artifact digest mismatch');
-for (const name of [manifest.config_schema_file, manifest.ui.schema_file, ...manifest.tool_files]) localFile(name);
+assert.deepEqual(new Set(manifest.capabilities.map((capability) => capability.kind)), new Set(['api_tool', 'mcp_tool', 'agent']));
+for (const forbidden of ['artifact', 'script', 'endpoint', 'permissions', 'secret', 'config_schema_file', 'ui']) assert.ok(!(forbidden in manifest), `Plugin manifest exposes forbidden field ${forbidden}`);
 const tool = json('tool.example.json');
 validate(tool.input_schema, { query: 'example', limit: 10 }, 'tool input');
 validate(tool.output_schema, { items: [{ name: 'Example', domain: 'example.test' }] }, 'tool output');
@@ -64,7 +56,7 @@ for (const [path, item] of Object.entries(api.paths)) {
   }
 }
 for (const [name, schema] of Object.entries(api.components.schemas)) assert.ok(ajv.validateSchema(schema), `${name}: ${ajv.errorsText()}`);
-console.log(`PASS: JSON Schemas / examples, artifact SHA-256, local refs and OpenAPI structure (${Object.keys(api.paths).length} paths / ${ids.size} operations)`);
+console.log(`PASS: JSON Schemas / examples, governed Plugin capability references, local refs and OpenAPI structure (${Object.keys(api.paths).length} paths / ${ids.size} operations)`);
 console.log('LIMIT: this validates design examples, not full OpenAPI conformance or implemented business endpoints.');
 
 const runAPI = parse(readFileSync(join(root, 'run-query-cancel.openapi.yaml'), 'utf8'));
