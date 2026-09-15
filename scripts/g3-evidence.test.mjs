@@ -14,7 +14,11 @@ test('G3 evidence manifest keeps the certified current protocol and exact three-
   assert.equal(manifest.oauth_refresh.status, 'covered-alpha');
   assert.equal(manifest.remote_agent.status, 'covered-alpha');
   assert.equal(manifest.remote_agent.interaction_scope, 'one-shot-supplemental-input');
-  assert.ok(manifest.requirements.includes('T07') && manifest.requirements.includes('T08') && manifest.requirements.includes('T17'));
+  assert.equal(manifest.provider_callback.status, 'covered-alpha');
+  assert.equal(manifest.provider_callback.ingress_scope, 'reviewed-signed-inbox');
+  assert.equal(manifest.artifact_object.status, 'covered-alpha');
+  assert.equal(manifest.artifact_object.storage_scope, 'reviewed-filesystem-sidecar');
+  for (const requirement of ['T07', 'T08', 'T17', 'T28', 'T30']) assert.ok(manifest.requirements.includes(requirement));
   assert.deepEqual(manifest.limits.third_party_clients_certified, []);
 });
 
@@ -27,6 +31,8 @@ test('G3 evidence rejects legacy/third-party/A2A support inflation', () => {
     (m) => { m.mcp.sdk_harness.version = 'v1.8.0'; },
     (m) => { m.oauth_refresh.status = 'certified-production'; },
     (m) => { m.remote_agent.interaction_scope = 'multi-turn-agent'; },
+    (m) => { m.provider_callback.ingress_scope = 'user-configurable-webhook'; },
+    (m) => { m.artifact_object.storage_scope = 'public-cloud-bucket'; },
   ]) {
     const manifest = fresh();
     mutate(manifest);
@@ -44,6 +50,10 @@ test('G3 evidence rejects missing entry sources and truth phases', () => {
     (m) => { m.oauth_refresh.evidence.pop(); },
     (m) => { m.remote_agent.behaviors = ['reviewed_submit_status_cancel']; },
     (m) => { m.remote_agent.evidence.pop(); },
+    (m) => { m.provider_callback.behaviors = ['duplicate_delivery_dedup']; },
+    (m) => { m.provider_callback.evidence.pop(); },
+    (m) => { m.artifact_object.behaviors = ['short_lived_capability']; },
+    (m) => { m.artifact_object.evidence.pop(); },
   ]) {
     const manifest = fresh();
     mutate(manifest);

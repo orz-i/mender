@@ -77,6 +77,12 @@ VALUES(repeat('a',64),'ws_callback','provider_callback','evt.probe',repeat('b',6
 		_ = probe.Rollback(ctx)
 		t.Fatal("callback role cannot insert bounded Inbox metadata", err)
 	}
+	_, err = probe.Exec(ctx, `INSERT INTO execution.provider_callback_inbox(receipt_id,workspace_id,provider_id,event_id,body_sha256,key_id,signed_at,received_at,last_received_at,delivery_count,run_id,attempt_no,provider_request_id,external_task_id,observation_id,observation_state,observed_at,disposition,reason_code,processed_at)
+VALUES(repeat('c',64),'ws_callback_other','provider_callback','evt.cross-workspace',repeat('d',64),'key_current',clock_timestamp(),clock_timestamp(),clock_timestamp(),1,'run_probe',1,'request/probe',NULL,'obs.cross-workspace','pending',clock_timestamp(),'quarantined','probe',clock_timestamp())`)
+	if err == nil {
+		_ = probe.Rollback(ctx)
+		t.Fatal("callback role crossed Workspace RLS on Inbox insert")
+	}
 	must(t, probe.Rollback(ctx))
 
 	base := time.Now().UTC().Truncate(time.Microsecond).Add(-2 * time.Minute)

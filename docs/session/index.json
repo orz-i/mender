@@ -118,6 +118,14 @@
       "updated_at": "unix:1789199930",
       "parent_session_id": "ses_f2a20bc1f63049ef830f96688cbf0475"
     },
+    "ses_b98d95ee6f7a42e2b5771c88f9929c07": {
+      "path": "docs/session/ses_b98d95ee6f7a42e2b5771c88f9929c07.md",
+      "title": "Core Alpha G3 Closure",
+      "status": "active",
+      "created_at": "unix:1789475909",
+      "updated_at": "unix:1789476488",
+      "parent_session_id": "ses_97e75755ae184ab3a49b7c4dab5ec367"
+    },
     "ses_bff93a3a526b43c1bf714db4948d23cc": {
       "path": "docs/session/ses_bff93a3a526b43c1bf714db4948d23cc.md",
       "title": "Mender Alpha 第二批",
@@ -178,6 +186,6 @@
     "host-session:be22f26ebb1fb1dcd7490beb19b7d96a9c0380da14161fce6912b89779e7b9d6": "ses_ecbf2ba5ef77446a97478cb1f13a4c51",
     "host-session:c53bc646420f50ff80a09d952e02f152a0df5b2ff8de8ca08ba0290a7c708939": "ses_8e2a42283ec744f5940c1dc762d2e187",
     "host-session:f0dc32257f053fdad6fcdd105ee0cbd89e45535e508e8f6b9baa3068c6ba38ce": "ses_2f17c97012894567b7429bfba5d52c62",
-    "host-session:f469a465ece78120da5de60df27407ac2fb02c786dfd8fc9bd42ee7a3f475fab": "ses_97e75755ae184ab3a49b7c4dab5ec367"
+    "host-session:f469a465ece78120da5de60df27407ac2fb02c786dfd8fc9bd42ee7a3f475fab": "ses_b98d95ee6f7a42e2b5771c88f9929c07"
   }
 }

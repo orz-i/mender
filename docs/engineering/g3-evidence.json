@@ -2,7 +2,7 @@
   "schema_version": 1,
   "gate": "G3",
   "as_of": "2026-09-15",
-  "requirements": ["S3-13", "S3-14", "S3-15", "S3-18", "T07", "T08", "T13", "T14", "T15", "T16", "T17", "T40"],
+  "requirements": ["S3-13", "S3-14", "S3-15", "S3-18", "T07", "T08", "T13", "T14", "T15", "T16", "T17", "T28", "T30", "T40"],
   "mcp": {
     "certified_protocol_version": "2026-07-28",
     "selected_legacy_protocol_version": "2025-11-25",
@@ -136,6 +136,77 @@
         "file": "backend/tests/integration/postgres_test.go",
         "symbol": "TestPostgresRuntimeContract",
         "subtest": "reviewed remote Agent runtime"
+      }
+    ]
+  },
+  "provider_callback": {
+    "status": "covered-alpha",
+    "ingress_scope": "reviewed-signed-inbox",
+    "behaviors": [
+      "raw_body_hmac_before_parse",
+      "timestamp_and_key_id_validation",
+      "duplicate_delivery_dedup",
+      "event_id_conflict_quarantine",
+      "attempt_binding_fail_closed",
+      "out_of_order_quarantine",
+      "terminal_replay_quarantine",
+      "run_artifact_convergence",
+      "workspace_rls_isolation",
+      "least_privilege",
+      "safe_observer_projection"
+    ],
+    "evidence": [
+      {
+        "file": "backend/internal/processes/providercallback/adapters/inbound/httpapi/handler_test.go",
+        "symbol": "TestCallbackVerifiesRawBodyBeforeStrictParsingAndForwardsSafeFacts"
+      },
+      {
+        "file": "backend/internal/processes/providercallback/adapters/inbound/httpapi/handler_test.go",
+        "symbol": "TestCallbackRejectsTamperStaleSignatureAndDuplicateJSONBeforeReceiver"
+      },
+      {
+        "file": "backend/tests/integration/provider_callback_runtime_test.go",
+        "symbol": "exerciseProviderCallbackRuntime"
+      },
+      {
+        "file": "backend/tests/integration/postgres_test.go",
+        "symbol": "TestPostgresRuntimeContract",
+        "subtest": "trusted Provider callback Inbox convergence"
+      }
+    ]
+  },
+  "artifact_object": {
+    "status": "covered-alpha",
+    "storage_scope": "reviewed-filesystem-sidecar",
+    "behaviors": [
+      "threshold_materialization",
+      "deterministic_store",
+      "run_read_authorization",
+      "short_lived_capability",
+      "digest_size_revalidation",
+      "no_object_key_projection",
+      "cross_workspace_denial",
+      "expiry_physical_delete",
+      "expired_capability_gone",
+      "least_privilege"
+    ],
+    "evidence": [
+      {
+        "file": "backend/tests/integration/artifact_result_test.go",
+        "symbol": "exerciseArtifacts"
+      },
+      {
+        "file": "backend/internal/contexts/execution/application/artifact_objects_test.go",
+        "symbol": "TestArtifactObjectAccessAuthorizesIssueAndRevalidatesSignedRead"
+      },
+      {
+        "file": "backend/internal/contexts/execution/application/artifact_objects_test.go",
+        "symbol": "TestArtifactObjectMaterializerExpiresOnlyAfterPhysicalDelete"
+      },
+      {
+        "file": "backend/tests/integration/postgres_test.go",
+        "symbol": "TestPostgresRuntimeContract",
+        "subtest": "immutable result Artifacts and protected reads"
       }
     ]
   },
