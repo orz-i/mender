@@ -121,9 +121,9 @@
     "ses_b98d95ee6f7a42e2b5771c88f9929c07": {
       "path": "docs/session/ses_b98d95ee6f7a42e2b5771c88f9929c07.md",
       "title": "Core Alpha G3 Closure",
-      "status": "active",
+      "status": "completed",
       "created_at": "unix:1789475909",
-      "updated_at": "unix:1789478198",
+      "updated_at": "unix:1789478312",
       "parent_session_id": "ses_97e75755ae184ab3a49b7c4dab5ec367"
     },
     "ses_bff93a3a526b43c1bf714db4948d23cc": {
