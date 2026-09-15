@@ -105,9 +105,9 @@
     "ses_a14ecc74a98644ce8b7f5c338321c93f": {
       "path": "docs/session/ses_a14ecc74a98644ce8b7f5c338321c93f.md",
       "title": "S4-A Plugin Publisher Publication",
-      "status": "active",
+      "status": "completed",
       "created_at": "unix:1789479336",
-      "updated_at": "unix:1789482577"
+      "updated_at": "unix:1789482714"
     },
     "ses_b24b820ad024447d944a6fc31c6c5964": {
       "path": "docs/session/ses_b24b820ad024447d944a6fc31c6c5964.md",
