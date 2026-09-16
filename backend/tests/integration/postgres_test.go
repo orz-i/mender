@@ -351,6 +351,9 @@ func TestPostgresRuntimeContract(t *testing.T) {
 		if os.Getenv("MENDER_S4_BROWSER") == "true" {
 			t.Run("S4 real browser HTTP and PostgreSQL workbenches", func(t *testing.T) { exerciseS4Browser(t, ctx, owner, runtimeURL.String()) })
 		}
+		if os.Getenv("MENDER_S4_RECOVERY") == "true" {
+			t.Run("S4 owned-container backup restore and reconciliation", func(t *testing.T) { exerciseS4Recovery(t, ctx, owner, dbURL.String()) })
+		}
 		if h, _, e := bootstrap.BuildAPI(ctx, bootstrap.APIConfig{RunAPIEnabled: true, DatabaseURL: dbURL.String()}); e == nil || h != nil {
 			t.Fatal("migration owner accepted by API")
 		}

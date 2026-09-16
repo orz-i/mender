@@ -1,0 +1,24 @@
+COMMAND: pnpm check:dependencies
+STARTED: 2026-09-16T10:23:26.206Z
+FINISHED: 2026-09-16T10:23:49.401Z
+SOURCE: 7549741603735fd2d2cb618864be5b38d77823a1
+SOURCE_SHA256: 83c76d55a555eb86b29d2dcdb4817e59762196fa2de162f6cc2e7eb1b99674b2
+
+STDOUT
+No known vulnerabilities found
+all modules verified
+=== Symbol Results ===
+
+No vulnerabilities found.
+
+Your code is affected by 0 vulnerabilities.
+This scan also found 3 vulnerabilities in packages you import and 23
+vulnerabilities in modules you require, but your code doesn't appear to call
+these vulnerabilities.
+Use '-show verbose' for more details.
+
+STDERR
+$ pnpm audit --audit-level=low && node scripts/backend.mjs mod verify && node scripts/backend.mjs run golang.org/x/vuln/cmd/govulncheck@v1.8.0 -test ./...
+
+SOURCE_UNCHANGED: true
+EXIT_CODE: 0

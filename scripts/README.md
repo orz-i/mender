@@ -7,6 +7,13 @@
 | 命令 | 验证范围 |
 | --- | --- |
 | `pnpm check` | 下列必要检查和构建的聚合入口，任一失败即停止 |
+| `pnpm test:s4:tools` | CLI／有界质量任务／真实Ed25519签名的单元和合同测试 |
+| `pnpm test:s4:recovery` | 构建后在自有临时容器执行真实PG／CLI／Chromium及pg_dump/pg_restore对账，结束清理 |
+| `pnpm check:dependencies` | 在线pnpm advisory、Go模块完整性及固定govulncheck；网络不可用/可达漏洞不视为通过 |
+| `pnpm cli --help` | 消费既有MCP端点的CLI，不授予权限；执行需明确--execute，参数走stdin |
+| `pnpm quality:probe CONFIG.json` | 固定基线和明确端点的只读MCP发现合成采样，失败非零且不覆盖基线 |
+| `pnpm quality:report REPORT.json` | 输出无脚本/CSP只读质量视图，不展示秘密或作发布批准 |
+| `pnpm release:artifact ...` | 显式清单、真实Ed25519签名及独立可信公钥验证，不生成生产密钥或部署 |
 | `pnpm test:integration:docker --check` | 仅检查本地 Docker 条件；不创建数据库，不视为集成通过 |
 | `pnpm test:integration:docker [--pull]` | 使用自有临时 PostgreSQL 容器运行真实套件并清理；默认不下载镜像 |
 | `pnpm check:toolchain` | Node／pnpm／Go 精确版本与清单一致 |
@@ -38,7 +45,9 @@ node scripts/backend.mjs test -race -count=1 ./internal/contexts/execution/... .
 
 race 检查要求对应宿主工具链支持；它不等于数据库或分布式并发验证。覆盖边界及后续工作见 [implementation 记录](../docs/engineering/2026-09-09-execution-foundation.md)。
 
-本轮可增加 `./tests/identity ./tests/httpapi ./internal/platform/postgres ./internal/bootstrap` 的定向验证。`pnpm check` 不需要数据库；CI 在其后使用专用 PostgreSQL 服务单独运行 `pnpm test:integration`，未完成真实套件不得声称持久化已验收。
+本轮可增加 `./tests/identity ./tests/httpapi ./internal/platform/postgres ./internal/bootstrap` 的定向验证。`pnpm check` 不需要数据库；当前CI在其后运行独立依赖扫描，再显式安装Chromium并运行 `pnpm test:integration:browser`（MENDER_S4_BROWSER=true），缺少测试库/浏览器条件失败而不跳过。本地自有容器入口还可增加 `--recovery`，真实恢复演练不是普通CI服务步骤的隐含保证。
+
+原S4本地工程与G4边界见[收口记录](../docs/engineering/2026-09-16-s4-closeout.md)。`node scripts/record-s4-verification.mjs MODE --record`只执行固定命令并记录实际输出与源码指纹；`node scripts/review-s4-closeout-status.mjs --receipts`只在实际回执及文件摘要一致时回填原任务的验证轴，不授予任务或Gate验收。
 
 操作员写命令：`pnpm db:migrate`、`pnpm db:grant-runtime --role <role>`、`pnpm db:grant-admission --role <role>`、`pnpm db:grant-cancellation --role <role>`、`pnpm db:grant-worker --role <role>`、`pnpm db:grant-executor --role <role>`、`pnpm db:grant-mcp-connector --role <role>`、`pnpm db:grant-reconciler --role <role>`、`pnpm db:grant-settlement --role <role>`、`pnpm key:issue --workspace <workspace> --subject <service-account> --scopes run:read,run:create`、`pnpm key:revoke --id <key-id>`。这些不是检查命令，需要安全注入管理连接；不要在普通 CI 或未授权数据库运行。Worker 只负责本地租约/submission；executor-runtime 只读 HTTP 执行材料；MCP connector 额外拥有 Supply-owned snapshot/route/result evidence 的最小权限；Cancellation role 可写用户 provider-cancel intent 但不能写远端 outcome；Reconciler 只写 provider observation、claim/resolve cancel intent 与终态收敛。SecretProvider 仍是独立运行时能力。发行 Key 只在持久提交后打印一次秘密，不能公开日志。详见 [Supplier Runtime Broker](../docs/engineering/2026-09-10-supplier-runtime-broker.md)、[Upstream MCP Client Adapter Foundation](../docs/engineering/2026-09-11-upstream-mcp-client-foundation.md)、[Provider Result Lifecycle](../docs/engineering/2026-09-10-provider-result-lifecycle.md)和 [Provider Cancellation](../docs/engineering/2026-09-10-provider-cancellation.md)。
 

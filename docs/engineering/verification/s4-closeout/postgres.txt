@@ -1,0 +1,17 @@
+COMMAND: pnpm test:integration:docker --browser --recovery
+STARTED: 2026-09-16T10:21:56.588Z
+FINISHED: 2026-09-16T10:22:58.194Z
+SOURCE: 7549741603735fd2d2cb618864be5b38d77823a1
+SOURCE_SHA256: 83c76d55a555eb86b29d2dcdb4817e59762196fa2de162f6cc2e7eb1b99674b2
+
+STDOUT
+Isolated PostgreSQL is ready; executing the real migration/RLS/CAS/query/atomic-admission suite.
+ok  	github.com/orz-i/mender/backend/tests/integration	49.260s
+Owned test container removed.
+PASS: real isolated PostgreSQL suite and resource cleanup.
+
+STDERR
+$ node scripts/test-postgres.mjs "--browser" "--recovery"
+
+SOURCE_UNCHANGED: true
+EXIT_CODE: 0

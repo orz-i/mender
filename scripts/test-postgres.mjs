@@ -6,8 +6,8 @@ import { postgresPreflight, withIsolatedPostgres } from './lib/postgres-test.mjs
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const flags = new Set(process.argv.slice(2));
-if ([...flags].some((flag) => !['--check', '--pull', '--browser'].includes(flag))) {
-  console.error('Usage: pnpm test:integration:docker [--check] [--pull] [--browser]');
+if ([...flags].some((flag) => !['--check', '--pull', '--browser', '--recovery'].includes(flag))) {
+  console.error('Usage: pnpm test:integration:docker [--check] [--pull] [--browser] [--recovery]');
   process.exitCode = 1;
 } else {
   const controller = new AbortController();
@@ -52,7 +52,7 @@ if ([...flags].some((flag) => !['--check', '--pull', '--browser'].includes(flag)
         sleep: (ms, signal) => delay(ms, undefined, { signal }),
         runTests: async (testEnv, signal) => {
           const result = await run(process.execPath, ['scripts/backend.mjs', 'test', '-tags=integration', '-count=1', flags.has('--browser') ? '-timeout=300s' : '-timeout=120s', './tests/integration'], {
-            env: { MENDER_DATABASE_URL: '', MENDER_ADMIN_DATABASE_URL: '', MENDER_RUN_API_ENABLED: 'false', MENDER_RUN_READ_API_ENABLED: 'false', ...testEnv, MENDER_S4_BROWSER: flags.has('--browser') ? 'true' : '' },
+            env: { MENDER_DATABASE_URL: '', MENDER_ADMIN_DATABASE_URL: '', MENDER_RUN_API_ENABLED: 'false', MENDER_RUN_READ_API_ENABLED: 'false', ...testEnv, MENDER_S4_BROWSER: flags.has('--browser') ? 'true' : '', MENDER_S4_RECOVERY: flags.has('--recovery') ? 'true' : '' },
             signal, timeoutMs: flags.has('--browser') ? 330000 : 150000,
           });
           process.stdout.write(result.stdout); process.stderr.write(result.stderr);

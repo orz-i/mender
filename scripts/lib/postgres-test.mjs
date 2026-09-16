@@ -67,6 +67,8 @@ export async function withIsolatedPostgres({ run, runTests, sleep, nonce, passwo
     const code = await runTests({
       MENDER_TEST_DATABASE_URL: `postgres://postgres:${password}@127.0.0.1:${port}/postgres?sslmode=disable`,
       MENDER_TEST_ALLOW_CREATE_DATABASE: 'true',
+      MENDER_TEST_OWNED_CONTAINER: name,
+      MENDER_TEST_CONTAINER_NONCE: nonce,
     }, signal);
     checkAbort();
     if (code !== 0) throw new Error(`PostgreSQL integration suite failed (exit ${code}); this is not a passing verification.`);

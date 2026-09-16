@@ -6,6 +6,8 @@
 
 Core Alpha／G3 是内部范围化放行；S4 继续使用原 S4-01～S4-18，不把历史字母切片 COMPLETE 扩大为全阶段、外部客户端或生产验收。
 
+[S4本地工程收口与G4评审输入](engineering/2026-09-16-s4-closeout.md)汇总已实现的[五个工作台](engineering/2026-09-16-s4-workbenches.md)、[CLI／Skill／质量和签名工具](engineering/2026-09-16-s4-distribution-quality.md)、[备份恢复与对账手册](engineering/2026-09-16-s4-operations-runbook.md)。生产支付、商业许可、值班与正式用户验收仍需独立证据；不会因本地技术回归通过自动放行。
+
 ## 产品与设计
 
 设计基线 v1.1，状态：待评审。

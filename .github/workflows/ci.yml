@@ -48,8 +48,15 @@ jobs:
         working-directory: backend
       - name: Project status, contracts and regression checks
         run: pnpm check
-      - name: Real PostgreSQL migration, RLS, CAS and HTTP integration
-        run: pnpm test:integration
+      - name: Dependency advisory and module integrity checks
+        run: pnpm check:dependencies
+      - name: Install pinned Playwright Chromium for isolated S4 browser regression
+        run: pnpm exec playwright install --with-deps chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: .tmp/playwright-browsers
+      - name: Real PostgreSQL, HTTP, CLI and Chromium S4 workflows
+        run: pnpm test:integration:browser
         env:
           MENDER_TEST_DATABASE_URL: postgres://postgres:mender_ci_test_only@127.0.0.1:5432/postgres?sslmode=disable
           MENDER_TEST_ALLOW_CREATE_DATABASE: 'true'
+          MENDER_S4_BROWSER: 'true'

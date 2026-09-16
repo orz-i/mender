@@ -2,7 +2,7 @@
 
 > 自动生成：`node scripts/render-project-status.mjs --write`。唯一可编辑状态源是 [project-data.json](project-data.json) 的任务 `execution` 字段；不要手改本页。
 
-复核日期：2026-09-16。本地复核提交：`bfa8171409e5cc1baea3a89df6d23d94212ba4b9`。
+复核日期：2026-09-16。本地复核提交：`7549741603735fd2d2cb618864be5b38d77823a1`。
 
 本页区分实施、自动化证据和原任务验收。已有证据文件不等于本次测试通过；切片 COMPLETE 不等于原任务完整验收。未复核的条目明确标记待复核，不推断为没有代码。
 
@@ -30,7 +30,7 @@
 | Gate | 当前记录 | 证据／限制 |
 | --- | --- | --- |
 | G3 | scoped-go | 限定内部集成；第三方客户端与外部用户验收继续待完成；[决议记录](../engineering/alpha-closure.json) |
-| G4 | pending | 后端切片不代替完整商业准备验收 |
+| G4 | pending | S4本地工程与自动化验证已汇总；原任务剩余范围、正式用户验收、值班/远端门禁和商业签署仍待负责人确认，不自动授予G4商业放行 |
 | G5 | pending | 未据此授予生产／商业 Beta 放行 |
 
 **remote-merge-protection — not-verified：** 本轮不变更 GitHub 设置。仓库 CI 运行不等于主干强制门禁；需管理员核验并配置必需 check，记录真实证据。
@@ -40,38 +40,32 @@
 
 | 原任务 | 实施 | 自动化证据 | 原任务验收 | 已有范围／剩余条件 |
 | --- | --- | --- | --- | --- |
-| S4-01 实现插件清单校验与发布状态机 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | 受审清单、发布状态机、精确审批与后端 API；**剩余：**全量原任务验收；发布者／审核 UI 按 S4-09/10，非本切片已完成 |
-| S4-02 实现危险操作审批与 JIT 管理授权 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | 限定危险动作与 JIT；后续增加 refund/adjustment 消费者；**剩余：**全量原任务验收；S4-10 UI 与生产 MFA 不自动完成 |
-| S4-03 实现账单、调账和退款补充分录 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | 独立业务账本、追加分录、退款／调账及对账后端；**剩余：**原范围验收；ProviderCostEvent、真实资金及 S4-11 UI 仍有缺口 |
-| S4-04 实现灰度、排空、回退和禁用开关 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | cohort 灰度、排空、回退、紧急禁用与固定 Run 版本；**剩余：**原任务验收；百分比灰度／自动指标晋级非已实现范围 |
-| S4-05 实现供应商与平台 Admin 管理能力 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | 工作区冻结、Provider 隔离、事故与审计后端；**剩余：**商业供应商准入、S4-10 平台运营 UI 及原任务验收 |
-| S4-06 实现支付供应商适配与回调对账 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | 供应商中立 sandbox PaymentIntent、验签与回调对账；**剩余：**原任务 sandbox 条件签署；真实 PSP／商户资格／真钱与 S4-11 UI 不得据此放行 |
-| S4-07 实现 CLI 与 Skill 分发合同 | 未开始 | 未执行 | 待验收 | 当前切片均明确 CLI/Skill 分发后置；**剩余：**原 CLI/Skill 合同、安装与多入口一致性测试 |
-| S4-08 实现发布质量与健康检查任务 | 待复核 | 待复核 | 待验收 | 未取得发布质量／健康任务完整交付证据；**剩余：**核对真实实现再决定工作量；不能把 API health 探针当合成质量任务 |
-| S4-09 实现发布者草稿、测试与提交页面 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | 五个S4工作台中对应原任务的固定端点表单、显式确认、只读事实和权限错误流程；真实Chromium/HTTP/隔离PostgreSQL已执行，正式回执随最终收口归档；**剩余：**首发发布者用户验收；发布预检不是上游试调用，真实供应商任务须另行授权验证 |
-| S4-10 实现 Admin 审核、异常与 JIT 界面 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | 五个S4工作台中对应原任务的固定端点表单、显式确认、只读事实和权限错误流程；真实Chromium/HTTP/隔离PostgreSQL已执行，正式回执随最终收口归档；**剩余：**正式运营用户验收和生产身份保证；发布/平台/JIT能力均继续服务端授权 |
-| S4-11 实现账单、支付及退款状态界面 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | 五个S4工作台中对应原任务的固定端点表单、显式确认、只读事实和权限错误流程；真实Chromium/HTTP/隔离PostgreSQL已执行，正式回执随最终收口归档；**剩余：**正式财务用户验收；仅sandbox意图与回调对账，真实商户/支付网络仍阻断 |
-| S4-12 补齐文档、API 示例与发布引导 | 部分实现 | 待复核 | 待验收 | 已有合同及局部工程说明，本轮仅修正当前状态入口；**剩余：**CLI／发布者路径齐备后的完整文档、示例与用户失败指引 |
-| S4-13 测试发布、回退、审批与 Admin | 部分实现 | 已有记录（非本次重跑） | 待验收 | 插件、发布、审批、Admin 后端已有测试文件和范围记录；**剩余：**S4-09/10 浏览器和端到端场景；原 T22–T24/T26/T31 全条件核对 |
-| S4-14 测试支付、对账与多入口一致性 | 部分实现 | 已有记录（非本次重跑） | 待验收 | 业务账本和模拟支付已有自动化测试记录；**剩余：**CLI/Skill、多入口及 S4-11 UI 联调；原 T20/T21/T27/T29 全条件核对 |
-| S4-15 执行商业化准备回归与 G4 证据整理 | 待复核 | 待复核 | 待验收 | 尚无完整 G4 放行证据；**剩余：**汇总 S4-13/14、明确剩余条件并形成正式 G4 决议 |
-| S4-16 实现制品校验、签名与依赖扫描 | 部分实现 | 已有记录（非本次重跑） | 待验收 | 受审 manifest／权限验证存在，签名和依赖扫描未全量认证；**剩余：**制品签名、依赖扫描及准入阻断实测，不能用 checksum 代替 |
-| S4-17 配置发布回退、备份与对账值班入口 | 部分实现 | 待复核 | 待验收 | 局部运行边界和回退 API 有说明；**剩余：**实际备份恢复、值班责任、外部告警与事故演练 |
-| S4-18 确认服务条款、收费与供应商清单 | 待复核 | 待复核 | 待验收 | 未取得真实商户／地区／供应商许可与商业签署证据；**剩余：**由业务责任人确认服务条款、收费、数据和供给许可；不得自动批准 |
+| S4-01 实现插件清单校验与发布状态机 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | 受审manifest、发布状态机、精确独立审批和发布API保留；对应S4-09/10工作台已接入；**剩余：**原任务完整范围正式验收；生产供应商/插件准入条件不得由本地测试代签 |
+| S4-02 实现危险操作审批与 JIT 管理授权 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | 危险操作与JIT以及refund/adjustment消费者保留，新增精确审批读取和工作台；撤销权限错误保持403；**剩余：**原范围正式验收；生产MFA和泛化危险动作不由本轮认证 |
+| S4-03 实现账单、调账和退款补充分录 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | 不可变业务账本、追加分录、退款/调账及对账保留，S4-11界面与真实退款重放验证已接入；**剩余：**原范围验收；ProviderCostEvent及真实资金不在已认证范围 |
+| S4-04 实现灰度、排空、回退和禁用开关 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | cohort灰度、排空、回退与紧急停用已接入工作台并纳入真实数据库回归；**剩余：**原任务验收；百分比灰度与自动指标晋级非当前范围 |
+| S4-05 实现供应商与平台 Admin 管理能力 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | 工作区冻结、Provider隔离、事故与审计后端及运营UI已接入，权限/版本冲突通过真实浏览器验证；**剩余：**商业供应商准入与正式运营验收；外部告警责任人须配置 |
+| S4-06 实现支付供应商适配与回调对账 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | 供应商中立sandbox意图、验签、回调与对账及状态UI保留，不提供真实充值；**剩余：**原sandbox范围签署；真实PSP/商户资格/地区/真钱仍不可放行 |
+| S4-07 实现 CLI 与 Skill 分发合同 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | 官方Go SDK CLI与Skill已实现；通过同MCP授权/预算/Run执行、幂等重放、查询、取消和精确参数合同；**剩余：**用户在已授权实际环境安装与接入验收；不声明未经验证的第三方客户端 |
+| S4-08 实现发布质量与健康检查任务 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | 只读MCP发现/合同快照、漂移拒绝、有界采样任务及无脚本质量报告已实现；不覆盖当前发布版本；**剩余：**负责人确认受控工具集探测范围；平台内多租户质量趋势持久化及付费上游功能任务不由此自动认证 |
+| S4-09 实现发布者草稿、测试与提交页面 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | 发布者工作台及真实Chromium/HTTP/隔离PostgreSQL草稿、预检、独立审核、发布与负向流程；**剩余：**首发发布者用户验收；上游功能试调用需真实授权且受限计费 |
+| S4-10 实现 Admin 审核、异常与 JIT 界面 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | 发布审核/回退、冻结/事故/审计和JIT工作台复用真实后端；CSRF、精确版本、不同审核主体及越权场景已验证；**剩余：**正式运营用户验收和生产身份/MFA保证；不得由浏览器确认替代服务端批准 |
+| S4-11 实现账单、支付及退款状态界面 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | 账本、对账、部分退款/调账审批与sandbox支付状态界面已有真实浏览器验证，不将跳转当到账；**剩余：**财务用户验收；真实商户/支付网络及商业资格仍阻断 |
+| S4-12 补齐文档、API 示例与发布引导 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | 已有实际CLI/Skill、五个工作台、质量、制品签名、依赖扫描和恢复引导；文档无真实秘密；**剩余：**面向首发用户复核文档和所有失败指引，正式产品验收待签署 |
+| S4-13 测试发布、回退、审批与 Admin | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | 发布/回退/审批/Admin合同、真实数据库及Chromium工作台回归已执行；不只核对文件存在；**剩余：**原T22～24/T26/T31的正式范围复核与真实用户验收 |
+| S4-14 测试支付、对账与多入口一致性 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | 不可变账本、sandbox回调、部分退款重放、浏览器账务与CLI同授权/同预算路径已执行；**剩余：**原T20/T21/T27/T29正式验收；实际PSP/商业环境不由测试替代 |
+| S4-15 执行商业化准备回归与 G4 证据整理 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | 汇总原18任务、实际命令/日志/源码指纹及G4阻断清单；工程验证不伪造Gate批准；**剩余：**项目负责人审阅范围并作出G4正式决议；现仍pending |
+| S4-16 实现制品校验、签名与依赖扫描 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | 真实Ed25519签名/外部可信公钥验证、不可变制品摘要与路径限制、网络依赖扫描已实现；修复两项实际可达漏洞；**剩余：**生产密钥托管/信任锚与部署准入联调；不可达依赖告警风险评审；远端CI与分支保护实测 |
+| S4-17 配置发布回退、备份与对账值班入口 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | 已提供工作台回退/对账手册与自有临时容器pg_dump/pg_restore，核对Run/Job/预算/账本/支付/迁移事实，恢复后不启动Worker；**剩余：**真实值班人、外部告警、备份保留与角色/密钥/对象存储恢复配置；生产RPO/RTO演练不在本地结果内 |
+| S4-18 确认服务条款、收费与供应商清单 | 部分实现 | 已有记录（非本次重跑） | 待验收 | 商业前置条件/供应商权利/地区/数据/支付及责任人清单已整理，未取得外部证明或签署；**剩余：**由业务负责人提交真实服务条款、供应商分发许可、支付/数据地区依据并签署；不得自动批准 |
 
 ## 下一步仍使用原任务
 
-- **S4-10 实现 Admin 审核、异常与 JIT 界面**：正式运营用户验收和生产身份保证；发布/平台/JIT能力均继续服务端授权
-- **S4-09 实现发布者草稿、测试与提交页面**：首发发布者用户验收；发布预检不是上游试调用，真实供应商任务须另行授权验证
-- **S4-11 实现账单、支付及退款状态界面**：正式财务用户验收；仅sandbox意图与回调对账，真实商户/支付网络仍阻断
-- **S4-13 测试发布、回退、审批与 Admin**：S4-09/10 浏览器和端到端场景；原 T22–T24/T26/T31 全条件核对
-- **S4-14 测试支付、对账与多入口一致性**：CLI/Skill、多入口及 S4-11 UI 联调；原 T20/T21/T27/T29 全条件核对
-- **S4-15 执行商业化准备回归与 G4 证据整理**：汇总 S4-13/14、明确剩余条件并形成正式 G4 决议
-- **S4-16 实现制品校验、签名与依赖扫描**：制品签名、依赖扫描及准入阻断实测，不能用 checksum 代替
-- **S4-17 配置发布回退、备份与对账值班入口**：实际备份恢复、值班责任、外部告警与事故演练
-- **S4-18 确认服务条款、收费与供应商清单**：由业务责任人确认服务条款、收费、数据和供给许可；不得自动批准
+- **S4-15 执行商业化准备回归与 G4 证据整理**：项目负责人审阅范围并作出G4正式决议；现仍pending
+- **S4-17 配置发布回退、备份与对账值班入口**：真实值班人、外部告警、备份保留与角色/密钥/对象存储恢复配置；生产RPO/RTO演练不在本地结果内
+- **S4-18 确认服务条款、收费与供应商清单**：由业务负责人提交真实服务条款、供应商分发许可、支付/数据地区依据并签署；不得自动批准
 
-当前纠偏只同步状态与证据检查，不将这些待交付页面、演练和商业审批标成完成。
+当前状态以逐项范围和真实执行回执为准；本地工程与自动化验证不能代替用户、商业及生产签署。
 
 ## 全任务实施状态与证据索引
 
@@ -138,24 +132,24 @@
 | S3-16 配置流式代理、超时与网络策略 | 进行中 | 部分实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/alpha-operations-evidence.json) |
 | S3-17 配置对象保留和授权回调安全 | 进行中 | 部分实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/alpha-operations-evidence.json) |
 | S3-18 完成客户端验收名单与 G3 评审 | 进行中 | 部分实现／已有记录（非本次重跑）／范围化放行 | [证据1](../engineering/alpha-closure.json)、[证据2](../engineering/g3-evidence.json) |
-| S4-01 实现插件清单校验与发布状态机 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s4a-plugin-publication-evidence.json) |
-| S4-02 实现危险操作审批与 JIT 管理授权 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s4c-dangerous-operation-jit-evidence.json)、[证据2](../engineering/s403-commerce-billing-evidence.json) |
-| S4-03 实现账单、调账和退款补充分录 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s403-commerce-billing-evidence.json) |
-| S4-04 实现灰度、排空、回退和禁用开关 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s4b-release-governance-evidence.json) |
-| S4-05 实现供应商与平台 Admin 管理能力 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s4d-platform-admin-evidence.json) |
-| S4-06 实现支付供应商适配与回调对账 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s406-sandbox-payment-evidence.json) |
-| S4-07 实现 CLI 与 Skill 分发合同 | 未开始 | 未开始／未执行／待验收 | [证据1](../engineering/s4a-plugin-publication-evidence.json)、[证据2](../engineering/s4b-release-governance-evidence.json) |
-| S4-08 实现发布质量与健康检查任务 | 待复核 | 待复核／待复核／待验收 | 未复核；不推断未实现 |
-| S4-09 实现发布者草稿、测试与提交页面 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s4a-plugin-publication-evidence.json)、[证据2](../../frontend/apps/console/src/app/router.tsx)、[证据3](../engineering/2026-09-16-s4-workbenches.md) |
-| S4-10 实现 Admin 审核、异常与 JIT 界面 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../../frontend/apps/admin/src/app/router.tsx)、[证据2](../engineering/s4a-plugin-publication-evidence.json)、[证据3](../engineering/s4b-release-governance-evidence.json)、[证据4](../engineering/s4c-dangerous-operation-jit-evidence.json)、[证据5](../engineering/s4d-platform-admin-evidence.json)、[证据6](../engineering/2026-09-16-s4-workbenches.md) |
-| S4-11 实现账单、支付及退款状态界面 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s403-commerce-billing-evidence.json)、[证据2](../engineering/s406-sandbox-payment-evidence.json)、[证据3](../../frontend/apps/admin/src/app/router.tsx)、[证据4](../engineering/2026-09-16-s4-workbenches.md) |
-| S4-12 补齐文档、API 示例与发布引导 | 进行中 | 部分实现／待复核／待验收 | [证据1](../engineering/s4a-plugin-publication-evidence.json)、[证据2](../engineering/s406-sandbox-payment-evidence.json) |
-| S4-13 测试发布、回退、审批与 Admin | 进行中 | 部分实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s4a-plugin-publication-evidence.json)、[证据2](../engineering/s4b-release-governance-evidence.json)、[证据3](../engineering/s4c-dangerous-operation-jit-evidence.json)、[证据4](../engineering/s4d-platform-admin-evidence.json)、[证据5](../../backend/tests/integration/postgres_test.go) |
-| S4-14 测试支付、对账与多入口一致性 | 进行中 | 部分实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s403-commerce-billing-evidence.json)、[证据2](../engineering/s406-sandbox-payment-evidence.json)、[证据3](../../backend/tests/integration/postgres_test.go) |
-| S4-15 执行商业化准备回归与 G4 证据整理 | 待复核 | 待复核／待复核／待验收 | 未复核；不推断未实现 |
-| S4-16 实现制品校验、签名与依赖扫描 | 进行中 | 部分实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s4a-plugin-publication-evidence.json)、[证据2](../engineering/s4b-release-governance-evidence.json) |
-| S4-17 配置发布回退、备份与对账值班入口 | 进行中 | 部分实现／待复核／待验收 | [证据1](../engineering/alpha-operations-evidence.json)、[证据2](../engineering/s4b-release-governance-evidence.json) |
-| S4-18 确认服务条款、收费与供应商清单 | 待复核 | 待复核／待复核／待验收 | [证据1](../engineering/s406-sandbox-payment-evidence.json) |
+| S4-01 实现插件清单校验与发布状态机 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s4a-plugin-publication-evidence.json)、[证据2](../engineering/2026-09-16-s4-workbenches.md)、[证据3](../engineering/2026-09-16-s4-closeout.md) |
+| S4-02 实现危险操作审批与 JIT 管理授权 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s4c-dangerous-operation-jit-evidence.json)、[证据2](../engineering/s403-commerce-billing-evidence.json)、[证据3](../engineering/2026-09-16-s4-workbenches.md)、[证据4](../engineering/2026-09-16-s4-closeout.md) |
+| S4-03 实现账单、调账和退款补充分录 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s403-commerce-billing-evidence.json)、[证据2](../engineering/2026-09-16-s4-workbenches.md)、[证据3](../engineering/2026-09-16-s4-closeout.md) |
+| S4-04 实现灰度、排空、回退和禁用开关 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s4b-release-governance-evidence.json)、[证据2](../engineering/2026-09-16-s4-workbenches.md)、[证据3](../engineering/2026-09-16-s4-closeout.md) |
+| S4-05 实现供应商与平台 Admin 管理能力 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s4d-platform-admin-evidence.json)、[证据2](../engineering/2026-09-16-s4-workbenches.md)、[证据3](../engineering/2026-09-16-s4-closeout.md) |
+| S4-06 实现支付供应商适配与回调对账 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s406-sandbox-payment-evidence.json)、[证据2](../engineering/2026-09-16-s4-workbenches.md)、[证据3](../engineering/2026-09-16-s4-closeout.md) |
+| S4-07 实现 CLI 与 Skill 分发合同 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s4a-plugin-publication-evidence.json)、[证据2](../engineering/s4b-release-governance-evidence.json)、[证据3](../engineering/2026-09-16-s4-distribution-quality.md)、[证据4](../engineering/2026-09-16-s4-closeout.md) |
+| S4-08 实现发布质量与健康检查任务 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/2026-09-16-s4-distribution-quality.md)、[证据2](../engineering/2026-09-16-s4-closeout.md) |
+| S4-09 实现发布者草稿、测试与提交页面 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s4a-plugin-publication-evidence.json)、[证据2](../../frontend/apps/console/src/app/router.tsx)、[证据3](../engineering/2026-09-16-s4-workbenches.md)、[证据4](../engineering/2026-09-16-s4-closeout.md) |
+| S4-10 实现 Admin 审核、异常与 JIT 界面 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../../frontend/apps/admin/src/app/router.tsx)、[证据2](../engineering/s4a-plugin-publication-evidence.json)、[证据3](../engineering/s4b-release-governance-evidence.json)、[证据4](../engineering/s4c-dangerous-operation-jit-evidence.json)、[证据5](../engineering/s4d-platform-admin-evidence.json)、[证据6](../engineering/2026-09-16-s4-workbenches.md)、[证据7](../engineering/2026-09-16-s4-closeout.md) |
+| S4-11 实现账单、支付及退款状态界面 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s403-commerce-billing-evidence.json)、[证据2](../engineering/s406-sandbox-payment-evidence.json)、[证据3](../../frontend/apps/admin/src/app/router.tsx)、[证据4](../engineering/2026-09-16-s4-workbenches.md)、[证据5](../engineering/2026-09-16-s4-closeout.md) |
+| S4-12 补齐文档、API 示例与发布引导 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s4a-plugin-publication-evidence.json)、[证据2](../engineering/s406-sandbox-payment-evidence.json)、[证据3](../engineering/2026-09-16-s4-closeout.md) |
+| S4-13 测试发布、回退、审批与 Admin | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s4a-plugin-publication-evidence.json)、[证据2](../engineering/s4b-release-governance-evidence.json)、[证据3](../engineering/s4c-dangerous-operation-jit-evidence.json)、[证据4](../engineering/s4d-platform-admin-evidence.json)、[证据5](../../backend/tests/integration/postgres_test.go)、[证据6](../engineering/2026-09-16-s4-workbenches.md)、[证据7](../engineering/2026-09-16-s4-closeout.md) |
+| S4-14 测试支付、对账与多入口一致性 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s403-commerce-billing-evidence.json)、[证据2](../engineering/s406-sandbox-payment-evidence.json)、[证据3](../../backend/tests/integration/postgres_test.go)、[证据4](../engineering/2026-09-16-s4-closeout.md) |
+| S4-15 执行商业化准备回归与 G4 证据整理 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/2026-09-16-s4-closeout.md) |
+| S4-16 实现制品校验、签名与依赖扫描 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s4a-plugin-publication-evidence.json)、[证据2](../engineering/s4b-release-governance-evidence.json)、[证据3](../engineering/2026-09-16-s4-distribution-quality.md)、[证据4](../engineering/2026-09-16-s4-closeout.md) |
+| S4-17 配置发布回退、备份与对账值班入口 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/alpha-operations-evidence.json)、[证据2](../engineering/s4b-release-governance-evidence.json)、[证据3](../engineering/2026-09-16-s4-operations-runbook.md)、[证据4](../engineering/2026-09-16-s4-closeout.md) |
+| S4-18 确认服务条款、收费与供应商清单 | 进行中 | 部分实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s406-sandbox-payment-evidence.json)、[证据2](../engineering/2026-09-16-s4-closeout.md) |
 | S5-01 完成后端一致性与迁移加固 | 待复核 | 待复核／待复核／待验收 | 未复核；不推断未实现 |
 | S5-02 参与恢复、账本与事故演练修复 | 待复核 | 待复核／待复核／待验收 | 未复核；不推断未实现 |
 | S5-03 完成协议、超时及连接故障加固 | 待复核 | 待复核／待复核／待验收 | 未复核；不推断未实现 |

@@ -3,11 +3,15 @@
 package integration_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +24,7 @@ import (
 	identitypg "github.com/orz-i/mender/backend/internal/contexts/identity/adapters/outbound/postgres"
 	identitydomain "github.com/orz-i/mender/backend/internal/contexts/identity/domain"
 	database "github.com/orz-i/mender/backend/internal/platform/postgres"
+	"github.com/orz-i/mender/backend/internal/platform/mcpconsumer"
 	"github.com/orz-i/mender/backend/migrations"
 )
 
@@ -209,4 +214,53 @@ func exerciseMCPGateway(t *testing.T, ctx context.Context, owner, runtime *pgxpo
 	if w.Code != http.StatusForbidden || strings.Contains(w.Body.String(), "jsonrpc") {
 		t.Fatal(w.Code, w.Body.String())
 	}
+
+	t.Run("canonical S4-07 CLI uses public authorization and exact admission",func(t *testing.T){
+		keyPath:=filepath.Join(t.TempDir(),"machine-key")
+		must(t,os.WriteFile(keyPath,[]byte(createKey),0600))
+		cli:=func(keyFile string,command []string,body string)(int,string,string){
+			var out,diagnostic bytes.Buffer
+			args:=append([]string{"--endpoint",ts.URL+"/mcp/v1/workspaces/ws_a","--key-file",keyFile},command...)
+			code:=mcpconsumer.Run(ctx,args,strings.NewReader(body),&out,&diagnostic)
+			return code,out.String(),diagnostic.String()
+		}
+		code,inventory,diagnostic:=cli(keyPath,[]string{"list"},"")
+		if code!=0 || !strings.Contains(inventory,"mender_run_start"){t.Fatal(code,diagnostic)}
+		if code,_,diag:=cli(keyPath,[]string{"health"},"");code!=0{t.Fatal(diag)}
+		// Run the operator quality job through its actual Node -> Go CLI path,
+		// not an injected HTTP mock or a file-name-only contract assertion.
+		root,err:=filepath.Abs("../../..");must(t,err)
+		baselinePath:=filepath.Join(t.TempDir(),"inventory.json")
+		must(t,os.WriteFile(baselinePath,[]byte(inventory),0600))
+		qualityConfig,err:=json.Marshal(map[string]any{"endpoint":ts.URL+"/mcp/v1/workspaces/ws_a","key_file":keyPath,"baseline":baselinePath,"samples":1,"interval_ms":5000});must(t,err)
+		configPath:=filepath.Join(t.TempDir(),"quality.json");must(t,os.WriteFile(configPath,qualityConfig,0600))
+		node,err:=exec.LookPath("node");must(t,err)
+		probeCommand:=exec.CommandContext(ctx,node,"scripts/quality-probe.mjs","run",configPath)
+		probeCommand.Dir=root
+		qualityOutput,err:=probeCommand.Output();if err!=nil{t.Fatal("real quality CLI job failed",err)}
+		var quality map[string]any;must(t,json.Unmarshal(qualityOutput,&quality))
+		if quality["status"]!="passed" || quality["business_tools_called"]!=float64(0){t.Fatal("quality job did not prove read-only healthy baseline")}
+		args:=`{"idempotency_key":"cli_original_0001","tool_id":"tool_mcp","tool_version":"1.0.0","toolset_id":"set_mcp_v1","connection_id":"conn_mcp","arguments":{"n":9007199254740993},"currency":"USD","max_charge_micro":"100"}`
+		if code,_,_:=cli(keyPath,[]string{"call","mender_run_start"},args);code==0{t.Fatal("call lacked explicit execution intent")}
+		code,body,diagnostic:=cli(keyPath,[]string{"--execute","call","mender_run_start"},args)
+		if code!=0{t.Fatal(diagnostic)}
+		var response mcp.CallToolResult;must(t,json.Unmarshal([]byte(body),&response))
+		cliRun:=mcpText(t,&response)["run_id"].(string)
+		code,body,diagnostic=cli(keyPath,[]string{"--execute","call","mender_run_start"},args)
+		if code!=0{t.Fatal(diagnostic)}
+		must(t,json.Unmarshal([]byte(body),&response))
+		if replay:=mcpText(t,&response);replay["run_id"]!=cliRun || replay["replayed"]!=true{t.Fatal("CLI replay did not reuse Run")}
+		must(t,owner.QueryRow(ctx,`SELECT canonical_arguments FROM execution.run_admissions WHERE workspace_id='ws_a' AND run_id=$1`,cliRun).Scan(&canonical))
+		if !strings.Contains(canonical,"9007199254740993"){t.Fatal("CLI lost exact integer")}
+		for _,tool:=range []string{"mender_run_get","mender_run_cancel"}{
+			code,_,diagnostic=cli(keyPath,[]string{"--execute","call",tool},`{"run_id":"`+cliRun+`"}`)
+			if code!=0{t.Fatal(tool,diagnostic)}
+		}
+		must(t,owner.QueryRow(ctx,`SELECT reserved_micro FROM commerce.budget_periods WHERE workspace_id='ws_a' AND budget_id='budget_mcp' AND period_id='period_mcp'`).Scan(&held))
+		if held!=0{t.Fatal("CLI did not use same budget cancellation")}
+		must(t,os.WriteFile(keyPath,[]byte(readOnlyKey),0600))
+		if code,_,_:=cli(keyPath,[]string{"--execute","call","mender_run_start"},args);code==0{t.Fatal("CLI bypassed run:create")}
+		must(t,os.WriteFile(keyPath,[]byte(otherWorkspaceKey),0600))
+		if code,_,_:=cli(keyPath,[]string{"list"},"");code==0{t.Fatal("CLI bypassed workspace boundary")}
+	})
 }

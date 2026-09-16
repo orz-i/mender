@@ -86,7 +86,7 @@ test('scoped implementation cannot be promoted to complete without full acceptan
   rejects(({ data }) => { target(data).execution.acceptance = 'accepted'; }, 'FULL_ACCEPTANCE');
 });
 test('source fixture names and COMPLETE evidence are not fresh test receipts', () => {
-  rejects(({ data }) => { target(data).execution.verification = 'passed'; }, 'EVIDENCE_REF');
+  rejects(({ data }) => { const e = target(data).execution; e.verification = 'passed'; e.verification_receipt = null; }, 'EVIDENCE_REF');
   rejects(({ data }) => {
     const e = target(data).execution; e.verification = 'passed'; e.verification_receipt = e.evidence[0];
   }, 'VERIFICATION_RECEIPT');
@@ -105,7 +105,12 @@ test('G3 internal decision cannot approve arbitrary original tasks', () => {
   }, 'SCOPED_DECISION');
 });
 test('unreviewed work cannot claim verified or accepted execution', () => {
-  rejects(({ data }) => { target(data, 'S4-08').execution.verification = 'passed'; }, 'UNREVIEWED_CLAIM');
+  rejects(({ data }) => {
+    const task = target(data, 'S4-08');
+    task.execution.implementation = 'not_reviewed';
+    task.execution.verification = 'passed';
+    task.status = taskStatus(task.execution);
+  }, 'UNREVIEWED_CLAIM');
 });
 test('remaining UI, operational and external acceptance conditions cannot be erased', () => {
   rejects(({ data }) => { target(data, 'S4-10').execution.remaining = []; }, 'MISSING_REMAINING');
@@ -183,5 +188,12 @@ test('status guard and negative tests stay wired into the real aggregate CI comm
   assert.ok(pkg.scripts.test.split(/\s+/).includes('scripts/project-status.test.mjs'));
   const workflow = parse(actualRead('.github/workflows/ci.yml').toString('utf8'));
   assert.ok(workflow.jobs.check.steps.some((step) => step.run === 'pnpm check'));
-  assert.ok(workflow.jobs.check.steps.some((step) => step.run === 'pnpm test:integration'));
+  const integration = workflow.jobs.check.steps.find((step) => ['pnpm test:integration', 'pnpm test:integration:browser'].includes(step.run));
+  assert.ok(integration, 'CI must execute real PostgreSQL rather than only evidence checks');
+  assert.equal(integration.env.MENDER_TEST_ALLOW_CREATE_DATABASE, 'true');
+  if (integration.run === 'pnpm test:integration:browser') {
+    assert.equal(integration.env.MENDER_S4_BROWSER, 'true');
+    assert.match(pkg.scripts['test:integration:browser'], /-tags=integration.*-count=1.*-timeout=300s.*\.\/tests\/integration/u);
+    assert.ok(workflow.jobs.check.steps.some((step) => step.run === 'pnpm exec playwright install --with-deps chromium'));
+  }
 });

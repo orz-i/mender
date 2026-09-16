@@ -3731,7 +3731,7 @@
       "priority": "P0",
       "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json",
+      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
@@ -3741,14 +3741,22 @@
         "implementation": "scoped_implemented",
         "verification": "recorded",
         "acceptance": "pending",
-        "scope": "受审清单、发布状态机、精确审批与后端 API",
+        "scope": "受审manifest、发布状态机、精确独立审批和发布API保留；对应S4-09/10工作台已接入",
         "remaining": [
-          "全量原任务验收；发布者／审核 UI 按 S4-09/10，非本切片已完成"
+          "原任务完整范围正式验收；生产供应商/插件准入条件不得由本地测试代签"
         ],
         "evidence": [
           {
             "path": "docs/engineering/s4a-plugin-publication-evidence.json",
             "sha256": "3c7f8e7b5453fd1b253ef4c402d7fa9b5441895f688c408e4ae79d988dbbf7b2"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-workbenches.md",
+            "sha256": "01d166c0903941190b1a09390ddb80c9de5548d81b26f03efbbfe53bc8e015c4"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-closeout.md",
+            "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
           }
         ],
         "verification_receipt": null,
@@ -3771,7 +3779,7 @@
       "priority": "P0",
       "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/s4c-dangerous-operation-jit-evidence.json;docs/engineering/s403-commerce-billing-evidence.json",
+      "evidence": "docs/engineering/s4c-dangerous-operation-jit-evidence.json;docs/engineering/s403-commerce-billing-evidence.json;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
@@ -3781,9 +3789,9 @@
         "implementation": "scoped_implemented",
         "verification": "recorded",
         "acceptance": "pending",
-        "scope": "限定危险动作与 JIT；后续增加 refund/adjustment 消费者",
+        "scope": "危险操作与JIT以及refund/adjustment消费者保留，新增精确审批读取和工作台；撤销权限错误保持403",
         "remaining": [
-          "全量原任务验收；S4-10 UI 与生产 MFA 不自动完成"
+          "原范围正式验收；生产MFA和泛化危险动作不由本轮认证"
         ],
         "evidence": [
           {
@@ -3793,6 +3801,14 @@
           {
             "path": "docs/engineering/s403-commerce-billing-evidence.json",
             "sha256": "df0e0d323632116cd26b2150a1864db498ef5cbd61c3c145193986571e368ac9"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-workbenches.md",
+            "sha256": "01d166c0903941190b1a09390ddb80c9de5548d81b26f03efbbfe53bc8e015c4"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-closeout.md",
+            "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
           }
         ],
         "verification_receipt": null,
@@ -3815,7 +3831,7 @@
       "priority": "P0",
       "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/s403-commerce-billing-evidence.json",
+      "evidence": "docs/engineering/s403-commerce-billing-evidence.json;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
@@ -3825,14 +3841,22 @@
         "implementation": "scoped_implemented",
         "verification": "recorded",
         "acceptance": "pending",
-        "scope": "独立业务账本、追加分录、退款／调账及对账后端",
+        "scope": "不可变业务账本、追加分录、退款/调账及对账保留，S4-11界面与真实退款重放验证已接入",
         "remaining": [
-          "原范围验收；ProviderCostEvent、真实资金及 S4-11 UI 仍有缺口"
+          "原范围验收；ProviderCostEvent及真实资金不在已认证范围"
         ],
         "evidence": [
           {
             "path": "docs/engineering/s403-commerce-billing-evidence.json",
             "sha256": "df0e0d323632116cd26b2150a1864db498ef5cbd61c3c145193986571e368ac9"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-workbenches.md",
+            "sha256": "01d166c0903941190b1a09390ddb80c9de5548d81b26f03efbbfe53bc8e015c4"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-closeout.md",
+            "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
           }
         ],
         "verification_receipt": null,
@@ -3855,7 +3879,7 @@
       "priority": "P0",
       "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/s4b-release-governance-evidence.json",
+      "evidence": "docs/engineering/s4b-release-governance-evidence.json;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
@@ -3865,14 +3889,22 @@
         "implementation": "scoped_implemented",
         "verification": "recorded",
         "acceptance": "pending",
-        "scope": "cohort 灰度、排空、回退、紧急禁用与固定 Run 版本",
+        "scope": "cohort灰度、排空、回退与紧急停用已接入工作台并纳入真实数据库回归",
         "remaining": [
-          "原任务验收；百分比灰度／自动指标晋级非已实现范围"
+          "原任务验收；百分比灰度与自动指标晋级非当前范围"
         ],
         "evidence": [
           {
             "path": "docs/engineering/s4b-release-governance-evidence.json",
             "sha256": "5fe6f982e96076671291c178c0ceb1755b366b8a248bcb92f1e83d85b23c2c35"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-workbenches.md",
+            "sha256": "01d166c0903941190b1a09390ddb80c9de5548d81b26f03efbbfe53bc8e015c4"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-closeout.md",
+            "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
           }
         ],
         "verification_receipt": null,
@@ -3895,7 +3927,7 @@
       "priority": "P0",
       "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/s4d-platform-admin-evidence.json",
+      "evidence": "docs/engineering/s4d-platform-admin-evidence.json;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
@@ -3905,14 +3937,22 @@
         "implementation": "scoped_implemented",
         "verification": "recorded",
         "acceptance": "pending",
-        "scope": "工作区冻结、Provider 隔离、事故与审计后端",
+        "scope": "工作区冻结、Provider隔离、事故与审计后端及运营UI已接入，权限/版本冲突通过真实浏览器验证",
         "remaining": [
-          "商业供应商准入、S4-10 平台运营 UI 及原任务验收"
+          "商业供应商准入与正式运营验收；外部告警责任人须配置"
         ],
         "evidence": [
           {
             "path": "docs/engineering/s4d-platform-admin-evidence.json",
             "sha256": "901276ee9fc74682b7791ce36e7b1232a9a2eb2da3895f422a0a8a24a0492dfc"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-workbenches.md",
+            "sha256": "01d166c0903941190b1a09390ddb80c9de5548d81b26f03efbbfe53bc8e015c4"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-closeout.md",
+            "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
           }
         ],
         "verification_receipt": null,
@@ -3935,7 +3975,7 @@
       "priority": "P1",
       "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/s406-sandbox-payment-evidence.json",
+      "evidence": "docs/engineering/s406-sandbox-payment-evidence.json;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
@@ -3945,14 +3985,22 @@
         "implementation": "scoped_implemented",
         "verification": "recorded",
         "acceptance": "pending",
-        "scope": "供应商中立 sandbox PaymentIntent、验签与回调对账",
+        "scope": "供应商中立sandbox意图、验签、回调与对账及状态UI保留，不提供真实充值",
         "remaining": [
-          "原任务 sandbox 条件签署；真实 PSP／商户资格／真钱与 S4-11 UI 不得据此放行"
+          "原sandbox范围签署；真实PSP/商户资格/地区/真钱仍不可放行"
         ],
         "evidence": [
           {
             "path": "docs/engineering/s406-sandbox-payment-evidence.json",
             "sha256": "a60bc0da2422619cacb053e231b3e0ae403c72c909227447035cb852ffe300e6"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-workbenches.md",
+            "sha256": "01d166c0903941190b1a09390ddb80c9de5548d81b26f03efbbfe53bc8e015c4"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-closeout.md",
+            "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
           }
         ],
         "verification_receipt": null,
@@ -3973,21 +4021,21 @@
       "req": "FR-021",
       "doc": "A07",
       "priority": "P1",
-      "status": "未开始",
+      "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/s4b-release-governance-evidence.json",
+      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/s4b-release-governance-evidence.json;docs/engineering/2026-09-16-s4-distribution-quality.md;docs/engineering/2026-09-16-s4-closeout.md",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
         "evidence": ""
       },
       "execution": {
-        "implementation": "not_started",
-        "verification": "not_run",
+        "implementation": "scoped_implemented",
+        "verification": "recorded",
         "acceptance": "pending",
-        "scope": "当前切片均明确 CLI/Skill 分发后置",
+        "scope": "官方Go SDK CLI与Skill已实现；通过同MCP授权/预算/Run执行、幂等重放、查询、取消和精确参数合同",
         "remaining": [
-          "原 CLI/Skill 合同、安装与多入口一致性测试"
+          "用户在已授权实际环境安装与接入验收；不声明未经验证的第三方客户端"
         ],
         "evidence": [
           {
@@ -3997,6 +4045,14 @@
           {
             "path": "docs/engineering/s4b-release-governance-evidence.json",
             "sha256": "5fe6f982e96076671291c178c0ceb1755b366b8a248bcb92f1e83d85b23c2c35"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-distribution-quality.md",
+            "sha256": "8e34df9802a4381e821456ae6bb62c1d11d26d3dac43dc3e11010b87790e7ff3"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-closeout.md",
+            "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
           }
         ],
         "verification_receipt": null,
@@ -4017,23 +4073,32 @@
       "req": "FR-015;FR-023",
       "doc": "A09",
       "priority": "P0",
-      "status": "待复核",
+      "status": "待验收",
       "progress": null,
-      "evidence": "",
+      "evidence": "docs/engineering/2026-09-16-s4-distribution-quality.md;docs/engineering/2026-09-16-s4-closeout.md",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
         "evidence": ""
       },
       "execution": {
-        "implementation": "not_reviewed",
-        "verification": "not_reviewed",
+        "implementation": "scoped_implemented",
+        "verification": "recorded",
         "acceptance": "pending",
-        "scope": "未取得发布质量／健康任务完整交付证据",
+        "scope": "只读MCP发现/合同快照、漂移拒绝、有界采样任务及无脚本质量报告已实现；不覆盖当前发布版本",
         "remaining": [
-          "核对真实实现再决定工作量；不能把 API health 探针当合成质量任务"
+          "负责人确认受控工具集探测范围；平台内多租户质量趋势持久化及付费上游功能任务不由此自动认证"
         ],
-        "evidence": [],
+        "evidence": [
+          {
+            "path": "docs/engineering/2026-09-16-s4-distribution-quality.md",
+            "sha256": "8e34df9802a4381e821456ae6bb62c1d11d26d3dac43dc3e11010b87790e7ff3"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-closeout.md",
+            "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
+          }
+        ],
         "verification_receipt": null,
         "acceptance_record": null
       }
@@ -4054,7 +4119,7 @@
       "priority": "P1",
       "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;frontend/apps/console/src/app/router.tsx;docs/engineering/2026-09-16-s4-workbenches.md",
+      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;frontend/apps/console/src/app/router.tsx;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
@@ -4064,9 +4129,9 @@
         "implementation": "scoped_implemented",
         "verification": "recorded",
         "acceptance": "pending",
-        "scope": "五个S4工作台中对应原任务的固定端点表单、显式确认、只读事实和权限错误流程；真实Chromium/HTTP/隔离PostgreSQL已执行，正式回执随最终收口归档",
+        "scope": "发布者工作台及真实Chromium/HTTP/隔离PostgreSQL草稿、预检、独立审核、发布与负向流程",
         "remaining": [
-          "首发发布者用户验收；发布预检不是上游试调用，真实供应商任务须另行授权验证"
+          "首发发布者用户验收；上游功能试调用需真实授权且受限计费"
         ],
         "evidence": [
           {
@@ -4080,6 +4145,10 @@
           {
             "path": "docs/engineering/2026-09-16-s4-workbenches.md",
             "sha256": "01d166c0903941190b1a09390ddb80c9de5548d81b26f03efbbfe53bc8e015c4"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-closeout.md",
+            "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
           }
         ],
         "verification_receipt": null,
@@ -4102,7 +4171,7 @@
       "priority": "P0",
       "status": "待验收",
       "progress": null,
-      "evidence": "frontend/apps/admin/src/app/router.tsx;docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/s4b-release-governance-evidence.json;docs/engineering/s4c-dangerous-operation-jit-evidence.json;docs/engineering/s4d-platform-admin-evidence.json;docs/engineering/2026-09-16-s4-workbenches.md",
+      "evidence": "frontend/apps/admin/src/app/router.tsx;docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/s4b-release-governance-evidence.json;docs/engineering/s4c-dangerous-operation-jit-evidence.json;docs/engineering/s4d-platform-admin-evidence.json;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
@@ -4112,9 +4181,9 @@
         "implementation": "scoped_implemented",
         "verification": "recorded",
         "acceptance": "pending",
-        "scope": "五个S4工作台中对应原任务的固定端点表单、显式确认、只读事实和权限错误流程；真实Chromium/HTTP/隔离PostgreSQL已执行，正式回执随最终收口归档",
+        "scope": "发布审核/回退、冻结/事故/审计和JIT工作台复用真实后端；CSRF、精确版本、不同审核主体及越权场景已验证",
         "remaining": [
-          "正式运营用户验收和生产身份保证；发布/平台/JIT能力均继续服务端授权"
+          "正式运营用户验收和生产身份/MFA保证；不得由浏览器确认替代服务端批准"
         ],
         "evidence": [
           {
@@ -4140,6 +4209,10 @@
           {
             "path": "docs/engineering/2026-09-16-s4-workbenches.md",
             "sha256": "01d166c0903941190b1a09390ddb80c9de5548d81b26f03efbbfe53bc8e015c4"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-closeout.md",
+            "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
           }
         ],
         "verification_receipt": null,
@@ -4162,7 +4235,7 @@
       "priority": "P1",
       "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/s403-commerce-billing-evidence.json;docs/engineering/s406-sandbox-payment-evidence.json;frontend/apps/admin/src/app/router.tsx;docs/engineering/2026-09-16-s4-workbenches.md",
+      "evidence": "docs/engineering/s403-commerce-billing-evidence.json;docs/engineering/s406-sandbox-payment-evidence.json;frontend/apps/admin/src/app/router.tsx;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
@@ -4172,9 +4245,9 @@
         "implementation": "scoped_implemented",
         "verification": "recorded",
         "acceptance": "pending",
-        "scope": "五个S4工作台中对应原任务的固定端点表单、显式确认、只读事实和权限错误流程；真实Chromium/HTTP/隔离PostgreSQL已执行，正式回执随最终收口归档",
+        "scope": "账本、对账、部分退款/调账审批与sandbox支付状态界面已有真实浏览器验证，不将跳转当到账",
         "remaining": [
-          "正式财务用户验收；仅sandbox意图与回调对账，真实商户/支付网络仍阻断"
+          "财务用户验收；真实商户/支付网络及商业资格仍阻断"
         ],
         "evidence": [
           {
@@ -4192,6 +4265,10 @@
           {
             "path": "docs/engineering/2026-09-16-s4-workbenches.md",
             "sha256": "01d166c0903941190b1a09390ddb80c9de5548d81b26f03efbbfe53bc8e015c4"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-closeout.md",
+            "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
           }
         ],
         "verification_receipt": null,
@@ -4212,21 +4289,21 @@
       "req": "FR-021",
       "doc": "A14",
       "priority": "P1",
-      "status": "进行中",
+      "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/s406-sandbox-payment-evidence.json",
+      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/s406-sandbox-payment-evidence.json;docs/engineering/2026-09-16-s4-closeout.md",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
         "evidence": ""
       },
       "execution": {
-        "implementation": "partial",
-        "verification": "not_reviewed",
+        "implementation": "scoped_implemented",
+        "verification": "recorded",
         "acceptance": "pending",
-        "scope": "已有合同及局部工程说明，本轮仅修正当前状态入口",
+        "scope": "已有实际CLI/Skill、五个工作台、质量、制品签名、依赖扫描和恢复引导；文档无真实秘密",
         "remaining": [
-          "CLI／发布者路径齐备后的完整文档、示例与用户失败指引"
+          "面向首发用户复核文档和所有失败指引，正式产品验收待签署"
         ],
         "evidence": [
           {
@@ -4236,6 +4313,10 @@
           {
             "path": "docs/engineering/s406-sandbox-payment-evidence.json",
             "sha256": "a60bc0da2422619cacb053e231b3e0ae403c72c909227447035cb852ffe300e6"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-closeout.md",
+            "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
           }
         ],
         "verification_receipt": null,
@@ -4256,21 +4337,21 @@
       "req": "FR-015;FR-016",
       "doc": "A16",
       "priority": "P0",
-      "status": "进行中",
+      "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/s4b-release-governance-evidence.json;docs/engineering/s4c-dangerous-operation-jit-evidence.json;docs/engineering/s4d-platform-admin-evidence.json;backend/tests/integration/postgres_test.go",
+      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/s4b-release-governance-evidence.json;docs/engineering/s4c-dangerous-operation-jit-evidence.json;docs/engineering/s4d-platform-admin-evidence.json;backend/tests/integration/postgres_test.go;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
         "evidence": ""
       },
       "execution": {
-        "implementation": "partial",
+        "implementation": "scoped_implemented",
         "verification": "recorded",
         "acceptance": "pending",
-        "scope": "插件、发布、审批、Admin 后端已有测试文件和范围记录",
+        "scope": "发布/回退/审批/Admin合同、真实数据库及Chromium工作台回归已执行；不只核对文件存在",
         "remaining": [
-          "S4-09/10 浏览器和端到端场景；原 T22–T24/T26/T31 全条件核对"
+          "原T22～24/T26/T31的正式范围复核与真实用户验收"
         ],
         "evidence": [
           {
@@ -4291,7 +4372,15 @@
           },
           {
             "path": "backend/tests/integration/postgres_test.go",
-            "sha256": "2819bb1f9758e2d3ee7cb6d956399d67f58e036dd93d15c2b331d144a5f574e9"
+            "sha256": "af752f63a20965e44675f445605404814b9a136e142fc82a5c34e607ecf9ca83"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-workbenches.md",
+            "sha256": "01d166c0903941190b1a09390ddb80c9de5548d81b26f03efbbfe53bc8e015c4"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-closeout.md",
+            "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
           }
         ],
         "verification_receipt": null,
@@ -4312,21 +4401,21 @@
       "req": "FR-019;FR-021",
       "doc": "A16",
       "priority": "P0",
-      "status": "进行中",
+      "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/s403-commerce-billing-evidence.json;docs/engineering/s406-sandbox-payment-evidence.json;backend/tests/integration/postgres_test.go",
+      "evidence": "docs/engineering/s403-commerce-billing-evidence.json;docs/engineering/s406-sandbox-payment-evidence.json;backend/tests/integration/postgres_test.go;docs/engineering/2026-09-16-s4-closeout.md",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
         "evidence": ""
       },
       "execution": {
-        "implementation": "partial",
+        "implementation": "scoped_implemented",
         "verification": "recorded",
         "acceptance": "pending",
-        "scope": "业务账本和模拟支付已有自动化测试记录",
+        "scope": "不可变账本、sandbox回调、部分退款重放、浏览器账务与CLI同授权/同预算路径已执行",
         "remaining": [
-          "CLI/Skill、多入口及 S4-11 UI 联调；原 T20/T21/T27/T29 全条件核对"
+          "原T20/T21/T27/T29正式验收；实际PSP/商业环境不由测试替代"
         ],
         "evidence": [
           {
@@ -4339,7 +4428,11 @@
           },
           {
             "path": "backend/tests/integration/postgres_test.go",
-            "sha256": "2819bb1f9758e2d3ee7cb6d956399d67f58e036dd93d15c2b331d144a5f574e9"
+            "sha256": "af752f63a20965e44675f445605404814b9a136e142fc82a5c34e607ecf9ca83"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-closeout.md",
+            "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
           }
         ],
         "verification_receipt": null,
@@ -4360,23 +4453,28 @@
       "req": "NFR-009",
       "doc": "B07",
       "priority": "P0",
-      "status": "待复核",
+      "status": "待验收",
       "progress": null,
-      "evidence": "",
+      "evidence": "docs/engineering/2026-09-16-s4-closeout.md",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
         "evidence": ""
       },
       "execution": {
-        "implementation": "not_reviewed",
-        "verification": "not_reviewed",
+        "implementation": "scoped_implemented",
+        "verification": "recorded",
         "acceptance": "pending",
-        "scope": "尚无完整 G4 放行证据",
+        "scope": "汇总原18任务、实际命令/日志/源码指纹及G4阻断清单；工程验证不伪造Gate批准",
         "remaining": [
-          "汇总 S4-13/14、明确剩余条件并形成正式 G4 决议"
+          "项目负责人审阅范围并作出G4正式决议；现仍pending"
         ],
-        "evidence": [],
+        "evidence": [
+          {
+            "path": "docs/engineering/2026-09-16-s4-closeout.md",
+            "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
+          }
+        ],
         "verification_receipt": null,
         "acceptance_record": null
       }
@@ -4395,21 +4493,21 @@
       "req": "FR-015;NFR-002",
       "doc": "A09",
       "priority": "P0",
-      "status": "进行中",
+      "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/s4b-release-governance-evidence.json",
+      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/s4b-release-governance-evidence.json;docs/engineering/2026-09-16-s4-distribution-quality.md;docs/engineering/2026-09-16-s4-closeout.md",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
         "evidence": ""
       },
       "execution": {
-        "implementation": "partial",
+        "implementation": "scoped_implemented",
         "verification": "recorded",
         "acceptance": "pending",
-        "scope": "受审 manifest／权限验证存在，签名和依赖扫描未全量认证",
+        "scope": "真实Ed25519签名/外部可信公钥验证、不可变制品摘要与路径限制、网络依赖扫描已实现；修复两项实际可达漏洞",
         "remaining": [
-          "制品签名、依赖扫描及准入阻断实测，不能用 checksum 代替"
+          "生产密钥托管/信任锚与部署准入联调；不可达依赖告警风险评审；远端CI与分支保护实测"
         ],
         "evidence": [
           {
@@ -4419,6 +4517,14 @@
           {
             "path": "docs/engineering/s4b-release-governance-evidence.json",
             "sha256": "5fe6f982e96076671291c178c0ceb1755b366b8a248bcb92f1e83d85b23c2c35"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-distribution-quality.md",
+            "sha256": "8e34df9802a4381e821456ae6bb62c1d11d26d3dac43dc3e11010b87790e7ff3"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-closeout.md",
+            "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
           }
         ],
         "verification_receipt": null,
@@ -4439,21 +4545,21 @@
       "req": "NFR-005;NFR-008",
       "doc": "A15",
       "priority": "P0",
-      "status": "进行中",
+      "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/alpha-operations-evidence.json;docs/engineering/s4b-release-governance-evidence.json",
+      "evidence": "docs/engineering/alpha-operations-evidence.json;docs/engineering/s4b-release-governance-evidence.json;docs/engineering/2026-09-16-s4-operations-runbook.md;docs/engineering/2026-09-16-s4-closeout.md",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
         "evidence": ""
       },
       "execution": {
-        "implementation": "partial",
-        "verification": "not_reviewed",
+        "implementation": "scoped_implemented",
+        "verification": "recorded",
         "acceptance": "pending",
-        "scope": "局部运行边界和回退 API 有说明",
+        "scope": "已提供工作台回退/对账手册与自有临时容器pg_dump/pg_restore，核对Run/Job/预算/账本/支付/迁移事实，恢复后不启动Worker",
         "remaining": [
-          "实际备份恢复、值班责任、外部告警与事故演练"
+          "真实值班人、外部告警、备份保留与角色/密钥/对象存储恢复配置；生产RPO/RTO演练不在本地结果内"
         ],
         "evidence": [
           {
@@ -4463,6 +4569,14 @@
           {
             "path": "docs/engineering/s4b-release-governance-evidence.json",
             "sha256": "5fe6f982e96076671291c178c0ceb1755b366b8a248bcb92f1e83d85b23c2c35"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-operations-runbook.md",
+            "sha256": "96f3ab535e89b9af6ec4a03fee3f179b9b982611a69f96e829e60ff117db9a38"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-closeout.md",
+            "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
           }
         ],
         "verification_receipt": null,
@@ -4483,26 +4597,30 @@
       "req": "FR-019",
       "doc": "B07",
       "priority": "P0",
-      "status": "待复核",
+      "status": "进行中",
       "progress": null,
-      "evidence": "docs/engineering/s406-sandbox-payment-evidence.json",
+      "evidence": "docs/engineering/s406-sandbox-payment-evidence.json;docs/engineering/2026-09-16-s4-closeout.md",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
         "evidence": ""
       },
       "execution": {
-        "implementation": "not_reviewed",
-        "verification": "not_reviewed",
+        "implementation": "partial",
+        "verification": "recorded",
         "acceptance": "pending",
-        "scope": "未取得真实商户／地区／供应商许可与商业签署证据",
+        "scope": "商业前置条件/供应商权利/地区/数据/支付及责任人清单已整理，未取得外部证明或签署",
         "remaining": [
-          "由业务责任人确认服务条款、收费、数据和供给许可；不得自动批准"
+          "由业务负责人提交真实服务条款、供应商分发许可、支付/数据地区依据并签署；不得自动批准"
         ],
         "evidence": [
           {
             "path": "docs/engineering/s406-sandbox-payment-evidence.json",
             "sha256": "a60bc0da2422619cacb053e231b3e0ae403c72c909227447035cb852ffe300e6"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-closeout.md",
+            "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
           }
         ],
         "verification_receipt": null,
@@ -5473,8 +5591,8 @@
   "execution_tracking": {
     "schema_version": 1,
     "reviewed_at": "2026-09-16",
-    "reviewed_head": "bfa8171409e5cc1baea3a89df6d23d94212ba4b9",
-    "review_basis": "local source and existing historical evidence; not a new business-test or external acceptance receipt",
+    "reviewed_head": "7549741603735fd2d2cb618864be5b38d77823a1",
+    "review_basis": "实现文件与已执行本地验证已复核；最终完整回执待汇总，不将已有记录当本次全部通过",
     "plan_fingerprint": "54a10bde509a7cd3c78ba6602cb73623fc4a446a946c3d38947ae625b21afc70",
     "canonical_aliases": {
       "S4-A": "S4-01",
@@ -5485,13 +5603,7 @@
     "current_phase": "S4",
     "progress_policy": "null-until-full-acceptance",
     "next_task_ids": [
-      "S4-10",
-      "S4-09",
-      "S4-11",
-      "S4-13",
-      "S4-14",
       "S4-15",
-      "S4-16",
       "S4-17",
       "S4-18"
     ],
@@ -5509,7 +5621,7 @@
         "id": "G4",
         "state": "pending",
         "evidence": null,
-        "note": "后端切片不代替完整商业准备验收"
+        "note": "S4本地工程与自动化验证已汇总；原任务剩余范围、正式用户验收、值班/远端门禁和商业签署仍待负责人确认，不自动授予G4商业放行"
       },
       {
         "id": "G5",

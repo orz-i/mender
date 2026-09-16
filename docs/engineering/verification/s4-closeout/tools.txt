@@ -1,0 +1,36 @@
+COMMAND: pnpm test:s4:tools
+STARTED: 2026-09-16T10:20:25.481Z
+FINISHED: 2026-09-16T10:20:28.166Z
+SOURCE: 7549741603735fd2d2cb618864be5b38d77823a1
+SOURCE_SHA256: 83c76d55a555eb86b29d2dcdb4817e59762196fa2de162f6cc2e7eb1b99674b2
+
+STDOUT
+✔ bounded schedule keeps immutable baseline and never asks for a tools/call (4.5015ms)
+✔ drift and unavailability fail the whole job without copying secrets (0.5076ms)
+✔ invalid success output, lost baseline and side-effect claims never pass (0.4304ms)
+✔ invalid counts, transport and hidden configuration are rejected (0.4125ms)
+✔ HTML report refuses markup and inconsistent success rather than escaping arbitrary payloads (0.3447ms)
+✔ actual runner is wired only to bounded CLI health with required baseline (0.457ms)
+✔ real Ed25519 verification binds file bytes and externally supplied trusted public key (17.104ms)
+✔ artifact drift is rejected rather than silently refreshing hashes (6.5117ms)
+✔ wrong signer and modified signatures do not pass (12.2992ms)
+✔ revision substitution and embedded self-approved key are rejected (10.056ms)
+✔ expiry, invalid time and unknown fields fail closed (5.7621ms)
+✔ empty, duplicate and case-colliding artifact inventories fail (7.889ms)
+✔ paths reject traversal, absolute paths, alternate streams, device names and secrets (0.8129ms)
+✔ signing does not create or modify repository artifacts or keys (7.9443ms)
+ℹ tests 14
+ℹ suites 0
+ℹ pass 14
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 182.2805
+ok  	github.com/orz-i/mender/backend/internal/platform/mcpconsumer	(cached)
+
+STDERR
+$ node --test scripts/quality-probe.test.mjs scripts/release-artifact.test.mjs && node scripts/backend.mjs test ./internal/platform/mcpconsumer
+
+SOURCE_UNCHANGED: true
+EXIT_CODE: 0

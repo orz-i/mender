@@ -1,0 +1,409 @@
+COMMAND: pnpm check
+STARTED: 2026-09-16T10:20:09.289Z
+FINISHED: 2026-09-16T10:21:16.414Z
+SOURCE: 7549741603735fd2d2cb618864be5b38d77823a1
+SOURCE_SHA256: 83c76d55a555eb86b29d2dcdb4817e59762196fa2de162f6cc2e7eb1b99674b2
+
+STDOUT
+PASS: pinned Node / pnpm toolchain / Go
+PASS: 5 private workspace packages, workspace: dependencies, required scripts and one lockfile
+LIMIT: this manifest check is not a resolved Go / TypeScript architecture graph check.
+PASS: baseline counts / task references and 322 local Markdown links
+LIMIT: local link targets are checked; external URLs, Markdown anchors and Office/PDF layouts are not revalidated.
+PASS: 92 canonical tasks, implementation/verification/acceptance separation, evidence digests and generated status
+LIMIT: structural checks do not execute business tests or attest human approval, external clients, live payments or remote merge protection.
+PASS: JSON Schemas / examples, governed Plugin capability references, local refs and OpenAPI structure (10 paths / 11 operations)
+LIMIT: this validates design examples, not full OpenAPI conformance or implemented business endpoints.
+PASS: authenticated Run query/cancel v0.3.0 schemas, cancellation errors and response examples; real database checks are pnpm test:integration.
+PASS: machine + delegated Console Run list / finite event timeline schemas, signed cursor watermark contract and local response examples.
+PASS: machine + delegated Console inline Artifact metadata/content contract; bounded JSON and no provider-control identifiers/object-storage claims.
+PASS: Human Console quota observability + delegated Run cost contract use exact micro strings and no payment/admin semantics.
+PASS: MCP 2026-07-28 stateless meta-tool contract, stable four-tool surface and forbidden-output policy.
+PASS: Fixed Toolset publication contract keeps immutable Tool schemas, stable MCP aliases and server-owned routing controls.
+PASS: upstream MCP adapter pins stateless Tools discovery/call to reviewed snapshots, persists known results, disables automatic network retries and keeps unsupported capabilities explicit.
+PASS: G3 evidence certifies MCP 2026-07-28 on 2 distributions, 3 real entry sources, OAuth T07/T08, Remote Agent T17, Provider Callback T28, Artifact Object T30, and MCP cancellation T40 Alpha semantics.
+LIMIT: certification is the pinned automated Go SDK harness plus local real-PostgreSQL fixtures; no third-party MCP client, legacy protocol, A2A, multi-turn Agent, payment accounting or production proxy is certified.
+PASS: G3 Alpha operations evidence closes S3-16/S3-17 for the bounded local runtime.
+LIMIT: production streaming proxy, standalone/application SSE, external callback alert transport and cloud object storage remain explicitly uncertified.
+PASS: Mender core-alpha is COMPLETE; G3 internal integration decision is SCOPED-GO.
+LIMIT: third-party client interoperability, external user acceptance, production proxy/SSE/alerts, cloud object storage, A2A, multi-turn Agent and payment accounting remain deferred.
+PASS: Mender S4-A Plugin / Publisher publication model is COMPLETE.
+LIMIT: release canary/drain/rollback/emergency disable, frontend workbenches, commercial accounting, payment, CLI/Skill distribution and production deploy remain deferred.
+PASS: Mender S4-B Release Governance / T23 is COMPLETE.
+LIMIT: percentage-weighted canary, automated metric promotion, release frontends, JIT generalization, commercial accounting, payment, supply-chain certification and production deploy remain deferred.
+PASS: Mender S4-C Dangerous Operation / JIT Governance is COMPLETE.
+LIMIT: generalized dangerous actions, financial consumers, payment/refund accounting, unrestricted impersonation, secret access, admin operations UI, MFA assurance and production deploy remain deferred.
+PASS: Mender S4-D Platform Admin Operations is COMPLETE.
+LIMIT: frontend Admin UI, finance reconciliation/adjustments, refunds, payment integration, commercial provider onboarding, impersonation and production deploy remain deferred.
+PASS: Mender canonical S4-03 Commerce Billing / Adjustments / Refunds is COMPLETE.
+LIMIT: ProviderCostEvent accounting, payment providers, wallet funding, FX, tax/statutory GL, billing frontend and production deploy remain deferred.
+PASS: Mender canonical S4-06 sandbox payment boundary is COMPLETE.
+LIMIT: live PSP, merchant credentials, real-money funding, FX, tax, payouts, billing frontend and production deploy remain deferred.
+Frontend architecture: 126 source files checked; resolved imports, module boundaries and source cycles passed.
+ok  	github.com/orz-i/mender/backend/tests/architecture	0.113s
+Scope: 5 of 6 workspace projects
+frontend/packages/config typecheck$ tsc --project tsconfig.json
+frontend/packages/config typecheck: Done
+frontend/packages/ui typecheck$ tsc --project tsconfig.json
+frontend/packages/api-client typecheck$ tsc --project tsconfig.json
+frontend/packages/api-client typecheck: Done
+frontend/packages/ui typecheck: Done
+frontend/apps/admin typecheck$ tsc --project tsconfig.json
+frontend/apps/console typecheck$ tsc --project tsconfig.json
+frontend/apps/admin typecheck: Done
+frontend/apps/console typecheck: Done
+✔ Admin Governance lists exact revision with browser session transport only (75.6534ms)
+✔ Admin Governance approve sends only review note plus CSRF and never reviewer identity (1.5782ms)
+✔ Admin Governance fails closed on sensitive approval projection (1.0423ms)
+✔ Admin Governance history preserves exact sequence/revisions and bounded filters (1.5611ms)
+✔ Admin Governance history rejects numeric precision drift and sensitive payloads (7.7796ms)
+✔ Admin Governance policy snapshot preserves exact revisions and safe server decisions (28.6489ms)
+✔ Admin Governance creates only declarative policy fields and activates with empty body (1.3975ms)
+✔ Admin Provider callback Inbox uses safe same-origin read projection and exact cursor (3.4558ms)
+✔ Admin Provider callback Inbox fails closed on leaked handles, inconsistent facts, and malformed cursors (1.5205ms)
+✔ Admin Governance policy fails closed on precision drift and sensitive projection (0.8631ms)
+✔ Admin execution governance preserves exact server facts and sends only server-side filters (1.155ms)
+✔ Admin execution governance fails closed on numeric precision drift, raw arguments, and malformed cursors (1.0533ms)
+✔ Admin execution governance creates only declarative policy fields and activates with empty body (0.9163ms)
+✔ commercial client uses same-origin CSRF with exact revision strings and no bearer (128.5868ms)
+✔ write authority, missing CSRF, unknown endpoints and traversal reject before fetch (1.2463ms)
+✔ 403/409 and network uncertainty do not retry or leak arbitrary error bodies (4.4754ms)
+✔ JIT empty target revision and reviewed exact parameter shape are supported (82.3704ms)
+✔ plugin preflight/submit/publish send empty bodies and extra script fields cannot enter draft (30.0202ms)
+✔ draft create sends exactly the manifest and frozen publishers can be read (1.551ms)
+✔ financial approval displays explicit basis, amount and business-key bindings (0.9423ms)
+✔ sandbox intent mode is fixed; floats, exponent, leading zero and overflow never send (7.7326ms)
+✔ payment metadata is required and browser client exposes no callback write (70.6135ms)
+✔ unknown response keys, huge payloads, wrong content type and numeric revisions fail closed (15.408ms)
+✔ incident actions use the real Go target and severity vocabulary (2.2927ms)
+✔ Console Catalog snapshot preserves fixed precision and rejects sensitive projections (53.3286ms)
+✔ Console Catalog mutations echo CSRF and preflight remains server authoritative (2.6865ms)
+✔ Console Catalog surfaces server-owned policy deny with exact bigint decision and no approval (0.7522ms)
+✔ Console Catalog policy projection fails closed on sensitive fields (0.7105ms)
+✔ Console Catalog refuses settlement fields in PriceVersion options (0.7703ms)
+✔ Console Catalog OpenAPI preview sends only inline document and trusts server diagnostics/importability (1.4341ms)
+✔ Console Catalog OpenAPI import sends explicit mapping only, requires CSRF, and preserves draft precision (1.1099ms)
+✔ Console Catalog OpenAPI projections fail closed on leaked source, unknown fields, and inconsistent importability (14.3176ms)
+✔ lists only same-origin Connection metadata without Authorization (50.2882ms)
+✔ starts reviewed OAuth with only browser session + CSRF and returns a safe HTTPS redirect (0.7156ms)
+✔ OAuth start fails closed on unsafe authorization URL (0.8349ms)
+✔ revoke requires CSRF and never serializes a credential secret (0.6453ms)
+✔ fails closed if a server response exposes a credential reference (0.6586ms)
+✔ execution risk preview uses browser session + CSRF and preserves exact bigint strings (133.7558ms)
+✔ execution risk confirmation returns exact server-owned binding without raw arguments (0.726ms)
+✔ execution risk projection fails closed on sensitive fields, precision drift and inconsistent confirmation (1.8865ms)
+✔ Console identity uses same-origin cookies without Authorization headers (44.7946ms)
+✔ logout sends only the explicit CSRF header and keeps cookies browser-managed (0.3848ms)
+✔ unauthenticated Console response is surfaced without inventing a session (0.8458ms)
+✔ lists server-filtered launch options with browser session only (58.1213ms)
+✔ launch discovery fails closed on credential, budget or malformed schema leakage (1.5841ms)
+✔ human Run delegation is minted with browser session + CSRF but returned token is used explicitly (66.2806ms)
+✔ delegation revoke uses only CSRF + browser-managed cookie and rejects unsafe scope payloads (0.9671ms)
+✔ delegation responses fail closed on workspace or scope drift (0.8475ms)
+✔ mints exact StartRun delegation with browser session + CSRF only (64.9589ms)
+✔ starts through delegated Console Admission without token in URL or cookies (1.8783ms)
+✔ delegation response fails closed on constraint drift (1.0422ms)
+✔ Console Usage uses Browser Session transport and preserves exact micro strings beyond Number safe range (62.2424ms)
+✔ Console Usage fails closed on amount drift or internal-field leakage (1.3944ms)
+✔ Console Usage surfaces session authorization failure without inventing an identity (0.6455ms)
+✔ reads a live probe without claiming business readiness (76.3288ms)
+✔ rejects a failed HTTP response (1.0171ms)
+✔ rejects an unrelated service or a malformed response (1.5552ms)
+✔ propagates caller cancellation to the transport (1.1956ms)
+✔ Artifact object status and capability stay behind delegated run:read while signed content drops Authorization (42.3708ms)
+✔ Artifact object client fails closed on inferred, leaked, or unsafe server projections (3.7581ms)
+✔ reads exact Run quota cost with delegated Bearer and rejects accounting drift (2.1081ms)
+✔ lists protected runs without placing the machine token in the URL (1.0987ms)
+✔ loads detail, paged events and artifact content from the existing protected surface (1.6126ms)
+✔ event pagination and artifact detail fail closed on watermark or contract drift (0.716ms)
+✔ Console result reads use the delegated prefix and never browser cookies (0.9257ms)
+✔ cancels with strict JSON and surfaces API errors without token leakage (1.2063ms)
+✔ rejects malformed identities, unknown states and malformed payloads (2.3271ms)
+✔ fails closed if a successful response crosses the requested workspace boundary (0.9105ms)
+✔ fails closed if Run surfaces leak Remote Agent or provider-control internals (0.93ms)
+✔ Agent supplemental input uses exact safe projection and never exposes provider delivery internals (1.9158ms)
+✔ Core Alpha closure preserves scoped GO and exact certified client matrix (2.2733ms)
+✔ Core Alpha closure rejects external/production certification inflation (15.6916ms)
+✔ Core Alpha closure rejects missing G3 tests or deferred boundaries (1.4813ms)
+✔ Alpha operations evidence preserves bounded S3-16/S3-17 scope (4.4575ms)
+✔ Alpha operations evidence rejects production certification inflation (2.2006ms)
+✔ Alpha operations evidence rejects timeout and retention drift (1.618ms)
+✔ pure layers reject transport, framework and reverse dependencies (10.7813ms)
+✔ type imports, re-exports and static dynamic imports are inspected (6.5571ms)
+✔ ambient effects and JSX cannot enter pure business layers (6.1438ms)
+✔ cross-app private imports and shared UI business imports fail (0.5327ms)
+✔ workspace imports require declared workspace protocol and exported entry (0.6585ms)
+✔ pure intra-module ports and app composition remain allowed (0.3855ms)
+✔ presentation cannot instantiate its own concrete infrastructure (0.2785ms)
+✔ actual TypeScript path-alias resolution cannot hide a cross-app dependency (2.2694ms)
+✔ cycles, unresolved local modules, malformed source and unclassified layers fail (1.5107ms)
+✔ G3 evidence manifest keeps the certified current protocol and exact three-source truth (4.2761ms)
+✔ G3 evidence rejects legacy/third-party/A2A support inflation (8.372ms)
+✔ G3 evidence rejects missing entry sources and truth phases (6.1701ms)
+✔ isolated runner only accepts local engine and loopback port mappings (1.4302ms)
+✔ cancellation is a failure and cleanup does not reuse the aborted signal (2.6864ms)
+✔ preflight failure never creates containers or runs fake-success tests (1.0417ms)
+✔ successful real-suite invocation cleans only its owned resource and uses ephemeral credentials (1.0778ms)
+✔ test failures, readiness failures and unsafe bindings still clean owned resources (1.746ms)
+✔ cleanup failures are failures; foreign ownership is never removed (0.6729ms)
+✔ Docker runner and CI keep the same existing PostgreSQL image baseline (14.8097ms)
+✔ current 92-task plan, historical snapshots and generated page are coherent (35.1851ms)
+✔ original scope can eventually be accepted with distinct execution and acceptance receipts (21.2164ms)
+✔ missing task and duplicate task cannot silently shrink the denominator (100.7658ms)
+✔ new S4-19 or S4-E is not an original delivery task (60.9396ms)
+✔ scope, estimate and dependency changes require baseline review (46.4894ms)
+✔ canonical alias mapping cannot be reassigned or expanded (53.5488ms)
+✔ scoped-complete work cannot be reset to an unstarted task (22.5133ms)
+✔ implementation and top-level projections cannot contradict each other (44.1703ms)
+✔ unaccepted work has null progress rather than invented zero or 100 percent (65.1478ms)
+✔ scoped implementation cannot be promoted to complete without full acceptance (21.9414ms)
+✔ source fixture names and COMPLETE evidence are not fresh test receipts (41.461ms)
+✔ a full acceptance record must be task-scoped and tied to execution evidence (21.663ms)
+✔ G3 internal decision cannot approve arbitrary original tasks (22.0273ms)
+✔ unreviewed work cannot claim verified or accepted execution (21.4658ms)
+✔ remaining UI, operational and external acceptance conditions cannot be erased (46.4884ms)
+✔ evidence drift and missing files fail instead of auto-refreshing their hashes (42.3447ms)
+✔ canonical S4 evidence cannot be dropped while retaining a completion claim (20.4391ms)
+✔ malformed evidence and duplicate references yield actionable errors (44.2218ms)
+✔ path validation blocks traversal, absolute paths, alternate streams and aliases (285.197ms)
+✔ invalid date and missing execution axes cannot silently pass (91.6198ms)
+✔ generated Markdown is reproducible and hand-written inflation fails (28.6921ms)
+✔ next tasks and gate set remain within the original plan (46.6111ms)
+✔ backend slice completion cannot serve as a G4 release decision (23.1385ms)
+✔ acceptance of one task cannot grant full phase acceptance (33.5227ms)
+✔ local CI success does not assert remote merge protection or live payment readiness (70.2326ms)
+✔ tests do not mutate the repository plan or create real approval receipts (2.1162ms)
+✔ status guard and negative tests stay wired into the real aggregate CI command (11.5884ms)
+✔ bounded schedule keeps immutable baseline and never asks for a tools/call (4.983ms)
+✔ drift and unavailability fail the whole job without copying secrets (0.5415ms)
+✔ invalid success output, lost baseline and side-effect claims never pass (1.2506ms)
+✔ invalid counts, transport and hidden configuration are rejected (1.4686ms)
+✔ HTML report refuses markup and inconsistent success rather than escaping arbitrary payloads (0.392ms)
+✔ actual runner is wired only to bounded CLI health with required baseline (0.4977ms)
+✔ real Ed25519 verification binds file bytes and externally supplied trusted public key (51.1992ms)
+✔ artifact drift is rejected rather than silently refreshing hashes (16.544ms)
+✔ wrong signer and modified signatures do not pass (17.6165ms)
+✔ revision substitution and embedded self-approved key are rejected (10.6226ms)
+✔ expiry, invalid time and unknown fields fail closed (7.0476ms)
+✔ empty, duplicate and case-colliding artifact inventories fail (15.4065ms)
+✔ paths reject traversal, absolute paths, alternate streams, device names and secrets (0.5341ms)
+✔ signing does not create or modify repository artifacts or keys (12.3255ms)
+✔ S4-03 evidence rejects mutable or unbalanced ledger drift (7.6121ms)
+✔ S4-03 evidence rejects financial approval inflation (5.5459ms)
+✔ S4-03 evidence rejects roadmap and deferred-scope inflation (3.7459ms)
+✔ S4-06 evidence rejects live payment scope inflation (5.0461ms)
+✔ S4-06 evidence rejects callback and ledger authority inflation (1.2255ms)
+✔ S4-06 evidence keeps deferred production capabilities exact (1.1735ms)
+✔ S4-A evidence preserves declarative capability and maker-checker boundaries (3.7543ms)
+✔ S4-A evidence rejects arbitrary code or authority inflation (9.8812ms)
+✔ S4-A evidence does not inflate S4-B, UI, payment or deploy scope (16.8227ms)
+✔ S4-B evidence preserves T23 route pinning and emergency-disable semantics (3.8175ms)
+✔ S4-B evidence rejects route and authority inflation (8.3898ms)
+✔ S4-B evidence keeps percentage canary, UI, finance and production deferred (8.0842ms)
+✔ S4-C evidence preserves exact maker-checker and one-time consumption boundaries (6.7857ms)
+✔ S4-C evidence rejects JIT authority inflation (2.8027ms)
+✔ S4-C evidence keeps finance, generalized actions, UI and production deferred (3.1869ms)
+✔ S4-D evidence rejects Platform Staff authority inflation (6.1768ms)
+✔ S4-D evidence rejects provider quarantine semantic drift (1.7336ms)
+✔ S4-D evidence keeps finance UI impersonation and production deferred (2.4614ms)
+ℹ tests 154
+ℹ suites 0
+ℹ pass 154
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2722.4576
+?   	github.com/orz-i/mender/backend/cmd/api	[no test files]
+?   	github.com/orz-i/mender/backend/cmd/mender	[no test files]
+?   	github.com/orz-i/mender/backend/cmd/operator	[no test files]
+?   	github.com/orz-i/mender/backend/cmd/worker	[no test files]
+ok  	github.com/orz-i/mender/backend/internal/bootstrap	0.059s
+?   	github.com/orz-i/mender/backend/internal/contexts/catalog/adapters/inbound/facade	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/catalog/adapters/outbound/postgres	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/catalog/application	[no test files]
+ok  	github.com/orz-i/mender/backend/internal/contexts/catalog/domain	(cached)
+?   	github.com/orz-i/mender/backend/internal/contexts/catalog/public	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/commerce/adapters/inbound/httpapi	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/commerce/adapters/inbound/pricing	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/commerce/adapters/inbound/reservations	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/commerce/adapters/outbound/identityaccess	[no test files]
+ok  	github.com/orz-i/mender/backend/internal/contexts/commerce/adapters/outbound/paymenthmac	(cached)
+?   	github.com/orz-i/mender/backend/internal/contexts/commerce/adapters/outbound/paymentsecret	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/commerce/adapters/outbound/postgres	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/commerce/adapters/outbound/random	[no test files]
+ok  	github.com/orz-i/mender/backend/internal/contexts/commerce/application	(cached)
+ok  	github.com/orz-i/mender/backend/internal/contexts/commerce/domain	(cached)
+?   	github.com/orz-i/mender/backend/internal/contexts/commerce/public	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/connections/adapters/inbound/facade	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/connections/adapters/inbound/httpapi	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/connections/adapters/outbound/identityaccess	[no test files]
+ok  	github.com/orz-i/mender/backend/internal/contexts/connections/adapters/outbound/oauth	(cached)
+?   	github.com/orz-i/mender/backend/internal/contexts/connections/adapters/outbound/postgres	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/connections/adapters/outbound/random	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/connections/adapters/outbound/supplycredentials	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/connections/application	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/connections/domain	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/connections/public	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/distribution/adapters/inbound/facade	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/distribution/adapters/outbound/postgres	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/distribution/application	[no test files]
+ok  	github.com/orz-i/mender/backend/internal/contexts/distribution/domain	(cached)
+?   	github.com/orz-i/mender/backend/internal/contexts/distribution/public	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/execution/adapters/inbound/admission	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/execution/adapters/inbound/facade	[no test files]
+ok  	github.com/orz-i/mender/backend/internal/contexts/execution/adapters/inbound/httpapi	0.026s
+?   	github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/agentinput	[no test files]
+ok  	github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/artifactcap	(cached)
+?   	github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/coordinatedcancel	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/cursor	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/heartbeat	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/identityaccess	[no test files]
+ok  	github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/objectfs	(cached)
+?   	github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/postgres	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/supplycancel	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/supplyexecutor	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/supplyinput	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/execution/adapters/outbound/supplystatus	[no test files]
+ok  	github.com/orz-i/mender/backend/internal/contexts/execution/application	(cached)
+?   	github.com/orz-i/mender/backend/internal/contexts/execution/application/ports	[no test files]
+ok  	github.com/orz-i/mender/backend/internal/contexts/execution/domain	(cached)
+?   	github.com/orz-i/mender/backend/internal/contexts/execution/public	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/governance/adapters/inbound/admission	[no test files]
+ok  	github.com/orz-i/mender/backend/internal/contexts/governance/adapters/inbound/httpapi	0.027s
+?   	github.com/orz-i/mender/backend/internal/contexts/governance/adapters/outbound/identityaccess	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/governance/adapters/outbound/postgres	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/governance/adapters/outbound/random	[no test files]
+ok  	github.com/orz-i/mender/backend/internal/contexts/governance/application	(cached)
+ok  	github.com/orz-i/mender/backend/internal/contexts/governance/domain	(cached)
+?   	github.com/orz-i/mender/backend/internal/contexts/governance/public	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/identity/adapters/inbound/facade	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/identity/adapters/inbound/httpapi	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/identity/adapters/outbound/keycodec	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/identity/adapters/outbound/oidc	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/identity/adapters/outbound/postgres	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/identity/adapters/outbound/sessioncodec	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/identity/application	[no test files]
+ok  	github.com/orz-i/mender/backend/internal/contexts/identity/domain	(cached)
+?   	github.com/orz-i/mender/backend/internal/contexts/identity/public	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/supply/adapters/inbound/facade	[no test files]
+ok  	github.com/orz-i/mender/backend/internal/contexts/supply/adapters/inbound/httpapi	0.026s
+?   	github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/connectioncredentials	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/executioninput	[no test files]
+ok  	github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/filesecret	(cached)
+ok  	github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/http	(cached)
+?   	github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/identityaccess	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/manifesthash	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/mcp	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/postgres	[no test files]
+?   	github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/random	[no test files]
+ok  	github.com/orz-i/mender/backend/internal/contexts/supply/application	(cached)
+ok  	github.com/orz-i/mender/backend/internal/contexts/supply/domain	(cached)
+?   	github.com/orz-i/mender/backend/internal/contexts/supply/public	[no test files]
+ok  	github.com/orz-i/mender/backend/internal/platform/httpserver	0.028s
+ok  	github.com/orz-i/mender/backend/internal/platform/mcpconsumer	(cached)
+ok  	github.com/orz-i/mender/backend/internal/platform/postgres	0.022s
+?   	github.com/orz-i/mender/backend/internal/processes/admission/adapters/inbound/cancellation	[no test files]
+?   	github.com/orz-i/mender/backend/internal/processes/admission/adapters/inbound/facade	[no test files]
+?   	github.com/orz-i/mender/backend/internal/processes/admission/adapters/inbound/httpapi	[no test files]
+?   	github.com/orz-i/mender/backend/internal/processes/admission/adapters/outbound/capabilities	[no test files]
+?   	github.com/orz-i/mender/backend/internal/processes/admission/adapters/outbound/governanceaccess	[no test files]
+?   	github.com/orz-i/mender/backend/internal/processes/admission/adapters/outbound/identityaccess	[no test files]
+?   	github.com/orz-i/mender/backend/internal/processes/admission/adapters/outbound/identitycancel	[no test files]
+?   	github.com/orz-i/mender/backend/internal/processes/admission/adapters/outbound/identitystart	[no test files]
+?   	github.com/orz-i/mender/backend/internal/processes/admission/adapters/outbound/input	[no test files]
+?   	github.com/orz-i/mender/backend/internal/processes/admission/adapters/outbound/postgres	[no test files]
+?   	github.com/orz-i/mender/backend/internal/processes/admission/application	[no test files]
+?   	github.com/orz-i/mender/backend/internal/processes/admission/public	[no test files]
+ok  	github.com/orz-i/mender/backend/internal/processes/catalogmanagement/adapters/inbound/httpapi	0.042s
+?   	github.com/orz-i/mender/backend/internal/processes/catalogmanagement/adapters/outbound/identityaccess	[no test files]
+?   	github.com/orz-i/mender/backend/internal/processes/catalogmanagement/adapters/outbound/openapiaccess	[no test files]
+?   	github.com/orz-i/mender/backend/internal/processes/catalogmanagement/adapters/outbound/postgres	[no test files]
+?   	github.com/orz-i/mender/backend/internal/processes/catalogmanagement/adapters/outbound/random	[no test files]
+?   	github.com/orz-i/mender/backend/internal/processes/catalogmanagement/application	[no test files]
+?   	github.com/orz-i/mender/backend/internal/processes/consolelaunch/adapters/inbound/httpapi	[no test files]
+?   	github.com/orz-i/mender/backend/internal/processes/consolelaunch/adapters/outbound/identityaccess	[no test files]
+?   	github.com/orz-i/mender/backend/internal/processes/consolelaunch/adapters/outbound/postgres	[no test files]
+?   	github.com/orz-i/mender/backend/internal/processes/consolelaunch/application	[no test files]
+?   	github.com/orz-i/mender/backend/internal/processes/mcpbridge/adapters/inbound/httpapi	[no test files]
+?   	github.com/orz-i/mender/backend/internal/processes/mcpbridge/adapters/outbound/admissionaccess	[no test files]
+?   	github.com/orz-i/mender/backend/internal/processes/mcpbridge/adapters/outbound/executionaccess	[no test files]
+?   	github.com/orz-i/mender/backend/internal/processes/mcpbridge/adapters/outbound/fixedtools	[no test files]
+?   	github.com/orz-i/mender/backend/internal/processes/mcpbridge/adapters/outbound/identityaccess	[no test files]
+?   	github.com/orz-i/mender/backend/internal/processes/mcpbridge/application	[no test files]
+ok  	github.com/orz-i/mender/backend/internal/processes/openapiimport/adapters/inbound/document	(cached)
+?   	github.com/orz-i/mender/backend/internal/processes/openapiimport/adapters/inbound/facade	[no test files]
+ok  	github.com/orz-i/mender/backend/internal/processes/openapiimport/application	(cached)
+?   	github.com/orz-i/mender/backend/internal/processes/openapiimport/public	[no test files]
+ok  	github.com/orz-i/mender/backend/internal/processes/providercallback/adapters/inbound/httpapi	0.026s
+?   	github.com/orz-i/mender/backend/internal/processes/providercallback/adapters/outbound/executionaccess	[no test files]
+ok  	github.com/orz-i/mender/backend/internal/processes/providercallback/adapters/outbound/filesecret	(cached)
+ok  	github.com/orz-i/mender/backend/internal/processes/providercallback/adapters/outbound/hmacverify	(cached)
+?   	github.com/orz-i/mender/backend/internal/processes/providercallback/application	[no test files]
+?   	github.com/orz-i/mender/backend/internal/processes/settlement/adapters/outbound/capabilities	[no test files]
+?   	github.com/orz-i/mender/backend/internal/processes/settlement/adapters/outbound/postgres	[no test files]
+ok  	github.com/orz-i/mender/backend/internal/processes/settlement/application	(cached)
+?   	github.com/orz-i/mender/backend/internal/sharedkernel/canonicaljson	[no test files]
+?   	github.com/orz-i/mender/backend/migrations	[no test files]
+ok  	github.com/orz-i/mender/backend/tests/admission	0.029s
+ok  	github.com/orz-i/mender/backend/tests/architecture	(cached)
+ok  	github.com/orz-i/mender/backend/tests/commerce	0.022s
+ok  	github.com/orz-i/mender/backend/tests/connections	0.055s
+ok  	github.com/orz-i/mender/backend/tests/consolelaunch	0.037s
+ok  	github.com/orz-i/mender/backend/tests/execution	(cached)
+ok  	github.com/orz-i/mender/backend/tests/httpapi	0.046s
+ok  	github.com/orz-i/mender/backend/tests/identity	0.031s
+ok  	github.com/orz-i/mender/backend/tests/mcp	0.364s
+ok  	github.com/orz-i/mender/backend/tests/supply	(cached)
+Scope: 2 of 6 workspace projects
+frontend/apps/console build$ tsc --project tsconfig.json && vite build
+frontend/apps/admin build$ tsc --project tsconfig.json && vite build
+frontend/apps/admin build: [36mvite v8.2.2 [32mbuilding client environment for production...[36m[39m
+frontend/apps/admin build: transforming...
+frontend/apps/console build: [36mvite v8.2.2 [32mbuilding client environment for production...[36m[39m
+frontend/apps/console build: transforming...
+frontend/apps/admin build: ✓ 185 modules transformed.
+frontend/apps/console build: ✓ 184 modules transformed.
+frontend/apps/admin build: rendering chunks...
+frontend/apps/console build: rendering chunks...
+frontend/apps/admin build: computing gzip size...
+frontend/apps/admin build: dist/index.html                   0.45 kB │ gzip:   0.29 kB
+frontend/apps/admin build: dist/assets/index-Cm4c5G3B.css   29.26 kB │ gzip:   6.84 kB
+frontend/apps/admin build: dist/assets/index-BArMishI.js   473.97 kB │ gzip: 136.56 kB
+frontend/apps/admin build: [32m✓ built in 534ms[39m
+frontend/apps/console build: computing gzip size...
+frontend/apps/console build: dist/index.html                                0.45 kB │ gzip:   0.29 kB
+frontend/apps/console build: dist/assets/index-Cm4c5G3B.css                29.26 kB │ gzip:   6.84 kB
+frontend/apps/console build: dist/assets/publisher-workbench-DEcI7Ek5.js   20.72 kB │ gzip:   7.08 kB
+frontend/apps/console build: dist/assets/index-BRVyUOZX.js                497.85 kB │ gzip: 143.33 kB
+frontend/apps/console build: [32m✓ built in 416ms[39m
+frontend/apps/admin build: Done
+frontend/apps/console build: Done
+
+STDERR
+$ pnpm check:toolchain && pnpm check:workspace && pnpm check:docs && pnpm check:status && pnpm check:contracts && pnpm check:g3 && pnpm check:alpha-operations && pnpm check:alpha && pnpm check:s4a-plugin-publication && pnpm check:s4b-release-governance && pnpm check:s4c-dangerous-operation-jit && pnpm check:s4d-platform-admin && pnpm check:s403-commerce-billing && pnpm check:s406-sandbox-payment && pnpm check:architecture && pnpm lint && pnpm typecheck && pnpm test && pnpm test:backend && pnpm vet:backend && pnpm build:backend && pnpm build
+$ node scripts/check-toolchain.mjs --go
+$ node scripts/check-workspace.mjs
+$ node scripts/check-docs.mjs
+$ node scripts/check-project-status.mjs
+$ node scripts/check-contracts.mjs
+$ node scripts/check-g3-evidence.mjs
+$ node scripts/check-alpha-operations.mjs
+$ node scripts/check-alpha-closure.mjs
+$ node scripts/check-s4a-plugin-publication.mjs
+$ node scripts/check-s4b-release-governance.mjs
+$ node scripts/check-s4c-dangerous-operation-jit.mjs
+$ node scripts/check-s4d-platform-admin.mjs
+$ node scripts/check-s403-commerce-billing.mjs
+$ node scripts/check-s406-sandbox-payment.mjs
+$ node scripts/check-architecture.mjs && node scripts/backend.mjs test ./tests/architecture
+$ eslint frontend scripts eslint.config.mjs --max-warnings 0
+$ pnpm -r run typecheck
+$ node --test scripts/quality-probe.test.mjs scripts/release-artifact.test.mjs scripts/project-status.test.mjs scripts/architecture.test.mjs scripts/postgres-test.test.mjs scripts/g3-evidence.test.mjs scripts/alpha-operations.test.mjs scripts/alpha-closure.test.mjs scripts/s4a-plugin-publication.test.mjs scripts/s4b-release-governance.test.mjs scripts/s4c-dangerous-operation-jit.test.mjs scripts/s4d-platform-admin.test.mjs scripts/s403-commerce-billing.test.mjs scripts/s406-sandbox-payment.test.mjs frontend/packages/api-client/src/health.test.mjs frontend/packages/api-client/src/runs.test.mjs frontend/packages/api-client/src/console-identity.test.mjs frontend/packages/api-client/src/console-connections.test.mjs frontend/packages/api-client/src/console-run-delegation.test.mjs frontend/packages/api-client/src/console-launch.test.mjs frontend/packages/api-client/src/console-start-run.test.mjs frontend/packages/api-client/src/console-execution-risk.test.mjs frontend/packages/api-client/src/console-usage.test.mjs frontend/packages/api-client/src/console-catalog.test.mjs frontend/packages/api-client/src/admin-governance.test.mjs frontend/packages/api-client/src/commercial.test.mjs
+$ node scripts/backend.mjs test ./...
+$ node scripts/backend.mjs vet ./...
+$ node scripts/backend.mjs build ./...
+$ pnpm --filter @mender/console --filter @mender/admin run build
+
+SOURCE_UNCHANGED: true
+EXIT_CODE: 0

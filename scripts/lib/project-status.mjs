@@ -61,7 +61,7 @@ export function renderProjectStatus(data) {
       const task = data.tasks.find((item) => item.id === id);
       return `- **${id} ${cell(task.title)}**：${cell(task.execution.remaining.join('；'))}`;
     }), '',
-    '当前纠偏只同步状态与证据检查，不将这些待交付页面、演练和商业审批标成完成。', '',
+    '当前状态以逐项范围和真实执行回执为准；本地工程与自动化验证不能代替用户、商业及生产签署。', '',
     '## 全任务实施状态与证据索引', '',
     '| 任务 | 当前状态 | 实施／验证／验收 | 证据 |', '| --- | --- | --- | --- |',
     ...data.tasks.map((task) => {
