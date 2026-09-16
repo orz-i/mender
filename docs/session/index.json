@@ -198,9 +198,9 @@
     "ses_f632a74f3fbf438fbd64cb771d17c141": {
       "path": "docs/session/ses_f632a74f3fbf438fbd64cb771d17c141.md",
       "title": "S4-06 Sandbox Payment T27",
-      "status": "active",
+      "status": "completed",
       "created_at": "unix:1789536698",
-      "updated_at": "unix:1789539855",
+      "updated_at": "unix:1789539956",
       "parent_session_id": "ses_54343b8f0fda4bfbb8d9f1d4e77018b1"
     },
     "ses_f7b8a241864e4340940e54633af38e0c": {
