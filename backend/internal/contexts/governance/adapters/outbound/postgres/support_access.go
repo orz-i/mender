@@ -101,14 +101,7 @@ func (r *SupportReadRepository) ListSupportRuns(ctx context.Context, workspace, 
 	if _, err = tx.Exec(ctx, `SELECT set_config('mender.workspace_id',$1,true)`, workspace); err != nil {
 		return nil, application.ErrUnavailable
 	}
-	var grantID *string
-	if err = tx.QueryRow(ctx, `SELECT governance.authorize_jit_support($1,$2,'run:read',$3)`, workspace, userID, at).Scan(&grantID); err != nil {
-		return nil, dangerousError(err)
-	}
-	if grantID == nil || *grantID == "" {
-		return nil, application.ErrForbidden
-	}
-	rows, err := tx.Query(ctx, `SELECT workspace_id,id,state,version,created_at,updated_at FROM execution.runs WHERE workspace_id=$1 ORDER BY updated_at DESC,id DESC LIMIT 100`, workspace)
+	rows, err := tx.Query(ctx, `SELECT workspace_id,id,state,version,created_at,updated_at FROM governance.list_jit_support_runs($1,$2,$3)`, workspace, userID, at)
 	if err != nil {
 		return nil, dangerousError(err)
 	}

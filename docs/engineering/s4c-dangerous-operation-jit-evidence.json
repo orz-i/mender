@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "as_of": "2026-09-16",
+  "work_package": "S4-C",
+  "status": "complete",
+  "approval_contract": {
+    "implemented_actions": ["release.emergency_disable", "support.workspace_read"],
+    "maker_checker": true,
+    "self_approval_allowed": false,
+    "exact_binding_fields": ["subject_kind", "subject_id", "action", "target_kind", "target_id", "target_version", "parameters_sha256", "amount_micro", "currency", "expires_at"],
+    "approval_ttl_min_seconds": 60,
+    "approval_ttl_max_seconds": 1800,
+    "one_time_consumption": true,
+    "browser_approval_flags_authoritative": false,
+    "release_revision_server_bound": true,
+    "release_emergency_requires_approval": true,
+    "support_parameters_digest_server_authoritative": true,
+    "amount_currency_binding_supported": true,
+    "financial_consumer_implemented": false,
+    "generic_submit_granted_to_restricted_manager": false
+  },
+  "jit_support": {
+    "platform_staff_separate_from_workspace_membership": true,
+    "creates_workspace_membership": false,
+    "platform_staff_roles": ["support", "reviewer", "operator", "auditor"],
+    "requester_roles": ["support", "operator"],
+    "reviewer_roles": ["reviewer", "operator"],
+    "allowed_scopes": ["workspace:read", "run:read", "usage:read"],
+    "mutation_scopes_allowed": false,
+    "grant_ttl_min_seconds": 300,
+    "grant_ttl_max_seconds": 3600,
+    "request_approval_ttl_seconds": 900,
+    "activation_rebind_allowed": false,
+    "expiry_database_enforced": true,
+    "revocation_database_enforced": true,
+    "support_reader_direct_tenant_table_read_allowed": false,
+    "support_reader_function_only": true,
+    "safe_run_projection_fields": ["id", "state", "version", "created_at", "updated_at"]
+  },
+  "security": {
+    "force_rls": true,
+    "append_only_audit": true,
+    "browser_session_csrf": true,
+    "database_roles": ["dangerous-operation-manager", "release-manager", "support-reader"],
+    "dangerous_manager_can_consume_release_approval": false,
+    "release_manager_can_request_or_review_approval": false,
+    "support_reader_can_read_jit_table": false,
+    "support_reader_can_read_identity_tables": false,
+    "support_reader_can_read_execution_tables_directly": false,
+    "credential_or_secret_access": false,
+    "unrestricted_impersonation": false
+  },
+  "surfaces": {
+    "dangerous_operation_admin_api": "implemented",
+    "support_jit_admin_api": "implemented",
+    "support_run_read_api": "implemented",
+    "dangerous_operation_frontend": "deferred",
+    "support_jit_frontend": "deferred"
+  },
+  "verification": {
+    "real_postgres_test": "backend/tests/integration/dangerous_operation_jit_test.go",
+    "approval_jit_migration": "backend/migrations/0042_dangerous_operation_jit.sql",
+    "release_approval_migration": "backend/migrations/0043_release_emergency_approval.sql",
+    "support_request_migration": "backend/migrations/0044_support_jit_api.sql",
+    "support_read_gate_migration": "backend/migrations/0045_support_jit_read_gate.sql",
+    "dangerous_operation_api": "backend/internal/contexts/governance/adapters/inbound/httpapi/dangerous_operation.go",
+    "support_access_api": "backend/internal/contexts/governance/adapters/inbound/httpapi/support_access.go"
+  },
+  "deferred": [
+    "generalized-dangerous-operation-actions",
+    "financial-approval-consumer",
+    "payment-refund-accounting",
+    "unrestricted-support-impersonation",
+    "support-secret-or-credential-access",
+    "workspace-freeze-anomaly-admin",
+    "dangerous-operation-frontend",
+    "support-jit-frontend",
+    "mfa-production-identity-assurance",
+    "production-deploy"
+  ],
+  "next_work_package": "S4-D-admin-operations",
+  "document": "docs/engineering/2026-09-16-s4c-dangerous-operation-jit-boundary.md"
+}

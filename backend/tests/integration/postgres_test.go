@@ -280,6 +280,9 @@ func TestPostgresRuntimeContract(t *testing.T) {
 	t.Run("T23 governed release canary drain rollback and emergency disable", func(t *testing.T) {
 		exerciseReleaseGovernance(t, ctx, owner, runtime, runtimeURL.String())
 	})
+	t.Run("T24 dangerous approval and T26 JIT support boundaries", func(t *testing.T) {
+		exerciseDangerousOperationJIT(t, ctx, owner, runtimeURL.String())
+	})
 	t.Run("execution risk policy decisions and exact human confirmations", func(t *testing.T) {
 		exerciseExecutionRiskGovernance(t, ctx, owner, runtimeURL.String())
 	})

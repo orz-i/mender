@@ -24,10 +24,12 @@ func GrantSupportReader(ctx context.Context, pool *pgxpool.Pool, role string) er
 	}
 	defer rollback(tx)
 	for _, sql := range []string{
-		"GRANT USAGE ON SCHEMA governance,execution,mender_meta TO " + id,
+		"GRANT USAGE ON SCHEMA governance,mender_meta TO " + id,
+		"REVOKE USAGE ON SCHEMA execution FROM " + id,
 		"GRANT SELECT ON mender_meta.schema_migrations TO " + id,
-		"GRANT SELECT (workspace_id,id,state,version,created_at,updated_at) ON execution.runs TO " + id,
-		"GRANT EXECUTE ON FUNCTION governance.authorize_jit_support(text,text,text,timestamptz) TO " + id,
+		"REVOKE ALL ON execution.runs FROM " + id,
+		"REVOKE EXECUTE ON FUNCTION governance.authorize_jit_support(text,text,text,timestamptz) FROM " + id,
+		"GRANT EXECUTE ON FUNCTION governance.list_jit_support_runs(text,text,timestamptz) TO " + id,
 	} {
 		if _, err = tx.Exec(ctx, sql); err != nil {
 			return errors.New("support-reader grant failed")
