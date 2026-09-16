@@ -12,6 +12,7 @@ var (
 	ErrInvocationForbidden   = errors.New("supplier invocation forbidden")
 	ErrInvocationUnavailable = errors.New("supplier invocation unavailable")
 	ErrSecretUnavailable     = errors.New("supplier credential secret unavailable")
+	ErrProviderQuarantined   = errors.New("provider quarantined")
 )
 
 type InvocationRef struct{ WorkspaceID, RunID string }
@@ -37,6 +38,7 @@ type CredentialSource interface {
 
 type DeploymentRepository interface {
 	FindDeployment(context.Context, string) (domain.Deployment, error)
+	ProviderAcceptsNewWork(context.Context, string) error
 }
 
 type SecretRequest struct {
@@ -112,6 +114,14 @@ func (b *Broker) resolve(ctx context.Context, ref InvocationRef, at time.Time, a
 	}
 	if deployment.Validate() != nil || (!allowDisabled && deployment.State != "active") {
 		return ExecutionInput{}, domain.Deployment{}, CredentialReference{}, Secret{}, ErrInvocationForbidden
+	}
+	if !allowDisabled {
+		if err = b.deployments.ProviderAcceptsNewWork(ctx, deployment.ProviderID); err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return ExecutionInput{}, domain.Deployment{}, CredentialReference{}, Secret{}, err
+			}
+			return ExecutionInput{}, domain.Deployment{}, CredentialReference{}, Secret{}, ErrInvocationForbidden
+		}
 	}
 	if enforceRequestLimit && len(input.CanonicalArguments) > deployment.MaxRequestBytes {
 		return ExecutionInput{}, domain.Deployment{}, CredentialReference{}, Secret{}, ErrInvocationForbidden

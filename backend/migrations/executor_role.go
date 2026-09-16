@@ -29,6 +29,7 @@ func GrantExecutor(ctx context.Context, pool *pgxpool.Pool, role string) error {
 	for _, sql := range []string{
 		"GRANT USAGE ON SCHEMA execution,connections,supply,mender_meta TO " + id,
 		"GRANT SELECT ON mender_meta.schema_migrations,supply.deployments TO " + id,
+		"GRANT EXECUTE ON FUNCTION supply.provider_accepts_new_work(text) TO " + id,
 		"GRANT SELECT (workspace_id,run_id,subject_id,connection_id,tool_version_id,deployment_revision,canonical_arguments) ON execution.run_admissions TO " + id,
 		"GRANT SELECT (workspace_id,id,provider_id,credential_version_ref,state,revision,created_at,expires_at) ON connections.connections TO " + id,
 		"GRANT SELECT (workspace_id,connection_id,subject_id,active,created_at,expires_at) ON connections.connection_grants TO " + id,

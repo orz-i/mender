@@ -26,6 +26,7 @@ func MCPConnectorRole(ctx context.Context, pool *pgxpool.Pool) error {
 	 AND has_schema_privilege(current_user,'mender_meta','USAGE')
 	 AND has_table_privilege(current_user,'mender_meta.schema_migrations','SELECT')
 	 AND has_table_privilege(current_user,'supply.deployments','SELECT')
+	 AND has_function_privilege(current_user,'supply.provider_accepts_new_work(text)','EXECUTE')
 	 AND has_table_privilege(current_user,'supply.mcp_tool_routes','SELECT')
 	 AND has_table_privilege(current_user,'supply.mcp_tool_snapshots','SELECT,INSERT')
 	 AND has_table_privilege(current_user,'supply.mcp_call_results','SELECT,INSERT')
@@ -40,7 +41,7 @@ func MCPConnectorRole(ctx context.Context, pool *pgxpool.Pool) error {
 			return errors.New("MCP connector role can reach unrelated business schema")
 		}
 	}
-	for _, table := range []string{"execution.runs", "execution.jobs", "execution.run_attempts", "execution.run_events", "execution.outbox", "execution.run_cancellations", "execution.provider_observations", "execution.provider_cancel_intents"} {
+	for _, table := range []string{"execution.runs", "execution.jobs", "execution.run_attempts", "execution.run_events", "execution.outbox", "execution.run_cancellations", "execution.provider_observations", "execution.provider_cancel_intents", "supply.provider_admin_states"} {
 		if err = pool.QueryRow(ctx, `SELECT has_table_privilege(current_user,$1,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') OR has_any_column_privilege(current_user,$1,'SELECT,INSERT,UPDATE')`, table).Scan(&unsafe); err != nil || unsafe {
 			return errors.New("MCP connector role has unrelated Execution access: " + table)
 		}

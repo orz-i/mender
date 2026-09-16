@@ -29,6 +29,18 @@ type releaseRouterStub struct {
 	calls    int
 }
 
+type providerGateStub struct {
+	err   error
+	calls int
+}
+
+func (s *providerGateStub) EnsureProviderAvailable(context.Context, string) error {
+	s.calls++
+	return s.err
+}
+
+func availableProviderGate() *providerGateStub { return &providerGateStub{} }
+
 func (s *releaseRouterStub) ResolveReleaseRoute(context.Context, supply.ReleaseRouteQuery) (supply.ReleaseRouteDecision, error) {
 	s.calls++
 	return s.decision, s.err
@@ -47,7 +59,7 @@ func TestProductionResolverValidatesPublishedArgumentsBeforeConnectionAndPricing
 	}}
 	connectionsPort := &connectionsStub{access: connections.Access{ConnectionID: q.ConnectionID, ProviderID: "provider_a", Revision: 1, ValidUntil: moment.Add(time.Hour)}}
 	pricing := &pricingStub{terms: commerce.Terms{PriceVersionID: "price_v1", BudgetID: "budget_a", PeriodID: "period_a", Currency: "USD", ReserveMicro: 50, ValidUntil: moment.Add(time.Hour)}}
-	resolver, err := capabilities.NewResolver(toolsets, catalogPort, connectionsPort, pricing, stableReleaseRouter("deploy_v1"), clock{moment})
+	resolver, err := capabilities.NewResolver(toolsets, catalogPort, connectionsPort, pricing, availableProviderGate(), stableReleaseRouter("deploy_v1"), clock{moment})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +80,7 @@ func TestProductionResolverFailsClosedForInvalidPublishedSchema(t *testing.T) {
 	}}
 	connectionsPort := &connectionsStub{}
 	pricing := &pricingStub{}
-	resolver, err := capabilities.NewResolver(toolsets, catalogPort, connectionsPort, pricing, stableReleaseRouter("deploy_v1"), clock{moment})
+	resolver, err := capabilities.NewResolver(toolsets, catalogPort, connectionsPort, pricing, availableProviderGate(), stableReleaseRouter("deploy_v1"), clock{moment})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +136,7 @@ func TestProductionResolverUsesOwnedPublishedFactsAndTightestExpiry(t *testing.T
 	catalogPort := &catalogStub{tool: catalog.ToolVersion{ID: "tool_v1", ToolID: "tool_a", Version: "1.0.0", ProviderID: "provider_a", PriceVersionID: "price_v1", DeploymentRevision: "deploy_v1", InputSchema: `{"type":"object","additionalProperties":false,"required":["n"],"properties":{"n":{"type":"integer"}}}`}}
 	connectionsPort := &connectionsStub{access: connections.Access{ConnectionID: "conn_a", ProviderID: "provider_a", Revision: 3, ValidUntil: moment.Add(30 * time.Minute)}}
 	pricing := &pricingStub{terms: commerce.Terms{PriceVersionID: "price_v1", BudgetID: "budget_a", PeriodID: "period_a", Currency: "USD", ReserveMicro: 50, ValidUntil: moment.Add(time.Hour)}}
-	resolver, err := capabilities.NewResolver(toolsets, catalogPort, connectionsPort, pricing, stableReleaseRouter("deploy_v1"), clock{moment})
+	resolver, err := capabilities.NewResolver(toolsets, catalogPort, connectionsPort, pricing, availableProviderGate(), stableReleaseRouter("deploy_v1"), clock{moment})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +156,7 @@ func TestProductionResolverPinsCanaryDeploymentAndBlocksDisabledRelease(t *testi
 	connectionsPort := &connectionsStub{access: connections.Access{ConnectionID: q.ConnectionID, ProviderID: "provider_a", Revision: 1, ValidUntil: moment.Add(time.Hour)}}
 	pricing := &pricingStub{terms: commerce.Terms{PriceVersionID: "price_v1", BudgetID: "budget_a", PeriodID: "period_a", Currency: "USD", ReserveMicro: 50, ValidUntil: moment.Add(time.Hour)}}
 	releases := &releaseRouterStub{decision: supply.ReleaseRouteDecision{DeploymentRevision: "deploy_candidate", ReleasePlanID: "release_canary", ReleaseState: "canary", ReleaseRevision: 2, Routed: true}}
-	resolver, err := capabilities.NewResolver(toolsets, catalogPort, connectionsPort, pricing, releases, clock{moment})
+	resolver, err := capabilities.NewResolver(toolsets, catalogPort, connectionsPort, pricing, availableProviderGate(), releases, clock{moment})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +181,7 @@ func TestProductionResolverFailsClosedBeforeLaterCapabilities(t *testing.T) {
 	catalogPort := &catalogStub{}
 	connectionsPort := &connectionsStub{}
 	pricing := &pricingStub{}
-	resolver, err := capabilities.NewResolver(toolsets, catalogPort, connectionsPort, pricing, stableReleaseRouter("deploy_v1"), clock{moment})
+	resolver, err := capabilities.NewResolver(toolsets, catalogPort, connectionsPort, pricing, availableProviderGate(), stableReleaseRouter("deploy_v1"), clock{moment})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,6 +205,23 @@ func TestProductionResolverFailsClosedBeforeLaterCapabilities(t *testing.T) {
 	pricing.err = commerce.ErrPriceUnavailable
 	if _, err = resolver.Resolve(context.Background(), who, q, `{}`); !errors.Is(err, application.ErrForbidden) {
 		t.Fatal("unavailable price was reported as infrastructure failure", err)
+	}
+}
+
+func TestProductionResolverBlocksQuarantinedProviderBeforeLaterCapabilities(t *testing.T) {
+	q := request()
+	toolsets := &toolsetsStub{binding: distribution.Binding{ToolsetVersionID: q.ToolsetVersionID, ToolVersionID: "tool_v1", BudgetID: "budget_a"}}
+	catalogPort := &catalogStub{tool: catalog.ToolVersion{ID: "tool_v1", ToolID: q.ToolID, Version: q.ToolVersion, ProviderID: "provider_a", PriceVersionID: "price_v1", DeploymentRevision: "deploy_v1"}}
+	connectionsPort := &connectionsStub{}
+	pricing := &pricingStub{}
+	providers := &providerGateStub{err: supply.ErrProviderQuarantined}
+	releases := stableReleaseRouter("deploy_v1")
+	resolver, err := capabilities.NewResolver(toolsets, catalogPort, connectionsPort, pricing, providers, releases, clock{moment})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = resolver.Resolve(context.Background(), who, q, `{}`); !errors.Is(err, application.ErrForbidden) || providers.calls != 1 || releases.calls != 0 || connectionsPort.calls != 0 || pricing.calls != 0 {
+		t.Fatal("quarantined provider reached later admission capabilities", err, providers.calls, releases.calls, connectionsPort.calls, pricing.calls)
 	}
 }
 

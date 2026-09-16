@@ -122,10 +122,12 @@ func RuntimeRole(ctx context.Context, pool *pgxpool.Pool) error {
 	 AND NOT has_schema_privilege(current_user,'connections','CREATE')
 	 AND has_schema_privilege(current_user,'supply','USAGE')
 	 AND has_function_privilege(current_user,'supply.resolve_release_route(text,text,text,text)','EXECUTE')
+	 AND has_function_privilege(current_user,'supply.provider_accepts_new_work(text)','EXECUTE')
 	 AND NOT has_table_privilege(current_user,'supply.release_plans','SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
 	 AND NOT has_table_privilege(current_user,'supply.release_routes','SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
 	 AND NOT has_table_privilege(current_user,'supply.release_audit_events','SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
-	 AND NOT has_table_privilege(current_user,'supply.deployments','SELECT,INSERT,UPDATE,DELETE,TRUNCATE')`).Scan(&grants); err != nil || !grants {
+	 AND NOT has_table_privilege(current_user,'supply.deployments','SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
+	 AND NOT has_table_privilege(current_user,'supply.provider_admin_states','SELECT,INSERT,UPDATE,DELETE,TRUNCATE')`).Scan(&grants); err != nil || !grants {
 		return errors.New("API admission plan grants are invalid")
 	}
 	var releaseRLS int

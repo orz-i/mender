@@ -17,6 +17,31 @@ func (f inputSourceFunc) ResolveExecutionInput(ctx context.Context, workspace, r
 	return f(ctx, workspace, run)
 }
 
+func TestBrokerQuarantineBlocksNewSubmissionButPreservesControl(t *testing.T) {
+	at := time.Date(2026, 9, 16, 6, 0, 0, 0, time.UTC)
+	input := application.ExecutionInput{WorkspaceID: "ws_a", RunID: "run_a", SubjectID: "sa_a", ConnectionID: "conn_a", ToolVersionID: "toolv_a", DeploymentRevision: "deploy_a", CanonicalArguments: `{}`}
+	credential := application.CredentialReference{ConnectionID: "conn_a", ProviderID: "provider_a", CredentialVersionRef: "credv_a", Revision: 1, ValidUntil: at.Add(time.Hour)}
+	broker, err := application.NewBroker(
+		inputSourceFunc(func(context.Context, string, string) (application.ExecutionInput, error) { return input, nil }),
+		credentialSourceFunc(func(context.Context, string, string, string, string, time.Time) (application.CredentialReference, error) {
+			return credential, nil
+		}),
+		gatedDeploymentRepo{deployment: deployment(at, "none"), gateErr: application.ErrProviderQuarantined},
+		secretProviderFunc(func(context.Context, application.SecretRequest) (application.Secret, error) {
+			return application.Secret{}, errors.New("unexpected secret")
+		}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = broker.Prepare(context.Background(), application.InvocationRef{WorkspaceID: "ws_a", RunID: "run_a"}, at); !errors.Is(err, application.ErrInvocationForbidden) {
+		t.Fatal("quarantined provider accepted new submission", err)
+	}
+	if _, err = broker.PrepareControl(context.Background(), application.InvocationRef{WorkspaceID: "ws_a", RunID: "run_a"}, at); err != nil {
+		t.Fatal("quarantine blocked existing-run control", err)
+	}
+}
+
 type credentialSourceFunc func(context.Context, string, string, string, string, time.Time) (application.CredentialReference, error)
 
 func (f credentialSourceFunc) ResolveCredential(ctx context.Context, workspace, subject, connection, provider string, at time.Time) (application.CredentialReference, error) {
@@ -28,6 +53,19 @@ type deploymentRepoFunc func(context.Context, string) (domain.Deployment, error)
 func (f deploymentRepoFunc) FindDeployment(ctx context.Context, revision string) (domain.Deployment, error) {
 	return f(ctx, revision)
 }
+
+func (f deploymentRepoFunc) ProviderAcceptsNewWork(context.Context, string) error { return nil }
+
+type gatedDeploymentRepo struct {
+	deployment domain.Deployment
+	gateErr    error
+}
+
+func (r gatedDeploymentRepo) FindDeployment(context.Context, string) (domain.Deployment, error) {
+	return r.deployment, nil
+}
+
+func (r gatedDeploymentRepo) ProviderAcceptsNewWork(context.Context, string) error { return r.gateErr }
 
 type secretProviderFunc func(context.Context, application.SecretRequest) (application.Secret, error)
 

@@ -30,6 +30,7 @@ func ExecutorRole(ctx context.Context, pool *pgxpool.Pool) error {
 	 AND has_schema_privilege(current_user,'mender_meta','USAGE')
 	 AND has_table_privilege(current_user,'mender_meta.schema_migrations','SELECT')
 	 AND has_table_privilege(current_user,'supply.deployments','SELECT')
+	 AND has_function_privilege(current_user,'supply.provider_accepts_new_work(text)','EXECUTE')
 	 AND has_column_privilege(current_user,'execution.run_admissions','workspace_id','SELECT')
 	 AND has_column_privilege(current_user,'execution.run_admissions','run_id','SELECT')
 	 AND has_column_privilege(current_user,'execution.run_admissions','subject_id','SELECT')
@@ -55,7 +56,7 @@ func ExecutorRole(ctx context.Context, pool *pgxpool.Pool) error {
 	// Cross-schema reachability above is authoritative for identity/commerce/
 	// catalog/distribution. Within the schemas this role can actually USE, reject
 	// access to unrelated execution tables explicitly.
-	for _, table := range []string{"execution.runs", "execution.jobs", "execution.run_attempts", "execution.run_events", "execution.outbox", "execution.run_cancellations", "execution.provider_observations", "execution.provider_cancel_intents"} {
+	for _, table := range []string{"execution.runs", "execution.jobs", "execution.run_attempts", "execution.run_events", "execution.outbox", "execution.run_cancellations", "execution.provider_observations", "execution.provider_cancel_intents", "supply.provider_admin_states"} {
 		if err = pool.QueryRow(ctx, `SELECT has_table_privilege(current_user,$1,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') OR has_any_column_privilege(current_user,$1,'SELECT,INSERT,UPDATE')`, table).Scan(&unsafe); err != nil || unsafe {
 			return errors.New("executor role has unrelated table access: " + table)
 		}

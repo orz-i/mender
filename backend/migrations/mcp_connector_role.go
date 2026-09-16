@@ -30,6 +30,7 @@ func GrantMCPConnector(ctx context.Context, pool *pgxpool.Pool, role string) err
 	for _, sql := range []string{
 		"GRANT USAGE ON SCHEMA execution,connections,supply,mender_meta TO " + id,
 		"GRANT SELECT ON mender_meta.schema_migrations,supply.deployments,supply.mcp_tool_routes TO " + id,
+		"GRANT EXECUTE ON FUNCTION supply.provider_accepts_new_work(text) TO " + id,
 		"GRANT SELECT,INSERT ON supply.mcp_tool_snapshots,supply.mcp_call_results TO " + id,
 		"GRANT SELECT (workspace_id,run_id,subject_id,connection_id,tool_version_id,deployment_revision,canonical_arguments) ON execution.run_admissions TO " + id,
 		"GRANT SELECT (workspace_id,id,provider_id,credential_version_ref,state,revision,created_at,expires_at) ON connections.connections TO " + id,

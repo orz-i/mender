@@ -24,15 +24,16 @@ type Resolver struct {
 	catalog     catalog.Catalog
 	connections connections.Connections
 	pricing     commerce.Pricing
+	providers   supply.ProviderAdmissionGate
 	releases    supply.ReleaseRouter
 	clock       application.Clock
 }
 
-func NewResolver(toolsets distribution.Toolsets, catalogPort catalog.Catalog, connectionsPort connections.Connections, pricing commerce.Pricing, releases supply.ReleaseRouter, clock application.Clock) (*Resolver, error) {
-	if toolsets == nil || catalogPort == nil || connectionsPort == nil || pricing == nil || releases == nil || clock == nil {
+func NewResolver(toolsets distribution.Toolsets, catalogPort catalog.Catalog, connectionsPort connections.Connections, pricing commerce.Pricing, providers supply.ProviderAdmissionGate, releases supply.ReleaseRouter, clock application.Clock) (*Resolver, error) {
+	if toolsets == nil || catalogPort == nil || connectionsPort == nil || pricing == nil || providers == nil || releases == nil || clock == nil {
 		return nil, application.ErrUnavailable
 	}
-	return &Resolver{toolsets: toolsets, catalog: catalogPort, connections: connectionsPort, pricing: pricing, releases: releases, clock: clock}, nil
+	return &Resolver{toolsets: toolsets, catalog: catalogPort, connections: connectionsPort, pricing: pricing, providers: providers, releases: releases, clock: clock}, nil
 }
 
 func mapContext(err error) error {
@@ -164,6 +165,15 @@ func (r *Resolver) Resolve(ctx context.Context, caller application.Caller, q app
 	}
 	if err = validateArguments(tool.InputSchema, canonicalArguments); err != nil {
 		return application.Plan{}, err
+	}
+	if err = r.providers.EnsureProviderAvailable(ctx, tool.ProviderID); err != nil {
+		if e := mapContext(err); e != nil {
+			return application.Plan{}, e
+		}
+		if errors.Is(err, supply.ErrProviderQuarantined) {
+			return application.Plan{}, application.ErrForbidden
+		}
+		return application.Plan{}, application.ErrUnavailable
 	}
 	route, err := r.releases.ResolveReleaseRoute(ctx, supply.ReleaseRouteQuery{
 		WorkspaceID: caller.WorkspaceID, ToolsetVersionID: binding.ToolsetVersionID, ToolVersionID: tool.ID, DefaultDeploymentRevision: tool.DeploymentRevision,

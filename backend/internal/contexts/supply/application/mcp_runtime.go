@@ -39,6 +39,12 @@ func (b *Broker) PrepareMCPDiscovery(ctx context.Context, ref MCPDiscoveryRef, a
 	if !deployment.SupportsMCPTools() || deployment.State != "active" {
 		return PreparedMCPDiscovery{}, ErrInvocationForbidden
 	}
+	if err = b.deployments.ProviderAcceptsNewWork(ctx, deployment.ProviderID); err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return PreparedMCPDiscovery{}, err
+		}
+		return PreparedMCPDiscovery{}, ErrInvocationForbidden
+	}
 	credential, err := b.credentials.ResolveCredential(ctx, ref.WorkspaceID, ref.SubjectID, ref.ConnectionID, deployment.ProviderID, at)
 	if err != nil {
 		return PreparedMCPDiscovery{}, err

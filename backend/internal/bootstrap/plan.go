@@ -47,11 +47,16 @@ func BuildAdmissionResolver(pool *pgxpool.Pool) (admissionapp.Resolver, error) {
 	if err != nil {
 		return nil, err
 	}
+	providerAdmission, err := supplyapp.NewProviderAdmission(supplypg.NewDeployments(pool))
+	if err != nil {
+		return nil, err
+	}
 	return capabilities.NewResolver(
 		distributionfacade.New(distributionService),
 		catalogfacade.New(catalogService),
 		connectionsfacade.New(connectionsService),
 		pricingfacade.New(pricingService),
+		supplyfacade.NewProviderAdmissionGate(providerAdmission),
 		supplyfacade.NewReleaseRouter(releaseRouting),
 		systemClock{},
 	)

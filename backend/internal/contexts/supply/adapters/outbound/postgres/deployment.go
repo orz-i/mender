@@ -15,6 +15,23 @@ type Deployments struct{ pool *pgxpool.Pool }
 
 func NewDeployments(pool *pgxpool.Pool) *Deployments { return &Deployments{pool: pool} }
 
+func (r *Deployments) ProviderAcceptsNewWork(ctx context.Context, provider string) error {
+	if r == nil || r.pool == nil || provider == "" {
+		return application.ErrInvocationUnavailable
+	}
+	var allowed bool
+	if err := r.pool.QueryRow(ctx, `SELECT supply.provider_accepts_new_work($1)`, provider).Scan(&allowed); err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
+		return application.ErrInvocationUnavailable
+	}
+	if !allowed {
+		return application.ErrProviderQuarantined
+	}
+	return nil
+}
+
 func (r *Deployments) FindDeployment(ctx context.Context, revision string) (domain.Deployment, error) {
 	if r == nil || r.pool == nil {
 		return domain.Deployment{}, application.ErrInvocationUnavailable
