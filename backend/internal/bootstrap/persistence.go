@@ -140,6 +140,8 @@ type APIConfig struct {
 	DangerousOperationManagerDatabaseURL    string
 	AdminSupportAccessEnabled               bool
 	SupportReaderDatabaseURL                string
+	AdminPlatformOperationsEnabled          bool
+	PlatformAdminManagerDatabaseURL         string
 	AdminCatalogReviewEnabled               bool
 	AdminPluginReviewEnabled                bool
 	GovernanceReviewerDatabaseURL           string
@@ -356,6 +358,20 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 		}
 	default:
 		return c, errors.New("MENDER_ADMIN_SUPPORT_ACCESS_ENABLED must be true or false")
+	}
+	switch getenv("MENDER_ADMIN_PLATFORM_OPERATIONS_ENABLED") {
+	case "", "false":
+	case "true":
+		if !c.ConsoleOIDCEnabled {
+			return APIConfig{}, errors.New("Admin Platform Operations requires Console OIDC")
+		}
+		c.AdminPlatformOperationsEnabled = true
+		c.PlatformAdminManagerDatabaseURL = strings.TrimSpace(getenv("MENDER_PLATFORM_ADMIN_MANAGER_DATABASE_URL"))
+		if c.PlatformAdminManagerDatabaseURL == "" {
+			return APIConfig{}, errors.New("Admin Platform Operations requires a separate platform-admin-manager database role")
+		}
+	default:
+		return c, errors.New("MENDER_ADMIN_PLATFORM_OPERATIONS_ENABLED must be true or false")
 	}
 	switch getenv("MENDER_ADMIN_CATALOG_REVIEW_ENABLED") {
 	case "", "false":
@@ -772,6 +788,7 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	var releaseManagerPool *pgxpool.Pool
 	var dangerousOperationManagerPool *pgxpool.Pool
 	var supportReaderPool *pgxpool.Pool
+	var platformAdminManagerPool *pgxpool.Pool
 	var governanceReviewerPool *pgxpool.Pool
 	var governancePolicyManagerPool *pgxpool.Pool
 	var callbackObserverPool *pgxpool.Pool
@@ -814,6 +831,9 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 		}
 		if supportReaderPool != nil {
 			supportReaderPool.Close()
+		}
+		if platformAdminManagerPool != nil {
+			platformAdminManagerPool.Close()
 		}
 		if catalogManagerPool != nil {
 			catalogManagerPool.Close()
@@ -1387,6 +1407,40 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 			}
 			registers = append(registers, supportHandler.Register)
 		}
+		if c.AdminPlatformOperationsEnabled {
+			platformAdminManagerPool, buildErr = database.Open(start, c.PlatformAdminManagerDatabaseURL)
+			if buildErr != nil {
+				return failed(buildErr)
+			}
+			platformAdminCfg := platformAdminManagerPool.Config().ConnConfig
+			if readerCfg.Host != platformAdminCfg.Host || readerCfg.Port != platformAdminCfg.Port || readerCfg.Database != platformAdminCfg.Database ||
+				platformAdminCfg.User == readerCfg.User || platformAdminCfg.User == sessionCfg.User ||
+				(dangerousOperationManagerPool != nil && platformAdminCfg.User == dangerousOperationManagerPool.Config().ConnConfig.User) ||
+				(supportReaderPool != nil && platformAdminCfg.User == supportReaderPool.Config().ConnConfig.User) ||
+				(releaseManagerPool != nil && platformAdminCfg.User == releaseManagerPool.Config().ConnConfig.User) ||
+				(catalogManagerPool != nil && platformAdminCfg.User == catalogManagerPool.Config().ConnConfig.User) ||
+				(publisherManagerPool != nil && platformAdminCfg.User == publisherManagerPool.Config().ConnConfig.User) ||
+				(connectionManagerPool != nil && platformAdminCfg.User == connectionManagerPool.Config().ConnConfig.User) ||
+				(commerceObserverPool != nil && platformAdminCfg.User == commerceObserverPool.Config().ConnConfig.User) {
+				return failed(errors.New("Admin Platform Operations requires the same database with a distinct restricted role"))
+			}
+			if buildErr = migrations.Verify(start, platformAdminManagerPool); buildErr != nil {
+				return failed(buildErr)
+			}
+			if buildErr = database.PlatformAdminManagerRole(start, platformAdminManagerPool); buildErr != nil {
+				return failed(buildErr)
+			}
+			platformAdminAccess := governanceidentity.New(humanIdentity)
+			platformAdminService, serviceErr := governanceapp.NewPlatformAdminService(governancepg.NewPlatformAdmin(platformAdminManagerPool), platformAdminAccess, governancerandom.DangerousOperationIDs{}, systemClock{})
+			if serviceErr != nil {
+				return failed(serviceErr)
+			}
+			platformAdminHandler, handlerErr := governancehttp.NewPlatformAdmin(platformAdminService, platformAdminAccess)
+			if handlerErr != nil {
+				return failed(handlerErr)
+			}
+			registers = append(registers, platformAdminHandler.Register)
+		}
 		if c.AdminCatalogReviewEnabled || c.AdminPluginReviewEnabled {
 			governanceReviewerPool, buildErr = database.Open(start, c.GovernanceReviewerDatabaseURL)
 			if buildErr != nil {
@@ -1714,6 +1768,14 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 				return err
 			}
 			if err := database.SupportReaderRole(ctx, supportReaderPool); err != nil {
+				return err
+			}
+		}
+		if platformAdminManagerPool != nil {
+			if err := migrations.Verify(ctx, platformAdminManagerPool); err != nil {
+				return err
+			}
+			if err := database.PlatformAdminManagerRole(ctx, platformAdminManagerPool); err != nil {
 				return err
 			}
 		}

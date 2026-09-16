@@ -22,3 +22,11 @@ func (DangerousOperationIDs) NewJITGrantID() (string, error) {
 	}
 	return "jit_" + hex.EncodeToString(value[:]), nil
 }
+
+func (DangerousOperationIDs) NewPlatformIncidentID() (string, error) {
+	var value [16]byte
+	if _, err := rand.Read(value[:]); err != nil {
+		return "", err
+	}
+	return "incident_" + hex.EncodeToString(value[:]), nil
+}
