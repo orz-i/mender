@@ -10,12 +10,16 @@ var ErrDangerousOperation = errors.New("invalid dangerous operation approval")
 const (
 	DangerousActionReleaseEmergencyDisable = "release.emergency_disable"
 	DangerousActionSupportWorkspaceRead    = "support.workspace_read"
+	DangerousActionCommerceRefund          = "commerce.refund"
+	DangerousActionCommerceAdjustment      = "commerce.adjustment"
 
 	DangerousSubjectWorkspaceMember = "workspace_member"
 	DangerousSubjectPlatformStaff   = "platform_staff"
 
-	DangerousTargetReleasePlan = "release_plan"
-	DangerousTargetWorkspace   = "workspace"
+	DangerousTargetReleasePlan       = "release_plan"
+	DangerousTargetWorkspace         = "workspace"
+	DangerousTargetBillingRefund     = "billing_refund"
+	DangerousTargetBillingAdjustment = "billing_adjustment"
 
 	DangerousApprovalPending  = "pending"
 	DangerousApprovalApproved = "approved"
@@ -71,11 +75,27 @@ func (b DangerousOperationBinding) Valid() bool {
 		if b.SubjectKind != DangerousSubjectPlatformStaff || b.TargetKind != DangerousTargetWorkspace || b.TargetID != b.WorkspaceID || b.TargetVersion != "" {
 			return false
 		}
+	case DangerousActionCommerceRefund:
+		if b.SubjectKind != DangerousSubjectPlatformStaff || b.TargetKind != DangerousTargetBillingRefund || b.TargetVersion == "" || len(b.TargetVersion) > 200 || !b.HasAmount || b.AmountMicro <= 0 {
+			return false
+		}
+	case DangerousActionCommerceAdjustment:
+		if b.SubjectKind != DangerousSubjectPlatformStaff || b.TargetKind != DangerousTargetBillingAdjustment || b.TargetVersion == "" || len(b.TargetVersion) > 200 || !b.HasAmount || b.AmountMicro <= 0 {
+			return false
+		}
 	default:
 		return false
 	}
 	if b.HasAmount {
-		return b.AmountMicro >= 0 && len(b.Currency) == 3
+		if b.AmountMicro < 0 || len(b.Currency) != 3 {
+			return false
+		}
+		for _, ch := range b.Currency {
+			if ch < 'A' || ch > 'Z' {
+				return false
+			}
+		}
+		return true
 	}
 	return b.AmountMicro == 0 && b.Currency == ""
 }

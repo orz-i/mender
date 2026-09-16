@@ -142,6 +142,8 @@ type APIConfig struct {
 	SupportReaderDatabaseURL                string
 	AdminPlatformOperationsEnabled          bool
 	PlatformAdminManagerDatabaseURL         string
+	AdminBillingEnabled                     bool
+	BillingManagerDatabaseURL               string
 	AdminCatalogReviewEnabled               bool
 	AdminPluginReviewEnabled                bool
 	GovernanceReviewerDatabaseURL           string
@@ -372,6 +374,20 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 		}
 	default:
 		return c, errors.New("MENDER_ADMIN_PLATFORM_OPERATIONS_ENABLED must be true or false")
+	}
+	switch getenv("MENDER_ADMIN_BILLING_ENABLED") {
+	case "", "false":
+	case "true":
+		if !c.ConsoleOIDCEnabled || !c.AdminDangerousOperationEnabled {
+			return APIConfig{}, errors.New("Admin Billing requires Console OIDC and Admin Dangerous Operation")
+		}
+		c.AdminBillingEnabled = true
+		c.BillingManagerDatabaseURL = strings.TrimSpace(getenv("MENDER_BILLING_MANAGER_DATABASE_URL"))
+		if c.BillingManagerDatabaseURL == "" {
+			return APIConfig{}, errors.New("Admin Billing requires a separate billing-manager database role")
+		}
+	default:
+		return c, errors.New("MENDER_ADMIN_BILLING_ENABLED must be true or false")
 	}
 	switch getenv("MENDER_ADMIN_CATALOG_REVIEW_ENABLED") {
 	case "", "false":
@@ -789,6 +805,7 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	var dangerousOperationManagerPool *pgxpool.Pool
 	var supportReaderPool *pgxpool.Pool
 	var platformAdminManagerPool *pgxpool.Pool
+	var billingManagerPool *pgxpool.Pool
 	var governanceReviewerPool *pgxpool.Pool
 	var governancePolicyManagerPool *pgxpool.Pool
 	var callbackObserverPool *pgxpool.Pool
@@ -834,6 +851,9 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 		}
 		if platformAdminManagerPool != nil {
 			platformAdminManagerPool.Close()
+		}
+		if billingManagerPool != nil {
+			billingManagerPool.Close()
 		}
 		if catalogManagerPool != nil {
 			catalogManagerPool.Close()
@@ -1441,6 +1461,37 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 			}
 			registers = append(registers, platformAdminHandler.Register)
 		}
+		if c.AdminBillingEnabled {
+			billingManagerPool, buildErr = database.Open(start, c.BillingManagerDatabaseURL)
+			if buildErr != nil {
+				return failed(buildErr)
+			}
+			billingCfg := billingManagerPool.Config().ConnConfig
+			if dangerousOperationManagerPool == nil || readerCfg.Host != billingCfg.Host || readerCfg.Port != billingCfg.Port || readerCfg.Database != billingCfg.Database ||
+				billingCfg.User == readerCfg.User || billingCfg.User == sessionCfg.User || billingCfg.User == dangerousOperationManagerPool.Config().ConnConfig.User ||
+				(platformAdminManagerPool != nil && billingCfg.User == platformAdminManagerPool.Config().ConnConfig.User) ||
+				(supportReaderPool != nil && billingCfg.User == supportReaderPool.Config().ConnConfig.User) ||
+				(releaseManagerPool != nil && billingCfg.User == releaseManagerPool.Config().ConnConfig.User) ||
+				(commerceObserverPool != nil && billingCfg.User == commerceObserverPool.Config().ConnConfig.User) {
+				return failed(errors.New("Admin Billing requires the same database with a distinct restricted role"))
+			}
+			if buildErr = migrations.Verify(start, billingManagerPool); buildErr != nil {
+				return failed(buildErr)
+			}
+			if buildErr = database.BillingManagerRole(start, billingManagerPool); buildErr != nil {
+				return failed(buildErr)
+			}
+			billingAccess := commerceidentityaccess.NewBilling(humanIdentity)
+			billingService, serviceErr := commerceapp.NewBillingService(commercepg.NewBilling(billingManagerPool), billingAccess, systemClock{})
+			if serviceErr != nil {
+				return failed(serviceErr)
+			}
+			billingHandler, handlerErr := commercehttp.NewBilling(billingService, billingAccess)
+			if handlerErr != nil {
+				return failed(handlerErr)
+			}
+			registers = append(registers, billingHandler.Register)
+		}
 		if c.AdminCatalogReviewEnabled || c.AdminPluginReviewEnabled {
 			governanceReviewerPool, buildErr = database.Open(start, c.GovernanceReviewerDatabaseURL)
 			if buildErr != nil {
@@ -1776,6 +1827,14 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 				return err
 			}
 			if err := database.PlatformAdminManagerRole(ctx, platformAdminManagerPool); err != nil {
+				return err
+			}
+		}
+		if billingManagerPool != nil {
+			if err := migrations.Verify(ctx, billingManagerPool); err != nil {
+				return err
+			}
+			if err := database.BillingManagerRole(ctx, billingManagerPool); err != nil {
 				return err
 			}
 		}

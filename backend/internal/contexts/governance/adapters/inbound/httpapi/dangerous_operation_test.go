@@ -17,10 +17,21 @@ type dangerousHTTPAuth struct{}
 func (dangerousHTTPAuth) Authenticate(context.Context, string) (application.Actor, error) {
 	return application.Actor{UserID: "admin_a"}, nil
 }
+func (r *dangerousHTTPRepo) RequestCommerceApproval(_ context.Context, workspace, id, requester, action, businessKey, basisKind, basisID, direction string, amount int64, currency, reason string, at, expires time.Time) (application.DangerousOperationApproval, error) {
+	r.requestCalls++
+	target := "billing_adjustment"
+	if action == "commerce.refund" {
+		target = "billing_refund"
+	}
+	return application.DangerousOperationApproval{WorkspaceID: workspace, ID: id, RequesterUserID: requester, SubjectKind: "platform_staff", SubjectID: requester, Action: action, TargetKind: target, TargetID: basisID, TargetVersion: businessKey, ParametersJSON: `{"basis_id":"` + basisID + `","basis_kind":"` + basisKind + `","business_key":"` + businessKey + `","direction":"` + direction + `"}`, ParametersSHA256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", AmountMicro: &amount, Currency: currency, Reason: reason, State: "pending", RequestedAt: at, ExpiresAt: expires}, nil
+}
 func (dangerousHTTPAuth) AuthenticateMutation(context.Context, string, string) (application.Actor, error) {
 	return application.Actor{UserID: "admin_a"}, nil
 }
 func (dangerousHTTPAuth) Authorize(context.Context, application.Actor, string, string) error {
+	return nil
+}
+func (dangerousHTTPAuth) AuthorizePlatform(context.Context, application.Actor, string) error {
 	return nil
 }
 
@@ -36,6 +47,9 @@ type dangerousHTTPRepo struct{ requestCalls int }
 
 func (r *dangerousHTTPRepo) ListDangerousOperations(context.Context, string, time.Time) ([]application.DangerousOperationApproval, error) {
 	return nil, nil
+}
+func (r *dangerousHTTPRepo) GetDangerousOperation(context.Context, string, string) (application.DangerousOperationApproval, error) {
+	return application.DangerousOperationApproval{}, nil
 }
 func (r *dangerousHTTPRepo) RequestReleaseEmergency(_ context.Context, workspace, id, requester, releaseID, reason string, at, expires time.Time) (application.DangerousOperationApproval, error) {
 	r.requestCalls++

@@ -17,6 +17,41 @@ func NewDangerousOperation(pool *pgxpool.Pool) *DangerousOperationRepository {
 	return &DangerousOperationRepository{pool: pool}
 }
 
+func (r *DangerousOperationRepository) RequestCommerceApproval(ctx context.Context, workspace, id, requester, action, businessKey, basisKind, basisID, direction string, amount int64, currency, reason string, at, expires time.Time) (application.DangerousOperationApproval, error) {
+	tx, err := r.begin(ctx, workspace)
+	if err != nil {
+		return application.DangerousOperationApproval{}, err
+	}
+	defer rollback(tx)
+	if _, err = tx.Exec(ctx, `SELECT governance.request_commerce_approval($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, workspace, id, requester, action, businessKey, basisKind, basisID, direction, amount, currency, reason, at, expires); err != nil {
+		return application.DangerousOperationApproval{}, dangerousError(err)
+	}
+	item, err := r.find(ctx, tx, workspace, id)
+	if err != nil {
+		return item, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return item, application.ErrUnavailable
+	}
+	return item, nil
+}
+
+func (r *DangerousOperationRepository) GetDangerousOperation(ctx context.Context, workspace, id string) (application.DangerousOperationApproval, error) {
+	tx, err := r.begin(ctx, workspace)
+	if err != nil {
+		return application.DangerousOperationApproval{}, err
+	}
+	defer rollback(tx)
+	item, err := r.find(ctx, tx, workspace, id)
+	if err != nil {
+		return item, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return item, application.ErrUnavailable
+	}
+	return item, nil
+}
+
 func dangerousError(err error) error {
 	if err == nil {
 		return nil

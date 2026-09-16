@@ -16,23 +16,94 @@ type DangerousOperationApproval struct {
 	RequestedAt, ExpiresAt, ReviewedAt, ConsumedAt           time.Time
 }
 
+func validCommerceBusinessKey(value string) bool {
+	if len(value) < 1 || len(value) > 200 {
+		return false
+	}
+	for _, ch := range value {
+		if !(ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9' || ch == '_' || ch == '-' || ch == '.' || ch == ':') {
+			return false
+		}
+	}
+	return true
+}
+
+func validCommerceCurrency(value string) bool {
+	if len(value) != 3 {
+		return false
+	}
+	for _, ch := range value {
+		if ch < 'A' || ch > 'Z' {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *DangerousOperationService) RequestCommerceApproval(ctx context.Context, actor Actor, workspace string, request CommerceApprovalRequest) (DangerousOperationApproval, error) {
+	validAction := request.Action == domain.DangerousActionCommerceRefund || request.Action == domain.DangerousActionCommerceAdjustment
+	validBasis := request.Action == domain.DangerousActionCommerceRefund && request.BasisKind == "usage_settlement" && request.Direction == "credit" ||
+		request.Action == domain.DangerousActionCommerceAdjustment && (request.BasisKind == "run" || request.BasisKind == "incident" || request.BasisKind == "reconciliation") && (request.Direction == "debit" || request.Direction == "credit")
+	if !validID(actor.UserID) || !validID(workspace) || !validID(request.BasisID) || !validAction || !validBasis || !validCommerceBusinessKey(request.BusinessKey) || request.AmountMicro <= 0 || !validCommerceCurrency(request.Currency) || len([]rune(request.Reason)) < 1 || len([]rune(request.Reason)) > 1000 || request.TTL < domain.MinDangerousApprovalTTL || request.TTL > domain.MaxDangerousApprovalTTL {
+		return DangerousOperationApproval{}, ErrInvalid
+	}
+	if err := s.auth.AuthorizePlatform(ctx, actor, "platform:operate"); err != nil {
+		return DangerousOperationApproval{}, err
+	}
+	id, err := s.ids.NewDangerousOperationID()
+	if err != nil || !validID(id) {
+		return DangerousOperationApproval{}, ErrUnavailable
+	}
+	at, err := s.dangerousNow()
+	if err != nil {
+		return DangerousOperationApproval{}, err
+	}
+	item, err := s.repository.RequestCommerceApproval(ctx, workspace, id, actor.UserID, request.Action, request.BusinessKey, request.BasisKind, request.BasisID, request.Direction, request.AmountMicro, request.Currency, request.Reason, at, at.Add(request.TTL))
+	if err != nil {
+		return DangerousOperationApproval{}, err
+	}
+	targetKind := domain.DangerousTargetBillingAdjustment
+	if request.Action == domain.DangerousActionCommerceRefund {
+		targetKind = domain.DangerousTargetBillingRefund
+	}
+	if item.ID != id || item.RequesterUserID != actor.UserID || item.Action != request.Action || item.TargetKind != targetKind || item.TargetID != request.BasisID || item.TargetVersion != request.BusinessKey || item.AmountMicro == nil || *item.AmountMicro != request.AmountMicro || item.Currency != request.Currency || !validDangerousProjection(item, workspace) {
+		return DangerousOperationApproval{}, ErrUnavailable
+	}
+	return item, nil
+}
+
+type CommerceApprovalRequest struct {
+	Action, BusinessKey, BasisKind, BasisID, Direction, Currency, Reason string
+	AmountMicro                                                          int64
+	TTL                                                                  time.Duration
+}
+
 type DangerousOperationRepository interface {
 	ListDangerousOperations(context.Context, string, time.Time) ([]DangerousOperationApproval, error)
+	GetDangerousOperation(context.Context, string, string) (DangerousOperationApproval, error)
 	RequestReleaseEmergency(context.Context, string, string, string, string, string, time.Time, time.Time) (DangerousOperationApproval, error)
+	RequestCommerceApproval(context.Context, string, string, string, string, string, string, string, string, int64, string, string, time.Time, time.Time) (DangerousOperationApproval, error)
 	ApproveDangerousOperation(context.Context, string, string, string, time.Time, string) (DangerousOperationApproval, error)
 	RejectDangerousOperation(context.Context, string, string, string, time.Time, string) (DangerousOperationApproval, error)
 }
 
 type DangerousOperationIDs interface{ NewDangerousOperationID() (string, error) }
 
+type DangerousOperationAuthorizer interface {
+	Authenticate(context.Context, string) (Actor, error)
+	AuthenticateMutation(context.Context, string, string) (Actor, error)
+	Authorize(context.Context, Actor, string, string) error
+	AuthorizePlatform(context.Context, Actor, string) error
+}
+
 type DangerousOperationService struct {
 	repository DangerousOperationRepository
-	auth       Authorizer
+	auth       DangerousOperationAuthorizer
 	ids        DangerousOperationIDs
 	clock      Clock
 }
 
-func NewDangerousOperationService(repository DangerousOperationRepository, auth Authorizer, ids DangerousOperationIDs, clock Clock) (*DangerousOperationService, error) {
+func NewDangerousOperationService(repository DangerousOperationRepository, auth DangerousOperationAuthorizer, ids DangerousOperationIDs, clock Clock) (*DangerousOperationService, error) {
 	if repository == nil || auth == nil || ids == nil || clock == nil {
 		return nil, ErrUnavailable
 	}
@@ -131,8 +202,21 @@ func (s *DangerousOperationService) decide(ctx context.Context, actor Actor, wor
 	if !validID(actor.UserID) || !validID(workspace) || !validID(id) || len([]rune(note)) > 1000 {
 		return DangerousOperationApproval{}, ErrInvalid
 	}
-	if err := s.auth.Authorize(ctx, actor, workspace, "release:manage"); err != nil {
+	current, err := s.repository.GetDangerousOperation(ctx, workspace, id)
+	if err != nil {
 		return DangerousOperationApproval{}, err
+	}
+	switch current.Action {
+	case domain.DangerousActionReleaseEmergencyDisable:
+		if err = s.auth.Authorize(ctx, actor, workspace, "release:manage"); err != nil {
+			return DangerousOperationApproval{}, err
+		}
+	case domain.DangerousActionSupportWorkspaceRead, domain.DangerousActionCommerceRefund, domain.DangerousActionCommerceAdjustment:
+		if err = s.auth.AuthorizePlatform(ctx, actor, "dangerous:review"); err != nil {
+			return DangerousOperationApproval{}, err
+		}
+	default:
+		return DangerousOperationApproval{}, ErrForbidden
 	}
 	at, err := s.dangerousNow()
 	if err != nil {

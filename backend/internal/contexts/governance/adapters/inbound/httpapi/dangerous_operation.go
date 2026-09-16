@@ -17,6 +17,47 @@ type DangerousOperationHandler struct {
 	auth    application.Authorizer
 }
 
+type dangerousCommerceRequestInput struct {
+	Action      string `json:"action"`
+	BusinessKey string `json:"business_key"`
+	BasisKind   string `json:"basis_kind"`
+	BasisID     string `json:"basis_id"`
+	Direction   string `json:"direction"`
+	AmountMicro string `json:"amount_micro"`
+	Currency    string `json:"currency"`
+	Reason      string `json:"reason"`
+	TTLSeconds  int64  `json:"ttl_seconds"`
+}
+
+func (h *DangerousOperationHandler) requestCommerce(c *gin.Context) {
+	configure(c)
+	workspace := c.Param("workspace_id")
+	var input dangerousCommerceRequestInput
+	if !validID(workspace) || decodeDangerous(c, &input) != nil || input.TTLSeconds < 60 || input.TTLSeconds > 1800 {
+		fail(c, application.ErrInvalid)
+		return
+	}
+	amount, err := strconv.ParseInt(input.AmountMicro, 10, 64)
+	if err != nil || amount <= 0 || strconv.FormatInt(amount, 10) != input.AmountMicro {
+		fail(c, application.ErrInvalid)
+		return
+	}
+	ctx, cancel, actor, ok := dangerousActor(c, h.auth, true)
+	defer cancel()
+	if !ok {
+		return
+	}
+	item, err := h.service.RequestCommerceApproval(ctx, actor, workspace, application.CommerceApprovalRequest{
+		Action: input.Action, BusinessKey: input.BusinessKey, BasisKind: input.BasisKind, BasisID: input.BasisID, Direction: input.Direction,
+		AmountMicro: amount, Currency: input.Currency, Reason: input.Reason, TTL: time.Duration(input.TTLSeconds) * time.Second,
+	})
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"data": dangerousView(item)})
+}
+
 func NewDangerousOperation(service *application.DangerousOperationService, auth application.Authorizer) (*DangerousOperationHandler, error) {
 	if service == nil || auth == nil {
 		return nil, application.ErrUnavailable
@@ -28,6 +69,7 @@ func (h *DangerousOperationHandler) Register(router *gin.Engine) {
 	base := "/api/admin/v1/workspaces/:workspace_id/dangerous-operations"
 	router.GET(base, h.list)
 	router.POST(base+"/release-emergency-requests", h.requestReleaseEmergency)
+	router.POST(base+"/commerce-requests", h.requestCommerce)
 	router.POST(base+"/:approval_id/approve", h.approve)
 	router.POST(base+"/:approval_id/reject", h.reject)
 }
