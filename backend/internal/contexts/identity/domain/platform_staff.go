@@ -37,6 +37,12 @@ func (s PlatformStaff) Allows(action string) bool {
 		return s.Role == PlatformReviewer || s.Role == PlatformOperator
 	case "dangerous:audit":
 		return s.Role == PlatformReviewer || s.Role == PlatformOperator || s.Role == PlatformAuditor
+	case "platform:operate":
+		return s.Role == PlatformOperator
+	case "platform:review":
+		return s.Role == PlatformReviewer || s.Role == PlatformOperator
+	case "platform:audit":
+		return s.Role == PlatformReviewer || s.Role == PlatformOperator || s.Role == PlatformAuditor
 	default:
 		return false
 	}
