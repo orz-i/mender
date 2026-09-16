@@ -12,9 +12,9 @@
     "ses_0842b6c5c9a74733a06753fb10c77fbd": {
       "path": "docs/session/ses_0842b6c5c9a74733a06753fb10c77fbd.md",
       "title": "S4-B Release Governance",
-      "status": "active",
+      "status": "completed",
       "created_at": "unix:1789522225",
-      "updated_at": "unix:1789524154",
+      "updated_at": "unix:1789524235",
       "parent_session_id": "ses_a14ecc74a98644ce8b7f5c338321c93f"
     },
     "ses_1344ce3dc7f0462cbd1a36eb4dbb4d03": {
