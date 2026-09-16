@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "as_of": "2026-09-16",
+  "work_package": "S4-06",
+  "canonical_s4_range": "S4-01..S4-18",
+  "invented_stage_id": false,
+  "status": "complete",
+  "scope": {
+    "mode": "sandbox",
+    "provider_neutral": true,
+    "live_payments_enabled": false,
+    "browser_redirect_is_payment_truth": false,
+    "real_money_funding_enabled": false
+  },
+  "intents": {
+    "billing_journal_binding_required": true,
+    "collect_charge_requires_charge_journal": true,
+    "execute_refund_requires_refund_journal": true,
+    "amount_currency_exact": true,
+    "business_key_idempotent": true,
+    "binding_immutable": true,
+    "terminal_revision": 2
+  },
+  "callbacks": {
+    "hmac_sha256": true,
+    "provider_account_domain_separated": true,
+    "verification_before_persistence": true,
+    "event_namespace": "provider/account/event_id",
+    "exact_duplicate_replay": true,
+    "fact_drift_quarantined": true,
+    "amount_currency_account_mismatch_quarantined": true,
+    "late_terminal_event_quarantined": true,
+    "raw_body_persisted": false,
+    "raw_signature_persisted": false,
+    "secret_persisted": false
+  },
+  "reconciliation": {
+    "collection_expected_vs_settled": true,
+    "refund_expected_vs_settled": true,
+    "currency_scoped": true,
+    "quarantine_counted": true,
+    "refund_callback_mutates_original_journal": false,
+    "callback_creates_billing_journal": false
+  },
+  "security": {
+    "payment_manager_role": "payment-manager",
+    "callback_role": "payment-callback-ingestor",
+    "roles_distinct": true,
+    "direct_business_table_access": false,
+    "callback_can_create_intent": false,
+    "manager_can_ingest_callback": false,
+    "admin_browser_session_csrf": true,
+    "safe_callback_projection_only": true
+  },
+  "verification": {
+    "contract_migration": "backend/migrations/0051_sandbox_payment_callbacks.sql",
+    "replay_hardening_migration": "backend/migrations/0052_sandbox_payment_callback_replay_hardening.sql",
+    "reconciliation_hardening_migration": "backend/migrations/0053_sandbox_payment_reconciliation_hardening.sql",
+    "postgres_test": "backend/tests/integration/sandbox_payment_callbacks_test.go",
+    "hmac_test": "backend/internal/contexts/commerce/adapters/outbound/paymenthmac/verifier_test.go",
+    "config_test": "backend/internal/bootstrap/payment_config_test.go",
+    "admin_http": "backend/internal/contexts/commerce/adapters/inbound/httpapi/payment.go"
+  },
+  "deferred": [
+    "live-payment-provider-network",
+    "production-merchant-credentials",
+    "real-money-wallet-funding",
+    "fx-conversion",
+    "tax-statutory-accounting",
+    "provider-payouts",
+    "billing-payment-frontend",
+    "production-deploy"
+  ],
+  "document": "docs/engineering/2026-09-16-s406-sandbox-payment-boundary.md"
+}

@@ -18,7 +18,7 @@
     "build:backend": "node scripts/backend.mjs build ./...",
     "lint": "eslint frontend scripts eslint.config.mjs --max-warnings 0",
     "typecheck": "pnpm -r run typecheck",
-    "test": "node --test scripts/architecture.test.mjs scripts/postgres-test.test.mjs scripts/g3-evidence.test.mjs scripts/alpha-operations.test.mjs scripts/alpha-closure.test.mjs scripts/s4a-plugin-publication.test.mjs scripts/s4b-release-governance.test.mjs scripts/s4c-dangerous-operation-jit.test.mjs scripts/s4d-platform-admin.test.mjs scripts/s403-commerce-billing.test.mjs frontend/packages/api-client/src/health.test.mjs frontend/packages/api-client/src/runs.test.mjs frontend/packages/api-client/src/console-identity.test.mjs frontend/packages/api-client/src/console-connections.test.mjs frontend/packages/api-client/src/console-run-delegation.test.mjs frontend/packages/api-client/src/console-launch.test.mjs frontend/packages/api-client/src/console-start-run.test.mjs frontend/packages/api-client/src/console-execution-risk.test.mjs frontend/packages/api-client/src/console-usage.test.mjs frontend/packages/api-client/src/console-catalog.test.mjs frontend/packages/api-client/src/admin-governance.test.mjs",
+    "test": "node --test scripts/architecture.test.mjs scripts/postgres-test.test.mjs scripts/g3-evidence.test.mjs scripts/alpha-operations.test.mjs scripts/alpha-closure.test.mjs scripts/s4a-plugin-publication.test.mjs scripts/s4b-release-governance.test.mjs scripts/s4c-dangerous-operation-jit.test.mjs scripts/s4d-platform-admin.test.mjs scripts/s403-commerce-billing.test.mjs scripts/s406-sandbox-payment.test.mjs frontend/packages/api-client/src/health.test.mjs frontend/packages/api-client/src/runs.test.mjs frontend/packages/api-client/src/console-identity.test.mjs frontend/packages/api-client/src/console-connections.test.mjs frontend/packages/api-client/src/console-run-delegation.test.mjs frontend/packages/api-client/src/console-launch.test.mjs frontend/packages/api-client/src/console-start-run.test.mjs frontend/packages/api-client/src/console-execution-risk.test.mjs frontend/packages/api-client/src/console-usage.test.mjs frontend/packages/api-client/src/console-catalog.test.mjs frontend/packages/api-client/src/admin-governance.test.mjs",
     "test:backend": "node scripts/backend.mjs test ./...",
     "test:integration": "node scripts/backend.mjs test -tags=integration -count=1 -timeout=120s ./tests/integration",
     "test:integration:docker": "node scripts/test-postgres.mjs",
@@ -34,6 +34,8 @@
     "db:grant-support-reader": "node scripts/backend.mjs run ./cmd/operator grant-support-reader",
     "db:grant-platform-admin-manager": "node scripts/backend.mjs run ./cmd/operator grant-platform-admin-manager",
     "db:grant-billing-manager": "node scripts/backend.mjs run ./cmd/operator grant-billing-manager",
+    "db:grant-payment-manager": "node scripts/backend.mjs run ./cmd/operator grant-payment-manager",
+    "db:grant-payment-callback-ingestor": "node scripts/backend.mjs run ./cmd/operator grant-payment-callback-ingestor",
     "db:grant-governance-reviewer": "node scripts/backend.mjs run ./cmd/operator grant-governance-reviewer",
     "db:grant-governance-policy-manager": "node scripts/backend.mjs run ./cmd/operator grant-governance-policy-manager",
     "db:grant-governance-execution-confirmer": "node scripts/backend.mjs run ./cmd/operator grant-governance-execution-confirmer",
@@ -66,8 +68,9 @@
     "check:s4c-dangerous-operation-jit": "node scripts/check-s4c-dangerous-operation-jit.mjs",
     "check:s4d-platform-admin": "node scripts/check-s4d-platform-admin.mjs",
     "check:s403-commerce-billing": "node scripts/check-s403-commerce-billing.mjs",
+    "check:s406-sandbox-payment": "node scripts/check-s406-sandbox-payment.mjs",
     "check:architecture": "node scripts/check-architecture.mjs && node scripts/backend.mjs test ./tests/architecture",
-    "check": "pnpm check:toolchain && pnpm check:workspace && pnpm check:docs && pnpm check:contracts && pnpm check:g3 && pnpm check:alpha-operations && pnpm check:alpha && pnpm check:s4a-plugin-publication && pnpm check:s4b-release-governance && pnpm check:s4c-dangerous-operation-jit && pnpm check:s4d-platform-admin && pnpm check:s403-commerce-billing && pnpm check:architecture && pnpm lint && pnpm typecheck && pnpm test && pnpm test:backend && pnpm vet:backend && pnpm build:backend && pnpm build"
+    "check": "pnpm check:toolchain && pnpm check:workspace && pnpm check:docs && pnpm check:contracts && pnpm check:g3 && pnpm check:alpha-operations && pnpm check:alpha && pnpm check:s4a-plugin-publication && pnpm check:s4b-release-governance && pnpm check:s4c-dangerous-operation-jit && pnpm check:s4d-platform-admin && pnpm check:s403-commerce-billing && pnpm check:s406-sandbox-payment && pnpm check:architecture && pnpm lint && pnpm typecheck && pnpm test && pnpm test:backend && pnpm vet:backend && pnpm build:backend && pnpm build"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

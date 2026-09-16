@@ -173,9 +173,17 @@ func (r *PaymentCallbackRepository) IngestPaymentCallback(ctx context.Context, c
 	if r == nil || r.pool == nil {
 		return application.PaymentCallbackReceipt{}, application.ErrPaymentCallbackUnavailable
 	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return application.PaymentCallbackReceipt{}, application.ErrPaymentCallbackUnavailable
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	if _, err = tx.Exec(ctx, `SELECT set_config('mender.workspace_id',$1,true)`, callback.WorkspaceID); err != nil {
+		return application.PaymentCallbackReceipt{}, application.ErrPaymentCallbackUnavailable
+	}
 	var receipt application.PaymentCallbackReceipt
 	var reason *string
-	err := r.pool.QueryRow(ctx, `SELECT * FROM commerce.ingest_sandbox_payment_callback($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+	err = tx.QueryRow(ctx, `SELECT * FROM commerce.ingest_sandbox_payment_callback($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
 		callback.ProviderID, callback.ProviderAccountID, callback.EventID, callback.BodySHA256, callback.KeyID, callback.SignedAt, callback.ReceivedAt,
 		callback.WorkspaceID, callback.IntentID, callback.EventType, nullablePayment(callback.ProviderTransactionID), callback.Currency, callback.AmountMicro,
 		callback.EventState, callback.OccurredAt).Scan(&receipt.ReceiptID, &receipt.Disposition, &reason)
@@ -188,6 +196,9 @@ func (r *PaymentCallbackRepository) IngestPaymentCallback(ctx context.Context, c
 	receipt.EventID = callback.EventID
 	if reason != nil {
 		receipt.ReasonCode = *reason
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return application.PaymentCallbackReceipt{}, application.ErrPaymentCallbackUnavailable
 	}
 	return receipt, nil
 }

@@ -289,6 +289,9 @@ func TestPostgresRuntimeContract(t *testing.T) {
 	t.Run("T20 T21 Commerce billing ledger adjustment refund and reconciliation boundaries", func(t *testing.T) {
 		exerciseCommerceBillingLedger(t, ctx, owner, runtimeURL.String())
 	})
+	t.Run("T27 sandbox payment signature callback idempotency refund and reconciliation boundaries", func(t *testing.T) {
+		exerciseSandboxPaymentCallbacks(t, ctx, owner, runtimeURL.String())
+	})
 	t.Run("execution risk policy decisions and exact human confirmations", func(t *testing.T) {
 		exerciseExecutionRiskGovernance(t, ctx, owner, runtimeURL.String())
 	})
