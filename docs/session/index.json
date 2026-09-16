@@ -98,9 +98,9 @@
     "ses_70aea63a62434ba2a7db48321a44b857": {
       "path": "docs/session/ses_70aea63a62434ba2a7db48321a44b857.md",
       "title": "S4-C Dangerous Operation / JIT Governance",
-      "status": "active",
+      "status": "completed",
       "created_at": "unix:1789524822",
-      "updated_at": "unix:1789527811",
+      "updated_at": "unix:1789527889",
       "parent_session_id": "ses_0842b6c5c9a74733a06753fb10c77fbd"
     },
     "ses_8e2a42283ec744f5940c1dc762d2e187": {
