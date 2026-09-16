@@ -32,14 +32,21 @@ func BillingManagerRole(ctx context.Context, pool *pgxpool.Pool) error {
 			return errors.New("billing-manager has direct table authority: " + table)
 		}
 	}
+	var governanceUsage, identityUsage, executionUsage, appendCharge bool
 	err = pool.QueryRow(ctx, `SELECT
-	 NOT has_schema_privilege(current_user,'governance','USAGE')
-	 AND NOT has_schema_privilege(current_user,'identity','USAGE')
-	 AND NOT has_schema_privilege(current_user,'execution','USAGE')
-	 AND NOT has_function_privilege(current_user,'governance.consume_commerce_approval(text,text,text,text,text,text,text,text,bigint,text,timestamptz)','EXECUTE')
-	 AND NOT has_function_privilege(current_user,'commerce.append_usage_charge_journal(text,text,text,bigint,timestamptz)','EXECUTE')`).Scan(&ok)
-	if err != nil || !ok {
-		return errors.New("billing-manager isolation grants are invalid")
+	 has_schema_privilege(current_user,'governance','USAGE'),
+	 has_schema_privilege(current_user,'identity','USAGE'),
+	 has_schema_privilege(current_user,'execution','USAGE'),
+	 has_function_privilege(current_user,'commerce.append_usage_charge_journal(text,text,text,bigint,timestamptz)','EXECUTE')`).Scan(&governanceUsage, &identityUsage, &executionUsage, &appendCharge)
+	if err != nil || governanceUsage || identityUsage || executionUsage || appendCharge {
+		return errors.New("billing-manager isolation grants are invalid: governance_schema=" + boolString(governanceUsage) + " identity_schema=" + boolString(identityUsage) + " execution_schema=" + boolString(executionUsage) + " append_charge=" + boolString(appendCharge))
 	}
 	return nil
+}
+
+func boolString(value bool) string {
+	if value {
+		return "true"
+	}
+	return "false"
 }

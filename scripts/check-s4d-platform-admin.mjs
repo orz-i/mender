@@ -74,7 +74,7 @@ export function validateS4DEvidence(evidence) {
   assert.equal(evidence.surfaces.platform_admin_frontend, 'deferred');
   exactKeys(evidence.verification, ['real_postgres_test', 'admin_migration', 'runtime_gate_migration', 'function_hardening_migration', 'admin_role', 'admin_role_validator', 'admin_api'], 'S4-D verification');
   exactSet(evidence.deferred, ['platform-admin-frontend', 'financial-reconciliation-and-adjustment', 'payment-provider-integration', 'billing-refund-ledger', 'provider-commercial-onboarding-review', 'unrestricted-impersonation', 'production-deploy'], 'S4-D deferred scope');
-  assert.equal(evidence.next_work_package, 'S4-E-commerce-adjustments-refunds');
+  assert.equal(evidence.next_work_package, 'S4-03-commerce-adjustments-refunds');
   assert.equal(evidence.document, 'docs/engineering/2026-09-16-s4d-platform-admin-boundary.md');
 }
 
@@ -132,7 +132,7 @@ export function checkS4DPlatformAdmin(root = projectRoot) {
   assert.ok(operator.includes('grant-platform-admin-manager'), 'Operator grant command missing');
 
   const document = readFileSync(localFile(root, evidence.document), 'utf8');
-  for (const phrase of ['S4-D Platform Admin Operations｜S4-05 / FR-018 / T26：COMPLETE', '不是 Deployment disabled，也不是 Release emergency-disable', '没有 `provider_admin_states` 记录的 provider 按原行为允许', 'S4-D 仍不是 production-ready 声明', 'S4-E Commerce Adjustments / Refund Supplemental Ledger']) assert.ok(document.includes(phrase), `S4-D boundary document missing ${phrase}`);
+  for (const phrase of ['S4-D Platform Admin Operations｜S4-05 / FR-018 / T26：COMPLETE', '不是 Deployment disabled，也不是 Release emergency-disable', '没有 `provider_admin_states` 记录的 provider 按原行为允许', 'S4-D 仍不是 production-ready 声明', 'canonical S4-03']) assert.ok(document.includes(phrase), `S4-D boundary document missing ${phrase}`);
   return evidence;
 }
 

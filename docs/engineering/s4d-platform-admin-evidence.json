@@ -83,6 +83,6 @@
     "unrestricted-impersonation",
     "production-deploy"
   ],
-  "next_work_package": "S4-E-commerce-adjustments-refunds",
+  "next_work_package": "S4-03-commerce-adjustments-refunds",
   "document": "docs/engineering/2026-09-16-s4d-platform-admin-boundary.md"
 }

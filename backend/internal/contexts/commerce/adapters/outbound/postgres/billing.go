@@ -64,9 +64,13 @@ func (r *BillingRepository) BillingSummary(ctx context.Context, workspace, actor
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 	var value domain.BillingSummary
-	err = tx.QueryRow(ctx, `SELECT * FROM commerce.billing_summary($1,$2,$3)`, workspace, actor, currency).Scan(&value.WorkspaceID, &value.Currency, &value.ChargedMicro, &value.RefundedMicro, &value.AdjustmentDebitMicro, &value.AdjustmentCreditMicro, &value.NetBilledMicro, &value.JournalCount, &value.LatestJournalAt)
+	var latest *time.Time
+	err = tx.QueryRow(ctx, `SELECT * FROM commerce.billing_summary($1,$2,$3)`, workspace, actor, currency).Scan(&value.WorkspaceID, &value.Currency, &value.ChargedMicro, &value.RefundedMicro, &value.AdjustmentDebitMicro, &value.AdjustmentCreditMicro, &value.NetBilledMicro, &value.JournalCount, &latest)
 	if err != nil {
 		return domain.BillingSummary{}, billingError(err)
+	}
+	if latest != nil {
+		value.LatestJournalAt = *latest
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return domain.BillingSummary{}, application.ErrBillingUnavailable

@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "as_of": "2026-09-16",
+  "work_package": "S4-03",
+  "status": "complete",
+  "roadmap": {
+    "canonical_id": "S4-03",
+    "canonical_s4_range": "S4-01..S4-18",
+    "invented_stage_id": false
+  },
+  "ledger": {
+    "operational_billing_ledger": true,
+    "usage_settlements_remain_usage_facts": true,
+    "double_entry": true,
+    "entries_per_journal": 2,
+    "zero_sum_per_currency": true,
+    "amount_unit": "integer_micro_units",
+    "implicit_fx": false,
+    "immutable_journals": true,
+    "immutable_entries": true,
+    "immutable_usage_settlements": true,
+    "unique_business_key": true,
+    "one_charge_per_usage_settlement": true,
+    "automatic_charge_mirror": true,
+    "exact_replay_idempotent": true,
+    "corrections_append_only": true,
+    "provider_cost_event_implemented": false,
+    "statutory_accounting_gl_claim": false
+  },
+  "approval": {
+    "actions": ["commerce.refund", "commerce.adjustment"],
+    "requester_roles": ["operator"],
+    "reviewer_roles": ["reviewer", "operator"],
+    "maker_checker": true,
+    "self_approval_allowed": false,
+    "exact_amount_currency_binding": true,
+    "business_key_bound": true,
+    "business_basis_bound": true,
+    "direction_bound": true,
+    "reason_required": true,
+    "one_time_consumption": true,
+    "failed_business_mutation_consumes_approval": false,
+    "refund_cumulative_cap_enforced": true,
+    "refund_basis": "usage_settlement",
+    "adjustment_bases": ["run", "incident", "reconciliation"],
+    "adjustment_directions": ["debit", "credit"]
+  },
+  "reconciliation": {
+    "unknown_provider_state": "reconciling",
+    "unknown_outcome_auto_release": false,
+    "unknown_outcome_auto_charge": false,
+    "held_reservation_preserved": true,
+    "late_provider_terminal_evidence_required": true,
+    "late_result_artifact_required": true,
+    "late_settlement_appends_one_charge": true,
+    "billing_summary_rebuilt_from_entries": true,
+    "usage_vs_ledger_reconciliation": true
+  },
+  "security": {
+    "billing_database_role": "billing-manager",
+    "approval_database_role": "dangerous-operation-manager",
+    "roles_separate": true,
+    "billing_direct_ledger_table_access": false,
+    "billing_direct_usage_table_access": false,
+    "billing_direct_approval_table_access": false,
+    "billing_internal_charge_mirror_execute": false,
+    "platform_staff_separate_from_workspace_membership": true,
+    "browser_session_csrf": true,
+    "browser_actor_fields_authoritative": false,
+    "raw_credentials_or_secrets_exposed": false,
+    "unrestricted_impersonation": false
+  },
+  "surfaces": {
+    "billing_summary_api": "implemented",
+    "billing_reconciliation_api": "implemented",
+    "refund_api": "implemented",
+    "adjustment_api": "implemented",
+    "commerce_approval_request_api": "implemented",
+    "billing_frontend": "deferred",
+    "payment_provider_adapter": "deferred"
+  },
+  "verification": {
+    "real_postgres_test": "backend/tests/integration/commerce_billing_ledger_test.go",
+    "ledger_migration": "backend/migrations/0049_commerce_billing_ledger.sql",
+    "hardening_migration": "backend/migrations/0050_commerce_billing_hardening.sql",
+    "billing_role": "backend/migrations/billing_manager_role.go",
+    "billing_role_validator": "backend/internal/platform/postgres/billing_manager.go",
+    "billing_api": "backend/internal/contexts/commerce/adapters/inbound/httpapi/billing.go",
+    "approval_api": "backend/internal/contexts/governance/adapters/inbound/httpapi/dangerous_operation.go",
+    "settlement_boundary_test": "backend/internal/processes/settlement/application/service_test.go"
+  },
+  "deferred": [
+    "provider-cost-event-accounting",
+    "payment-provider-integration",
+    "real-money-wallet-funding",
+    "automatic-fx-conversion",
+    "tax-calculation",
+    "statutory-accounting-general-ledger",
+    "billing-frontend",
+    "production-deploy"
+  ],
+  "document": "docs/engineering/2026-09-16-s403-commerce-billing-boundary.md"
+}

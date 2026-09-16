@@ -38,4 +38,4 @@ Platform Staff 权限保持精确分离：只有 `operator` 可以 `platform:ope
 
 S4-D 不实现 S4-10 Platform Admin 前端，不实现财务调账／退款补充分录，不实现支付供应商、商业 Provider onboarding 审核、通用 impersonation 或 production deploy。虽然 FR-018 的最终平台 Admin 范围包含 reconciliation，本工作包只交付安全控制面与审计，不把尚未实现的 Commerce reconciliation 伪装成完成。
 
-因此 **S4-D 仍不是 production-ready 声明**。下一工作包为 **S4-E Commerce Adjustments / Refund Supplemental Ledger（对应 S4-03）**，继续实现账单、调账和退款补充分录；Payment Provider integration（S4-06）仍保持独立。
+因此 **S4-D 仍不是 production-ready 声明**。下一项回到原始 roadmap 的 **canonical S4-03：账单、调账和退款补充分录**；不再为实现批次发明 S4-E 之类的新阶段编号。Payment Provider integration（S4-06）仍保持独立。

@@ -286,6 +286,9 @@ func TestPostgresRuntimeContract(t *testing.T) {
 	t.Run("T26 Platform Admin workspace provider incident and audit boundaries", func(t *testing.T) {
 		exercisePlatformAdminOperations(t, ctx, owner, runtime, runtimeURL.String())
 	})
+	t.Run("T20 T21 Commerce billing ledger adjustment refund and reconciliation boundaries", func(t *testing.T) {
+		exerciseCommerceBillingLedger(t, ctx, owner, runtimeURL.String())
+	})
 	t.Run("execution risk policy decisions and exact human confirmations", func(t *testing.T) {
 		exerciseExecutionRiskGovernance(t, ctx, owner, runtimeURL.String())
 	})
