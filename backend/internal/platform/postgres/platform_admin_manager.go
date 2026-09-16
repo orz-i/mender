@@ -31,7 +31,9 @@ func PlatformAdminManagerRole(ctx context.Context, pool *pgxpool.Pool) error {
 		"supply.deployments", "supply.provider_admin_states", "governance.platform_incidents", "governance.platform_admin_audit_events",
 		"governance.dangerous_operation_approvals", "governance.jit_support_grants", "execution.runs", "execution.run_admissions", "connections.connections", "commerce.budget_periods",
 	} {
-		if err = pool.QueryRow(ctx, `SELECT has_table_privilege(current_user,$1,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') OR has_any_column_privilege(current_user,$1,'SELECT,INSERT,UPDATE')`, table).Scan(&unsafe); err != nil || unsafe {
+		if err = pool.QueryRow(ctx, `SELECT has_schema_privilege(current_user,n.oid,'USAGE') AND
+		  (has_table_privilege(current_user,c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') OR has_any_column_privilege(current_user,c.oid,'SELECT,INSERT,UPDATE'))
+		 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname||'.'||c.relname=$1`, table).Scan(&unsafe); err != nil || unsafe {
 			return errors.New("platform-admin-manager has direct table authority: " + table)
 		}
 	}

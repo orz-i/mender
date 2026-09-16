@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "as_of": "2026-09-16",
+  "work_package": "S4-D",
+  "status": "complete",
+  "platform_admin": {
+    "workspace_freeze_implemented": true,
+    "provider_quarantine_implemented": true,
+    "incident_handling_implemented": true,
+    "audit_export_implemented": true,
+    "workspace_state_revisioned": true,
+    "provider_state_revisioned": true,
+    "incident_revisioned": true,
+    "mutation_reason_required": true,
+    "browser_session_csrf": true,
+    "browser_actor_fields_authoritative": false
+  },
+  "platform_staff": {
+    "separate_from_workspace_membership": true,
+    "creates_workspace_membership": false,
+    "roles": ["support", "reviewer", "operator", "auditor"],
+    "operate_roles": ["operator"],
+    "review_roles": ["reviewer", "operator"],
+    "audit_roles": ["reviewer", "operator", "auditor"]
+  },
+  "workspace_freeze": {
+    "authority_source": "identity.workspaces.disabled",
+    "api_key_rechecked": true,
+    "membership_rechecked": true,
+    "run_delegation_rechecked": true,
+    "start_run_delegation_rechecked": true,
+    "historical_facts_deleted": false
+  },
+  "provider_quarantine": {
+    "state_source": "supply.provider_admin_states",
+    "new_admission_blocked": true,
+    "new_submission_blocked": true,
+    "mcp_discovery_blocked": true,
+    "existing_run_control_allowed": true,
+    "deployment_state_mutated": false,
+    "historical_admission_rewritten": false,
+    "unknown_legacy_provider_default_allowed": true,
+    "function_only_runtime_gate": true
+  },
+  "audit": {
+    "append_only": true,
+    "max_export_rows": 500,
+    "safe_fields": ["sequence", "event_kind", "target_kind", "target_id", "target_revision", "actor_user_id", "reason", "occurred_at"],
+    "raw_canonical_arguments_exposed": false,
+    "credential_references_exposed": false,
+    "secrets_exposed": false
+  },
+  "security": {
+    "database_role": "platform-admin-manager",
+    "direct_business_table_read": false,
+    "direct_business_table_mutation": false,
+    "runtime_direct_provider_state_read": false,
+    "executor_direct_provider_state_read": false,
+    "mcp_connector_direct_provider_state_read": false,
+    "dangerous_jit_authority_widened": false,
+    "financial_mutation": false,
+    "unrestricted_impersonation": false
+  },
+  "surfaces": {
+    "platform_admin_api": "implemented",
+    "platform_admin_frontend": "deferred"
+  },
+  "verification": {
+    "real_postgres_test": "backend/tests/integration/platform_admin_operations_test.go",
+    "admin_migration": "backend/migrations/0046_platform_admin_operations.sql",
+    "runtime_gate_migration": "backend/migrations/0047_platform_admin_runtime_gate.sql",
+    "function_hardening_migration": "backend/migrations/0048_platform_admin_function_hardening.sql",
+    "admin_role": "backend/migrations/platform_admin_manager_role.go",
+    "admin_role_validator": "backend/internal/platform/postgres/platform_admin_manager.go",
+    "admin_api": "backend/internal/contexts/governance/adapters/inbound/httpapi/platform_admin.go"
+  },
+  "deferred": [
+    "platform-admin-frontend",
+    "financial-reconciliation-and-adjustment",
+    "payment-provider-integration",
+    "billing-refund-ledger",
+    "provider-commercial-onboarding-review",
+    "unrestricted-impersonation",
+    "production-deploy"
+  ],
+  "next_work_package": "S4-E-commerce-adjustments-refunds",
+  "document": "docs/engineering/2026-09-16-s4d-platform-admin-boundary.md"
+}
