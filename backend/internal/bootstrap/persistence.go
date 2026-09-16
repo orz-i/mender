@@ -134,6 +134,8 @@ type APIConfig struct {
 	CatalogManagerDatabaseURL               string
 	ConsolePublisherEnabled                 bool
 	PublisherManagerDatabaseURL             string
+	AdminReleaseGovernanceEnabled           bool
+	ReleaseManagerDatabaseURL               string
 	AdminCatalogReviewEnabled               bool
 	AdminPluginReviewEnabled                bool
 	GovernanceReviewerDatabaseURL           string
@@ -308,6 +310,20 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 		}
 	default:
 		return c, errors.New("MENDER_CONSOLE_PUBLISHER_ENABLED must be true or false")
+	}
+	switch getenv("MENDER_ADMIN_RELEASE_GOVERNANCE_ENABLED") {
+	case "", "false":
+	case "true":
+		if !c.ConsoleOIDCEnabled {
+			return APIConfig{}, errors.New("Admin Release Governance requires Console OIDC")
+		}
+		c.AdminReleaseGovernanceEnabled = true
+		c.ReleaseManagerDatabaseURL = strings.TrimSpace(getenv("MENDER_RELEASE_MANAGER_DATABASE_URL"))
+		if c.ReleaseManagerDatabaseURL == "" {
+			return APIConfig{}, errors.New("Admin Release Governance requires a separate release-manager database role")
+		}
+	default:
+		return c, errors.New("MENDER_ADMIN_RELEASE_GOVERNANCE_ENABLED must be true or false")
 	}
 	switch getenv("MENDER_ADMIN_CATALOG_REVIEW_ENABLED") {
 	case "", "false":
@@ -721,6 +737,7 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	var connectionManagerPool *pgxpool.Pool
 	var catalogManagerPool *pgxpool.Pool
 	var publisherManagerPool *pgxpool.Pool
+	var releaseManagerPool *pgxpool.Pool
 	var governanceReviewerPool *pgxpool.Pool
 	var governancePolicyManagerPool *pgxpool.Pool
 	var callbackObserverPool *pgxpool.Pool
@@ -754,6 +771,9 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 		}
 		if publisherManagerPool != nil {
 			publisherManagerPool.Close()
+		}
+		if releaseManagerPool != nil {
+			releaseManagerPool.Close()
 		}
 		if catalogManagerPool != nil {
 			catalogManagerPool.Close()
@@ -1236,13 +1256,42 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 			}
 			registers = append(registers, workflowHandler.Register)
 		}
+		if c.AdminReleaseGovernanceEnabled {
+			releaseManagerPool, buildErr = database.Open(start, c.ReleaseManagerDatabaseURL)
+			if buildErr != nil {
+				return failed(buildErr)
+			}
+			releaseCfg := releaseManagerPool.Config().ConnConfig
+			if readerCfg.Host != releaseCfg.Host || readerCfg.Port != releaseCfg.Port || readerCfg.Database != releaseCfg.Database || releaseCfg.User == readerCfg.User || releaseCfg.User == sessionCfg.User ||
+				(catalogManagerPool != nil && releaseCfg.User == catalogManagerPool.Config().ConnConfig.User) || (publisherManagerPool != nil && releaseCfg.User == publisherManagerPool.Config().ConnConfig.User) ||
+				(connectionManagerPool != nil && releaseCfg.User == connectionManagerPool.Config().ConnConfig.User) || (commerceObserverPool != nil && releaseCfg.User == commerceObserverPool.Config().ConnConfig.User) {
+				return failed(errors.New("Admin Release Governance requires the same database with a distinct restricted role"))
+			}
+			if buildErr = migrations.Verify(start, releaseManagerPool); buildErr != nil {
+				return failed(buildErr)
+			}
+			if buildErr = database.ReleaseManagerRole(start, releaseManagerPool); buildErr != nil {
+				return failed(buildErr)
+			}
+			releaseAccess := supplyidentity.NewHuman(humanIdentity)
+			releaseRepository := supplypg.NewReleaseGovernanceRepository(releaseManagerPool)
+			releaseService, serviceErr := supplyapp.NewReleaseGovernance(releaseRepository, releaseAccess, supplyrandom.ReleaseIDs{}, systemClock{})
+			if serviceErr != nil {
+				return failed(serviceErr)
+			}
+			releaseHandler, handlerErr := supplyhttp.NewReleaseGovernance(releaseService, releaseAccess)
+			if handlerErr != nil {
+				return failed(handlerErr)
+			}
+			registers = append(registers, releaseHandler.Register)
+		}
 		if c.AdminCatalogReviewEnabled || c.AdminPluginReviewEnabled {
 			governanceReviewerPool, buildErr = database.Open(start, c.GovernanceReviewerDatabaseURL)
 			if buildErr != nil {
 				return failed(buildErr)
 			}
 			reviewerCfg := governanceReviewerPool.Config().ConnConfig
-			if readerCfg.Host != reviewerCfg.Host || readerCfg.Port != reviewerCfg.Port || readerCfg.Database != reviewerCfg.Database || reviewerCfg.User == readerCfg.User || reviewerCfg.User == sessionCfg.User || (catalogManagerPool != nil && reviewerCfg.User == catalogManagerPool.Config().ConnConfig.User) || (publisherManagerPool != nil && reviewerCfg.User == publisherManagerPool.Config().ConnConfig.User) || (connectionManagerPool != nil && reviewerCfg.User == connectionManagerPool.Config().ConnConfig.User) || (commerceObserverPool != nil && reviewerCfg.User == commerceObserverPool.Config().ConnConfig.User) {
+			if readerCfg.Host != reviewerCfg.Host || readerCfg.Port != reviewerCfg.Port || readerCfg.Database != reviewerCfg.Database || reviewerCfg.User == readerCfg.User || reviewerCfg.User == sessionCfg.User || (catalogManagerPool != nil && reviewerCfg.User == catalogManagerPool.Config().ConnConfig.User) || (publisherManagerPool != nil && reviewerCfg.User == publisherManagerPool.Config().ConnConfig.User) || (releaseManagerPool != nil && reviewerCfg.User == releaseManagerPool.Config().ConnConfig.User) || (connectionManagerPool != nil && reviewerCfg.User == connectionManagerPool.Config().ConnConfig.User) || (commerceObserverPool != nil && reviewerCfg.User == commerceObserverPool.Config().ConnConfig.User) {
 				return failed(errors.New("Admin publication review requires the same database with a distinct restricted role"))
 			}
 			if buildErr = migrations.Verify(start, governanceReviewerPool); buildErr != nil {
@@ -1291,7 +1340,7 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 				return failed(buildErr)
 			}
 			policyCfg := governancePolicyManagerPool.Config().ConnConfig
-			if readerCfg.Host != policyCfg.Host || readerCfg.Port != policyCfg.Port || readerCfg.Database != policyCfg.Database || policyCfg.User == readerCfg.User || policyCfg.User == sessionCfg.User || (catalogManagerPool != nil && policyCfg.User == catalogManagerPool.Config().ConnConfig.User) || (governanceReviewerPool != nil && policyCfg.User == governanceReviewerPool.Config().ConnConfig.User) || (connectionManagerPool != nil && policyCfg.User == connectionManagerPool.Config().ConnConfig.User) || (commerceObserverPool != nil && policyCfg.User == commerceObserverPool.Config().ConnConfig.User) {
+			if readerCfg.Host != policyCfg.Host || readerCfg.Port != policyCfg.Port || readerCfg.Database != policyCfg.Database || policyCfg.User == readerCfg.User || policyCfg.User == sessionCfg.User || (catalogManagerPool != nil && policyCfg.User == catalogManagerPool.Config().ConnConfig.User) || (releaseManagerPool != nil && policyCfg.User == releaseManagerPool.Config().ConnConfig.User) || (governanceReviewerPool != nil && policyCfg.User == governanceReviewerPool.Config().ConnConfig.User) || (connectionManagerPool != nil && policyCfg.User == connectionManagerPool.Config().ConnConfig.User) || (commerceObserverPool != nil && policyCfg.User == commerceObserverPool.Config().ConnConfig.User) {
 				return failed(errors.New("Admin Catalog policy requires the same database with a distinct restricted role"))
 			}
 			if buildErr = migrations.Verify(start, governancePolicyManagerPool); buildErr != nil {
@@ -1539,6 +1588,14 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 				return err
 			}
 			if err := database.PublisherManagerRole(ctx, publisherManagerPool); err != nil {
+				return err
+			}
+		}
+		if releaseManagerPool != nil {
+			if err := migrations.Verify(ctx, releaseManagerPool); err != nil {
+				return err
+			}
+			if err := database.ReleaseManagerRole(ctx, releaseManagerPool); err != nil {
 				return err
 			}
 		}

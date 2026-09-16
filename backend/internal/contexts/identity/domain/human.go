@@ -43,11 +43,11 @@ func (m WorkspaceMembership) Allows(action string) bool {
 		return false
 	}
 	switch action {
-	case "workspace:read", "connection:read", "run:read", "usage:read", "catalog:read", "publisher:read":
+	case "workspace:read", "connection:read", "run:read", "usage:read", "catalog:read", "publisher:read", "release:read":
 		return true
 	case "connection:manage":
 		return m.Role == RoleOwner || m.Role == RoleAdmin
-	case "catalog:review", "catalog:audit", "catalog:policy", "publisher:review", "execution:governance":
+	case "catalog:review", "catalog:audit", "catalog:policy", "publisher:review", "release:manage", "execution:governance":
 		return m.Role == RoleOwner || m.Role == RoleAdmin
 	case "run:cancel", "run:input", "run:create", "catalog:manage", "publisher:manage":
 		return m.Role == RoleOwner || m.Role == RoleAdmin || m.Role == RoleDeveloper
