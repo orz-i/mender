@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "environment": "local",
+  "instance": "mender_local",
+  "console_origin": "https://console.localhost:18443",
+  "admin_origin": "https://admin.localhost:18443",
+  "http_port": 18000,
+  "https_port": 18443
+}

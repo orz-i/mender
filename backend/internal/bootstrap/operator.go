@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"github.com/orz-i/mender/backend/internal/platform/configenv"
 	"io"
 	"strings"
 	"time"
@@ -19,6 +20,11 @@ import (
 // RunOperator is local, privileged administration, not a public registration endpoint.
 // Only issue-key intentionally prints a generated secret, once, after durable insertion.
 func RunOperator(ctx context.Context, args []string, getenv func(string) string, out, errOut io.Writer) error {
+	resolved, resolveErr := configenv.Resolve(getenv)
+	if resolveErr != nil {
+		return resolveErr
+	}
+	getenv = resolved
 	if len(args) == 0 {
 		return errors.New("operator requires migrate, grant-runtime, grant-browser-session, grant-connection-manager, grant-oauth-refresher, grant-catalog-manager, grant-publisher-manager, grant-release-manager, grant-dangerous-operation-manager, grant-support-reader, grant-platform-admin-manager, grant-billing-manager, grant-payment-manager, grant-payment-callback-ingestor, grant-governance-reviewer, grant-governance-policy-manager, grant-governance-execution-confirmer, grant-commerce-observer, grant-admission, grant-cancellation, grant-worker, grant-executor, grant-mcp-connector, grant-reconciler, grant-callback-ingestor, grant-callback-observer, grant-settlement, grant-artifact-materializer, grant-artifact-object-reader, provision-human, provision-platform-staff, issue-key or revoke-key")
 	}

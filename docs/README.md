@@ -1,5 +1,7 @@
 # Mender 文档
 
+当前持久部署入口：[生产化部署操作](engineering/production-deployment.md)与[真实部署验证记录](engineering/2026-09-16-production-deployment.md)。旧切片按各自日期保留，不能用旧的“尚无工作台／未接入”说明覆盖当前状态；生产放行仍以真实目标环境与人工批准为准。
+
 ## 当前实施
 
 [当前实施与验收状态](planning/current-status.md)是统一状态入口，由[结构化主台账](planning/project-data.json)生成。限定实现、已有自动化记录、原任务验收与剩余条件分别展示；旧 Word／PDF／Excel 是 v1.1 历史设计快照，不是实时进度看板。状态字段和更新规则见[状态维护约定](planning/status-tracking.md)。

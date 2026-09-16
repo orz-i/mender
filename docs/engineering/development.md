@@ -1,5 +1,7 @@
 # Mender 本地开发
 
+> 2026-09-16 部署更新：持久数据库、独立角色／文件秘密、TLS反向代理、真实OIDC双入口、固定镜像制品及备份切换统一见[持久化部署指南](production-deployment.md)。本文后续带迁移编号的细节保留历史切片说明；包括“无MCP／Agent适配”和“CI从未运行”等旧边界，不应作为当前能力清单。当前能力以[统一状态](../planning/current-status.md)为准。
+
 ## 环境与安装
 
 使用 Node.js `24.19.0`、pnpm `11.18.0` 和 Go `1.26.7`。仓库中的 `.node-version`、`packageManager`、`engines`、`backend/go.mod` 与 `toolchain.versions.json` 必须同步维护。版本不一致时检查会失败，不自动替换系统工具链。

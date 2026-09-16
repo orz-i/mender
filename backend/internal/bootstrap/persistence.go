@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"github.com/orz-i/mender/backend/internal/platform/configenv"
 	"net/http"
 	"os"
 	"strings"
@@ -323,6 +324,11 @@ func parseReviewedPaymentCallbackKeys(raw string) (map[string][]string, error) {
 }
 
 func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
+	resolved, resolveErr := configenv.Resolve(getenv)
+	if resolveErr != nil {
+		return APIConfig{}, resolveErr
+	}
+	getenv = resolved
 	c := APIConfig{ConsoleCookieSecure: true, ConsoleSessionTTL: 8 * time.Hour, ConsoleRunDelegationTTL: 10 * time.Minute, ConsoleHumanStartDelegationTTL: 5 * time.Minute, ConnectionOAuthFlowTTL: 10 * time.Minute}
 	switch getenv("MENDER_CONSOLE_OIDC_ENABLED") {
 	case "", "false":

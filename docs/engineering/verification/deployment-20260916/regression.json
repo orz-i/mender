@@ -1,0 +1,14 @@
+{
+  "record_type": "local-regression-observation",
+  "recorded_date": "2026-09-16",
+  "scope": "Deployment productionization working tree based on 17468376565ec06480e92362240cc30d8edcad2d; no remote CI or production approval",
+  "checks": [
+    {"command":"pnpm test:deployment:contract","exit_code":0,"duration_ms":4041,"node_tests":7,"failed":0,"skipped":0,"verification_id":"2894e0e4f05046118ab482436dd55390","note":"Also executes Go configenv/bootstrap/architecture tests."},
+    {"command":"pnpm check","exit_code":0,"duration_ms":42175,"node_tests":161,"failed":0,"skipped":0,"verification_id":"943ec2ced01e462dbade50286c21338a","note":"Includes contract/state/architecture/lint/typecheck/Go tests/vet/build and both frontend builds. Some Go results are cached. The earlier evidence-drift failure was corrected by reviewed router digest updates, not suppressed."},
+    {"command":"pnpm test:s4:recovery","exit_code":0,"duration_ms":52830,"postgres_suite_seconds":39.545,"verification_id":"7ddaf38a6e8c4954aa595351a0fed6bc","note":"Fresh original S4 PostgreSQL/HTTP/CLI/Chromium/recovery regression; own container removed."},
+    {"command":"pnpm check:dependencies","exit_code":0,"duration_ms":23454,"verification_id":"c335978399ec49a2839160e9c4022d3e","note":"pnpm no known vulnerabilities; go mod verify passed; Go reachable vulnerabilities 0. Scanner still reports 3 imported-package and 23 required-module vulnerabilities not called by current code. Not an OS/container image vulnerability scan."}
+  ],
+  "approval": "not_granted",
+  "production_deployed": false,
+  "remote_pushed": false
+}

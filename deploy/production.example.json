@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "environment": "production",
+  "instance": "mender_production",
+  "worker_workspaces": ["REPLACE_REAL_WORKSPACE"],
+  "console_origin": "https://console.REPLACE.invalid",
+  "admin_origin": "https://admin.REPLACE.invalid",
+  "oidc_issuer": "https://REPLACE.invalid/realms/mender",
+  "oidc_client_id": "REPLACE_REAL_CLIENT_ID",
+  "oidc_client_secret_file": ".local/operator/oidc-client.txt",
+  "web_certificate_file": ".local/operator/fullchain.pem",
+  "web_private_key_file": ".local/operator/web.key",
+  "http_port": 80,
+  "https_port": 443
+}

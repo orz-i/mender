@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => {
       host: '127.0.0.1',
       port: 5173,
       strictPort: true,
-      proxy: { '/healthz': target, '/readyz': target, '/api': target },
+      proxy: { '/healthz': target, '/readyz': target, '/api': target, '/auth': target },
     },
     preview: { host: '127.0.0.1', port: 6173, strictPort: true },
   };

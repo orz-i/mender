@@ -2,7 +2,7 @@ import { BillingWorkbenchPage, createBillingWorkbenchGateway } from '../modules/
 import { SupportApprovalsPage, createSupportApprovalsGateway } from '../modules/support-approvals';
 import { PlatformOperationsPage, createPlatformOperationsGateway } from '../modules/platform-operations';
 import { ReleaseWorkbenchPage, createReleaseWorkbenchGateway } from '../modules/release-workbench';
-import { createBrowserRouter } from 'react-router';
+import { createBrowserRouter, Navigate } from 'react-router';
 import { HomePage } from './home-page';
 import { Layout, NotFound, RouteError } from './route-pages';
 import { StatusPage, createStatusReader } from '../modules/service-status';
@@ -30,6 +30,9 @@ export const router = createBrowserRouter([{
   errorElement: <RouteError />,
   children: [
     { index: true, element: <HomePage /> },
+    // The shared OIDC callback returns a fixed safe relative location. Admin
+    // maps it to its own entry point instead of introducing an open redirect.
+    { path: 'workspaces', element: <Navigate to="/" replace /> },
     { path: 'status', element: <StatusPage readStatus={readStatus} /> },
     { path: 'publication-reviews', element: <PublicationReviewPage gateway={reviewGateway} /> },
     { path: 'publication-history', element: <PublicationHistoryPage gateway={historyGateway} /> },

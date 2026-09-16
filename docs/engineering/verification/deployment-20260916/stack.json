@@ -1,0 +1,45 @@
+{
+  "record_type": "deployment-stack-verification",
+  "recorded_date": "2026-09-16",
+  "command": "node scripts/test-deployment.mjs dist/releases/deployment-r3",
+  "result": "passed",
+  "exit_code": 0,
+  "duration_ms": 75751,
+  "environment": "Windows host, Docker Linux/amd64, isolated owned Compose instance, Chromium",
+  "source": {
+    "head": "17468376565ec06480e92362240cc30d8edcad2d",
+    "source_sha256": "3cc25426995a96ef2c3b5e7bf01f071cb742f9946cea22a0d2a282ebfecd6358",
+    "note": "HEAD is the build baseline; the tested uncommitted source tree is fixed by the source digest, not claimed as an already committed future revision."
+  },
+  "runtime_image": "sha256:58faf9aad99ade9067f4bd4d4f0ee65b40f5ff371e23d3f9d2323aef27436374",
+  "web_image": "sha256:773a22833ed8bfcfcd7cac498809c8c1d4a2a6fccbeaced6b93c0e39c481c00f",
+  "postgres_image": "postgres@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280",
+  "release_manifest_sha256": "429bd057859f264c44b61d8908f457ea9b8cefe0946053576e019d533567c49a",
+  "result_report_sha256": "7c7fcaa4d6c583665b29a4da29eb501495c8b12b014353c5bf78b6e6537f3c76",
+  "scope": "local-owned-production-image-stack",
+  "external_idp": false,
+  "external_psp": false,
+  "chromium_local_ca_exception": true,
+  "production_trust_modified": false,
+  "results": [
+    {"name":"generate owned local PKI without changing OS trust","result":"passed","duration_ms":592},
+    {"name":"prepare persistent configuration with separate credentials and HTTPS database verification","result":"passed","duration_ms":1131},
+    {"name":"start built read-only non-root images and explicit least-privilege provisioning","result":"passed","duration_ms":22037},
+    {"name":"repeat provisioning without resetting credentials or generating data","result":"passed","duration_ms":1793},
+    {"name":"deployment preflight rejects untrusted release signatures and changed runtime images","result":"passed","duration_ms":2611},
+    {"name":"real Console login via TLS discovery, code, PKCE, nonce, JWKS and server session","result":"passed","duration_ms":563},
+    {"name":"distinct Admin origin is not authenticated by Console cookie; independent login lands safely","result":"passed","duration_ms":709},
+    {"name":"API restart preserves server-side browser session","result":"passed","duration_ms":6760},
+    {"name":"database restart preserves identities and sessions with the same volume and TLS key","result":"passed","duration_ms":3804},
+    {"name":"actual protected backup is readable by pg_restore and release switching preserves volume and secrets","result":"passed","duration_ms":26351},
+    {"name":"nonce tampering rejects login; no forged session is issued","result":"passed","duration_ms":287},
+    {"name":"logout invalidates persistent session and mobile page remains meaningful","result":"passed","duration_ms":231}
+  ],
+  "resources_removed": true,
+  "limitations": [
+    "Actual signed HTTPS protocol IdP simulator; not an external identity-provider certification.",
+    "Chromium accepts the fixture CA only inside its test context. API and PostgreSQL continue certificate verification; no OS trust store changed.",
+    "Same-release stopped switch and restart verified; not arbitrary cross-version schema rollback or a production RPO/RTO claim.",
+    "No target production host, public DNS, real payment, supplier license or human G4/G5 approval was provided."
+  ]
+}

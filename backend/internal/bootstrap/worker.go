@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"errors"
+	"github.com/orz-i/mender/backend/internal/platform/configenv"
 	"log/slog"
 	"os"
 	"strconv"
@@ -431,21 +432,25 @@ func RunWorkerWithReviewedServices(ctx context.Context, logger *slog.Logger, ser
 // When explicitly enabled, it constructs only the reviewed capabilities named
 // in configuration and closes every restricted resource on exit.
 func RunWorkerEntrypoint(ctx context.Context, logger *slog.Logger) error {
-	worker, err := LoadWorkerConfig(os.Getenv)
+	getenv, err := configenv.Resolve(os.Getenv)
 	if err != nil {
 		return err
 	}
-	host, err := LoadReviewedWorkerHostConfig(os.Getenv)
+	worker, err := LoadWorkerConfig(getenv)
+	if err != nil {
+		return err
+	}
+	host, err := LoadReviewedWorkerHostConfig(getenv)
 	if err != nil {
 		return err
 	}
 	if !host.Enabled {
-		return runWorker(ctx, logger, os.Getenv, nil)
+		return runWorker(ctx, logger, getenv, nil)
 	}
 	services, closeServices, err := BuildReviewedWorkerServicesFromConfig(ctx, worker, host)
 	if err != nil {
 		return err
 	}
 	defer closeServices()
-	return runWorker(ctx, logger, os.Getenv, services)
+	return runWorker(ctx, logger, getenv, services)
 }

@@ -14,7 +14,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     env:
       GOTOOLCHAIN: local
     services:
@@ -60,3 +60,13 @@ jobs:
           MENDER_TEST_DATABASE_URL: postgres://postgres:mender_ci_test_only@127.0.0.1:5432/postgres?sslmode=disable
           MENDER_TEST_ALLOW_CREATE_DATABASE: 'true'
           MENDER_S4_BROWSER: 'true'
+      - name: Fetch fixed deployment bases
+        run: |
+          docker pull postgres:18.6
+          docker pull nginx:1.30.5-alpine
+      - name: Build immutable Linux deployment images
+        run: pnpm deploy build dist/releases/ci
+      - name: Real TLS OIDC and persistent deployment regression
+        run: pnpm test:deployment dist/releases/ci
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: .tmp/playwright-browsers

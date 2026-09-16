@@ -1936,7 +1936,7 @@
           },
           {
             "path": "frontend/apps/admin/src/app/router.tsx",
-            "sha256": "8f94bba579e08cb7b1895e2a23fc3fff34b94988c9e69b46b8a802564103647a"
+            "sha256": "f03481bf19b9c9cbcf654c2040fc63a47225a7393baac851a52cfa855ff7c65a"
           },
           {
             "path": "pnpm-workspace.yaml",
@@ -4251,7 +4251,7 @@
         "evidence": [
           {
             "path": "frontend/apps/admin/src/app/router.tsx",
-            "sha256": "8f94bba579e08cb7b1895e2a23fc3fff34b94988c9e69b46b8a802564103647a"
+            "sha256": "f03481bf19b9c9cbcf654c2040fc63a47225a7393baac851a52cfa855ff7c65a"
           },
           {
             "path": "docs/engineering/s4a-plugin-publication-evidence.json",
@@ -4330,7 +4330,7 @@
           },
           {
             "path": "frontend/apps/admin/src/app/router.tsx",
-            "sha256": "8f94bba579e08cb7b1895e2a23fc3fff34b94988c9e69b46b8a802564103647a"
+            "sha256": "f03481bf19b9c9cbcf654c2040fc63a47225a7393baac851a52cfa855ff7c65a"
           },
           {
             "path": "docs/engineering/2026-09-16-s4-workbenches.md",
@@ -4378,7 +4378,7 @@
         "implementation": "scoped_implemented",
         "verification": "passed",
         "acceptance": "pending",
-        "scope": "已有实际CLI/Skill、五个工作台、质量、制品签名、依赖扫描和恢复引导；文档无真实秘密",
+        "scope": "已有实际CLI/Skill、五个工作台、质量、制品签名、依赖扫描和恢复引导；文档无真实秘密；已新增持久Compose部署、真实OIDC登录、文件秘密、签名准入及备份切换指南，见production-deployment工程记录",
         "remaining": [
           "面向首发用户复核文档和所有失败指引，正式产品验收待签署"
         ],
@@ -4610,7 +4610,7 @@
         "implementation": "scoped_implemented",
         "verification": "passed",
         "acceptance": "pending",
-        "scope": "真实Ed25519签名/外部可信公钥验证、不可变制品摘要与路径限制、网络依赖扫描已实现；修复两项实际可达漏洞",
+        "scope": "真实Ed25519签名/外部可信公钥验证、不可变制品摘要与路径限制、网络依赖扫描已实现；修复两项实际可达漏洞；部署preflight已绑定签名清单、实际镜像身份和字节摘要，并实际验证错签与镜像替换拒绝",
         "remaining": [
           "生产密钥托管/信任锚与部署准入联调；不可达依赖告警风险评审；远端CI与分支保护实测"
         ],
@@ -4669,7 +4669,7 @@
         "implementation": "scoped_implemented",
         "verification": "passed",
         "acceptance": "pending",
-        "scope": "已提供工作台回退/对账手册与自有临时容器pg_dump/pg_restore，核对Run/Job/预算/账本/支付/迁移事实，恢复后不启动Worker",
+        "scope": "已提供工作台回退/对账手册与自有临时容器pg_dump/pg_restore，核对Run/Job/预算/账本/支付/迁移事实，恢复后不启动Worker；新增真实持久卷、TLS数据库、独立角色初始化、重启会话保持及受保护备份和停机切换验证，非生产RPO/RTO认证",
         "remaining": [
           "真实值班人、外部告警、备份保留与角色/密钥/对象存储恢复配置；生产RPO/RTO演练不在本地结果内"
         ],
