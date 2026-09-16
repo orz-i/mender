@@ -98,9 +98,9 @@
     "ses_6f7c4394619e43c3836e4df8d639b9f2": {
       "path": "docs/session/ses_6f7c4394619e43c3836e4df8d639b9f2.md",
       "title": "S4-D Admin Operations",
-      "status": "active",
+      "status": "completed",
       "created_at": "unix:1789528525",
-      "updated_at": "unix:1789532268",
+      "updated_at": "unix:1789532350",
       "parent_session_id": "ses_70aea63a62434ba2a7db48321a44b857"
     },
     "ses_70aea63a62434ba2a7db48321a44b857": {
