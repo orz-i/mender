@@ -25,6 +25,7 @@ func DangerousOperationManagerRole(ctx context.Context, pool *pgxpool.Pool) erro
 	err = pool.QueryRow(ctx, `SELECT
 	 has_function_privilege(current_user,'governance.request_release_emergency_approval(text,text,text,text,text,timestamptz,timestamptz)','EXECUTE')
 	 AND has_function_privilege(current_user,'governance.request_support_jit_approval(text,text,text,text[],integer,text,timestamptz,timestamptz)','EXECUTE')
+	 AND has_function_privilege(current_user,'governance.request_commerce_approval(text,text,text,text,text,text,text,text,bigint,text,text,timestamptz,timestamptz)','EXECUTE')
 	 AND has_function_privilege(current_user,'governance.approve_dangerous_operation(text,text,text,timestamptz,text)','EXECUTE')
 	 AND has_function_privilege(current_user,'governance.reject_dangerous_operation(text,text,text,timestamptz,text)','EXECUTE')
 	 AND has_function_privilege(current_user,'governance.activate_jit_support(text,text,text,text,timestamptz)','EXECUTE')

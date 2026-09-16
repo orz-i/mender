@@ -30,6 +30,7 @@ func GrantDangerousOperationManager(ctx context.Context, pool *pgxpool.Pool, rol
 		"REVOKE EXECUTE ON FUNCTION governance.submit_dangerous_operation(text,text,text,text,text,text,text,text,text,jsonb,text,bigint,text,text,timestamptz,timestamptz) FROM " + id,
 		"GRANT EXECUTE ON FUNCTION governance.request_release_emergency_approval(text,text,text,text,text,timestamptz,timestamptz) TO " + id,
 		"GRANT EXECUTE ON FUNCTION governance.request_support_jit_approval(text,text,text,text[],integer,text,timestamptz,timestamptz) TO " + id,
+		"GRANT EXECUTE ON FUNCTION governance.request_commerce_approval(text,text,text,text,text,text,text,text,bigint,text,text,timestamptz,timestamptz) TO " + id,
 		"GRANT EXECUTE ON FUNCTION governance.approve_dangerous_operation(text,text,text,timestamptz,text),governance.reject_dangerous_operation(text,text,text,timestamptz,text) TO " + id,
 		"GRANT EXECUTE ON FUNCTION governance.activate_jit_support(text,text,text,text,timestamptz),governance.revoke_jit_support(text,text,text,timestamptz,text) TO " + id,
 	} {
