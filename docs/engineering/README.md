@@ -1,6 +1,6 @@
 # Mender 工程治理
 
-[开发指南](development.md)介绍环境与日常命令，[工程基线](initialization-report.md)记录当前实现。
+[开发指南](development.md)介绍环境与日常命令；[当前实施与验收状态](../planning/current-status.md)是唯一状态入口；[历史工程基线](initialization-report.md)仅保留早期演进。后续切片证据通过主台账索引，不再用本页历史目录推断最新阶段。
 
 | 文件 | 用途 |
 | --- | --- |

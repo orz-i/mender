@@ -149,6 +149,13 @@
       "updated_at": "unix:1789435115",
       "parent_session_id": "ses_ca840dfb85e2495e94c8037401927c36"
     },
+    "ses_b5722f72796d466797fdf8ce73b73715": {
+      "path": "docs/session/ses_b5722f72796d466797fdf8ce73b73715.md",
+      "title": "Mender 进度与验收纠偏",
+      "status": "active",
+      "created_at": "unix:1789542235",
+      "updated_at": "unix:1789542853"
+    },
     "ses_b73cf5f6073d42c5861409ba81162d3b": {
       "path": "docs/session/ses_b73cf5f6073d42c5861409ba81162d3b.md",
       "title": "Mender 当前完成情况与开发进度审计",
@@ -231,6 +238,7 @@
     "host-session:043ee4df576639eee2b229a35ac724174bbb1140023cfc08278b9ea5b952880b": "ses_fb8bf7db7ed14e029a0773cf6e00fdae",
     "host-session:2abf274ebc49994124c5c1126a12e09c07f36cb95097e3b6a0d293a55034b679": "ses_f632a74f3fbf438fbd64cb771d17c141",
     "host-session:5d530fd57ba79b8268af02d30478bff4dce88969f5bf7445b588a5903cdd379a": "ses_157ff4de793941e59da1cd925b5484b5",
+    "host-session:7e0b8242ef9941696eaa24188254c28dadf822f84f1f91086f6129987980e00c": "ses_b5722f72796d466797fdf8ce73b73715",
     "host-session:be22f26ebb1fb1dcd7490beb19b7d96a9c0380da14161fce6912b89779e7b9d6": "ses_ecbf2ba5ef77446a97478cb1f13a4c51",
     "host-session:c53bc646420f50ff80a09d952e02f152a0df5b2ff8de8ca08ba0290a7c708939": "ses_8e2a42283ec744f5940c1dc762d2e187",
     "host-session:f0dc32257f053fdad6fcdd105ee0cbd89e45535e508e8f6b9baa3068c6ba38ce": "ses_2f17c97012894567b7429bfba5d52c62",

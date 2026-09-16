@@ -267,22 +267,22 @@
     [
       "BE-A",
       "后端／技术负责人",
-      1.0
+      1
     ],
     [
       "BE-B",
       "后端／集成执行",
-      1.0
+      1
     ],
     [
       "FE",
       "前端工程师",
-      1.0
+      1
     ],
     [
       "QA",
       "测试工程师",
-      1.0
+      1
     ],
     [
       "SRE",
@@ -1306,9 +1306,26 @@
       "req": "FR-001;FR-019",
       "doc": "A01",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S0-02",
@@ -1324,9 +1341,35 @@
       "req": "FR-004;FR-007;NFR-012",
       "doc": "A03;A04;G01;G02;G03",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/context-map.json;docs/engineering/architecture-policy.yaml",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "上下文与架构政策已有文档和代码结构",
+        "remaining": [
+          "业务负责人、统一语言和上下文正式冻结仍待 G0"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/context-map.json",
+            "sha256": "4ecfbfb545fed3164ef59f290a9eb1e0b310784f56a93f30e8a75ff3a3846cc5"
+          },
+          {
+            "path": "docs/engineering/architecture-policy.yaml",
+            "sha256": "7cb1b1a245218b0af874424b1d79071015b677b761ea999f43b393f9d2a2b2f3"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S0-03",
@@ -1342,9 +1385,31 @@
       "req": "FR-011",
       "doc": "A07",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/g3-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "当前 MCP SDK harness 已有协议矩阵；旧协议明确拒绝",
+        "remaining": [
+          "第三方客户端验证；旧版兼容不能由拒绝测试代替"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/g3-evidence.json",
+            "sha256": "0bfe624fb3a752e18db887274325fa4ff927fdde0dd52687434220f4f8a69a1f"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S0-04",
@@ -1360,9 +1425,31 @@
       "req": "FR-005;FR-012",
       "doc": "A06;A08",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/g3-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "HTTP 与远程 Agent 测试上游具备内部矩阵",
+        "remaining": [
+          "真实供应商授权、价格上限与试点验收"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/g3-evidence.json",
+            "sha256": "0bfe624fb3a752e18db887274325fa4ff927fdde0dd52687434220f4f8a69a1f"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S0-05",
@@ -1378,9 +1465,35 @@
       "req": "FR-013;NFR-015",
       "doc": "A05;A11;G05",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待验收",
+      "progress": null,
+      "evidence": "docs/engineering/2026-09-09-atomic-admission.md;docs/engineering/2026-09-10-coordinated-cancellation.md",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "scoped_implemented",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "内部原子受理、预算预留、取消回滚已有历史测试记录",
+        "remaining": [
+          "原任务验收签署；不能由历史测试代替当前环境执行"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/2026-09-09-atomic-admission.md",
+            "sha256": "fa71936ddb75c4ae0cb0e62c7054eaf3610a6ff616d22da82287287c23f159e3"
+          },
+          {
+            "path": "docs/engineering/2026-09-10-coordinated-cancellation.md",
+            "sha256": "be9d3857cc02bcfd7e93b98a4cd63d01974d6af2072ba76add908901d697fefc"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S0-06",
@@ -1396,9 +1509,26 @@
       "req": "FR-017;FR-018",
       "doc": "A14;G06",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S0-07",
@@ -1414,9 +1544,26 @@
       "req": "NFR-001;NFR-016",
       "doc": "A16;G07",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S0-08",
@@ -1432,9 +1579,26 @@
       "req": "NFR-002",
       "doc": "A10",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S0-09",
@@ -1450,9 +1614,26 @@
       "req": "FR-006;FR-019",
       "doc": "A01",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S0-10",
@@ -1468,9 +1649,26 @@
       "req": "NFR-009",
       "doc": "A17;G08",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S1-01",
@@ -1486,9 +1684,35 @@
       "req": "NFR-012;NFR-013",
       "doc": "A03;G04",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "backend/internal/bootstrap/admission.go;backend/tests/architecture/README.md",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "八上下文结构、显式装配与依赖检查已存在",
+        "remaining": [
+          "完整内层纯度、所有权及架构例外验收"
+        ],
+        "evidence": [
+          {
+            "path": "backend/internal/bootstrap/admission.go",
+            "sha256": "f7ce14d41d9148845f83109f26bc381f3b82b4848cea5ac546e38a27c61208d2"
+          },
+          {
+            "path": "backend/tests/architecture/README.md",
+            "sha256": "42b091e272c3959083f01dd0ef06c172924fbb5ef065fa27dddb6d4f3ba9d5db"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S1-02",
@@ -1504,9 +1728,26 @@
       "req": "FR-001",
       "doc": "A10;A13",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S1-03",
@@ -1522,9 +1763,31 @@
       "req": "FR-002",
       "doc": "A10",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/2026-09-09-identity-postgres.md",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "机器 Key、作用域与发放撤销已有实现记录",
+        "remaining": [
+          "按 T03 验证完整生命周期及撤销窗口"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/2026-09-09-identity-postgres.md",
+            "sha256": "696e7bcf4d41f2de9b748fa8241ab2f01147485198f196aa6c15fadbf6bf9c58"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S1-04",
@@ -1540,9 +1803,31 @@
       "req": "FR-001",
       "doc": "A10",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/2026-09-12-human-session-oidc-foundation.md",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "受控 OIDC 与浏览器 Session 已有实现记录",
+        "remaining": [
+          "生产 IdP／MFA 与正式认证验收"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/2026-09-12-human-session-oidc-foundation.md",
+            "sha256": "92002db2b0cf54f8c13f875c7fd7f774b7dc063a8733422072d610ec1370daba"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S1-05",
@@ -1558,9 +1843,26 @@
       "req": "FR-003",
       "doc": "A04;A12;G02",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S1-06",
@@ -1576,9 +1878,26 @@
       "req": "FR-018",
       "doc": "A10;A14",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S1-07",
@@ -1594,9 +1913,39 @@
       "req": "NFR-011;NFR-014",
       "doc": "A14;G06",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "frontend/apps/console/src/app/router.tsx;frontend/apps/admin/src/app/router.tsx;pnpm-workspace.yaml",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "pnpm workspace、双入口和前端领域模块已存在",
+        "remaining": [
+          "完整 T41/T44/T46 原条件验收；不等于全部业务页面完成"
+        ],
+        "evidence": [
+          {
+            "path": "frontend/apps/console/src/app/router.tsx",
+            "sha256": "9cda013f377844123216113399f0fe0775b16223a10b78c401262ebc1cc05832"
+          },
+          {
+            "path": "frontend/apps/admin/src/app/router.tsx",
+            "sha256": "ed7d489dfecaeabbbe4cd9a249928da5226bc6372e6cdee9f4a870afcc2245d0"
+          },
+          {
+            "path": "pnpm-workspace.yaml",
+            "sha256": "9a7bd43cca3f594f740135ccea222ff7216727f3afda62c885e6c2cdfa707594"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S1-08",
@@ -1612,9 +1961,35 @@
       "req": "FR-001",
       "doc": "A14",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/2026-09-12-workspace-console-alpha.md;frontend/apps/console/src/app/router.tsx",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "Workspace 读取选择与登录 Session 已有子集",
+        "remaining": [
+          "邀请与成员编辑以及浏览器验收"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/2026-09-12-workspace-console-alpha.md",
+            "sha256": "79db9f876abcf45359d8f2b983d47eb83c2dcc89208acbc199bacbbced8f93c7"
+          },
+          {
+            "path": "frontend/apps/console/src/app/router.tsx",
+            "sha256": "9cda013f377844123216113399f0fe0775b16223a10b78c401262ebc1cc05832"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S1-09",
@@ -1630,9 +2005,31 @@
       "req": "FR-002;FR-003",
       "doc": "A14",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "frontend/apps/console/src/app/router.tsx",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "Console 已有 Catalog 路由",
+        "remaining": [
+          "API Key 全生命周期页面及目录详情完整验收"
+        ],
+        "evidence": [
+          {
+            "path": "frontend/apps/console/src/app/router.tsx",
+            "sha256": "9cda013f377844123216113399f0fe0775b16223a10b78c401262ebc1cc05832"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S1-10",
@@ -1648,9 +2045,26 @@
       "req": "FR-018",
       "doc": "A14",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S1-11",
@@ -1666,9 +2080,26 @@
       "req": "NFR-003",
       "doc": "A16;G07",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S1-12",
@@ -1684,9 +2115,26 @@
       "req": "NFR-001;NFR-007",
       "doc": "A16;G07",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S1-13",
@@ -1702,9 +2150,35 @@
       "req": "NFR-011;NFR-013;NFR-016",
       "doc": "A15;G07",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "scripts/check-architecture.mjs;scripts/architecture.test.mjs",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "pnpm check 与 CI、架构规则和负向测试已建立",
+        "remaining": [
+          "远端必需检查实际生效；供应链与生成漂移等剩余条件"
+        ],
+        "evidence": [
+          {
+            "path": "scripts/check-architecture.mjs",
+            "sha256": "c38d58fbac2b90b92ac4f220d5b5ee65be98218c363e441a53fc5d72151e0ba9"
+          },
+          {
+            "path": "scripts/architecture.test.mjs",
+            "sha256": "4ef9726c58daa1fa1aa39ae5c504adc6903024dcde94f72dfe28fdd8421c28c0"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S1-14",
@@ -1720,9 +2194,26 @@
       "req": "NFR-006",
       "doc": "A15",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S1-15",
@@ -1738,9 +2229,26 @@
       "req": "FR-001;FR-003",
       "doc": "B04;G08",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S2-01",
@@ -1756,9 +2264,26 @@
       "req": "FR-004",
       "doc": "A04;G02",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S2-02",
@@ -1774,9 +2299,35 @@
       "req": "FR-007;FR-008",
       "doc": "A05",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/2026-09-10-public-start-run.md;docs/engineering/2026-09-10-worker-leases.md",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "Run、Attempt、持久受理与幂等已有运行切片",
+        "remaining": [
+          "对照完整用例条件验收，不以切片替代全项"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/2026-09-10-public-start-run.md",
+            "sha256": "28ef9eca22b318e0f92c82f8612b3431e36c12af19faca85ecac6d19a6e5695f"
+          },
+          {
+            "path": "docs/engineering/2026-09-10-worker-leases.md",
+            "sha256": "d8943e7888d0e95461935a7b975cc85b75f3caa90dac0e813b38e86f3aaece2e"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S2-03",
@@ -1792,9 +2343,35 @@
       "req": "FR-013;NFR-015",
       "doc": "A11;G05",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/2026-09-09-atomic-admission.md;docs/engineering/s403-commerce-billing-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "预算预留和后续业务账本分别已有实现",
+        "remaining": [
+          "真实钱包资金与完整账务原范围仍不可认定完成"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/2026-09-09-atomic-admission.md",
+            "sha256": "fa71936ddb75c4ae0cb0e62c7054eaf3610a6ff616d22da82287287c23f159e3"
+          },
+          {
+            "path": "docs/engineering/s403-commerce-billing-evidence.json",
+            "sha256": "df0e0d323632116cd26b2150a1864db498ef5cbd61c3c145193986571e368ac9"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S2-04",
@@ -1810,9 +2387,35 @@
       "req": "FR-014",
       "doc": "A11",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/2026-09-11-commerce-usage-settlement.md;docs/engineering/s403-commerce-billing-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "用量结算、原周期取消释放与未知结果边界已有记录",
+        "remaining": [
+          "原条件完整验收；不等于真实支付退款"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/2026-09-11-commerce-usage-settlement.md",
+            "sha256": "dc4609ff98cbbdf2f74cc7259f2e23def01f419f72888f0a6c5029b56faa59af"
+          },
+          {
+            "path": "docs/engineering/s403-commerce-billing-evidence.json",
+            "sha256": "df0e0d323632116cd26b2150a1864db498ef5cbd61c3c145193986571e368ac9"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S2-05",
@@ -1828,9 +2431,26 @@
       "req": "FR-005",
       "doc": "A06",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S2-06",
@@ -1846,9 +2466,35 @@
       "req": "FR-005;FR-006",
       "doc": "A06",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/2026-09-10-http-executor.md;docs/engineering/g3-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "受审 HTTP Executor 和 Provider 控制链路已有记录",
+        "remaining": [
+          "声明式映射、导入特性与供应商上限的完整支持矩阵"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/2026-09-10-http-executor.md",
+            "sha256": "01f046d38472c9d432426f3b269c835f1b0d50dc08e497d6075a7478f7b792f2"
+          },
+          {
+            "path": "docs/engineering/g3-evidence.json",
+            "sha256": "0bfe624fb3a752e18db887274325fa4ff927fdde0dd52687434220f4f8a69a1f"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S2-07",
@@ -1864,9 +2510,35 @@
       "req": "FR-007;FR-008",
       "doc": "A05;G05",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/2026-09-10-worker-leases.md;docs/engineering/2026-09-10-dispatch-supervisor.md",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "Worker 租约与 Outbox 持久事实已存在",
+        "remaining": [
+          "Outbox 对外投递、死信与完整背压验收"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/2026-09-10-worker-leases.md",
+            "sha256": "d8943e7888d0e95461935a7b975cc85b75f3caa90dac0e813b38e86f3aaece2e"
+          },
+          {
+            "path": "docs/engineering/2026-09-10-dispatch-supervisor.md",
+            "sha256": "2b656853de585a445241457b1ec3d58444bfea4400783cfba26d24fd3b1077d8"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S2-08",
@@ -1882,9 +2554,35 @@
       "req": "FR-007;FR-014",
       "doc": "A12",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/2026-09-10-public-start-run.md;docs/engineering/2026-09-12-run-quota-cost-alpha.md",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "公共 StartRun、Run 查询与结果已有子集",
+        "remaining": [
+          "按原合同核对独立报价和全部 REST 范围"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/2026-09-10-public-start-run.md",
+            "sha256": "28ef9eca22b318e0f92c82f8612b3431e36c12af19faca85ecac6d19a6e5695f"
+          },
+          {
+            "path": "docs/engineering/2026-09-12-run-quota-cost-alpha.md",
+            "sha256": "3c5d7abfd8b913620f5c517b4216772e2d1551a459c89a0c8f4e9aea1efe138e"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S2-09",
@@ -1900,9 +2598,26 @@
       "req": "FR-004;FR-005",
       "doc": "A14",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S2-10",
@@ -1918,9 +2633,35 @@
       "req": "FR-017",
       "doc": "A14",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/2026-09-12-console-run-results-alpha.md;frontend/apps/console/src/app/router.tsx",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "Run Explorer、事件分页、Artifact 内容消费已有记录",
+        "remaining": [
+          "完整浏览器时间线、风险重试与错误状态验收"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/2026-09-12-console-run-results-alpha.md",
+            "sha256": "8e5d6745e0d38ae175e04be99127faafbdb302ca0fc42c0a035fedf3682abde7"
+          },
+          {
+            "path": "frontend/apps/console/src/app/router.tsx",
+            "sha256": "9cda013f377844123216113399f0fe0775b16223a10b78c401262ebc1cc05832"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S2-11",
@@ -1936,9 +2677,31 @@
       "req": "FR-013;FR-014",
       "doc": "A14",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/2026-09-12-console-usage-observability-alpha.md",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "只读 Usage/Budget 与单 Run quota-cost 已存在",
+        "remaining": [
+          "预算编辑、真实余额与 S4-11 财务页面不在已交付子集中"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/2026-09-12-console-usage-observability-alpha.md",
+            "sha256": "cde19091a2475fe73f939e7039add06b8e4d5020230e729b46475295a48f1430"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S2-12",
@@ -1954,9 +2717,26 @@
       "req": "FR-017",
       "doc": "A14",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S2-13",
@@ -1972,9 +2752,26 @@
       "req": "FR-005",
       "doc": "A16",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S2-14",
@@ -1990,9 +2787,35 @@
       "req": "NFR-003",
       "doc": "A16;G05;G07",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/2026-09-10-coordinated-cancellation.md;docs/engineering/g3-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "多个受理、取消与额度故障注入已有测试记录",
+        "remaining": [
+          "当前完整数据库与并发验收结果需独立记录"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/2026-09-10-coordinated-cancellation.md",
+            "sha256": "be9d3857cc02bcfd7e93b98a4cd63d01974d6af2072ba76add908901d697fefc"
+          },
+          {
+            "path": "docs/engineering/g3-evidence.json",
+            "sha256": "0bfe624fb3a752e18db887274325fa4ff927fdde0dd52687434220f4f8a69a1f"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S2-15",
@@ -2008,9 +2831,35 @@
       "req": "FR-007;FR-017",
       "doc": "B05",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/alpha-closure.json;docs/engineering/g3-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "Core Alpha 及 G3 内部三源收敛已作限定决议",
+        "remaining": [
+          "原任务完整端到端与外部验收，不扩大内部 harness 结论"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/alpha-closure.json",
+            "sha256": "d3f6789e182bf70096bacf9541209709fd2bc89131f27ed02cc4d4ec2dd960fc"
+          },
+          {
+            "path": "docs/engineering/g3-evidence.json",
+            "sha256": "0bfe624fb3a752e18db887274325fa4ff927fdde0dd52687434220f4f8a69a1f"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S2-16",
@@ -2026,9 +2875,26 @@
       "req": "NFR-002",
       "doc": "A10",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S2-17",
@@ -2044,9 +2910,26 @@
       "req": "NFR-006",
       "doc": "A15",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S2-18",
@@ -2062,9 +2945,26 @@
       "req": "FR-007",
       "doc": "B05",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S3-01",
@@ -2080,9 +2980,35 @@
       "req": "FR-009",
       "doc": "A07",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/2026-09-11-fixed-toolset-mcp.md;docs/engineering/s4b-release-governance-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "Fixed Toolset 与发布路由快照已有实现",
+        "remaining": [
+          "原 S3-09 工具集配置／安装体验和完整规则验收"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/2026-09-11-fixed-toolset-mcp.md",
+            "sha256": "4dc91545a82a84c7d0d8bacb6edcd6b3194d1c057790f49b13c9671f4902789e"
+          },
+          {
+            "path": "docs/engineering/s4b-release-governance-evidence.json",
+            "sha256": "5fe6f982e96076671291c178c0ceb1755b366b8a248bcb92f1e83d85b23c2c35"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S3-02",
@@ -2098,9 +3024,31 @@
       "req": "FR-006",
       "doc": "A10",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/g3-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "单一 reviewed OAuth 刷新、轮换与隔离已入 G3 矩阵",
+        "remaining": [
+          "多供应商及真实授权边界"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/g3-evidence.json",
+            "sha256": "0bfe624fb3a752e18db887274325fa4ff927fdde0dd52687434220f4f8a69a1f"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S3-03",
@@ -2116,9 +3064,35 @@
       "req": "FR-022",
       "doc": "A13",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/g3-evidence.json;docs/engineering/alpha-operations-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "本地 sidecar 产物、访问与过期清理已有矩阵",
+        "remaining": [
+          "云对象存储及生产保留策略认证"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/g3-evidence.json",
+            "sha256": "0bfe624fb3a752e18db887274325fa4ff927fdde0dd52687434220f4f8a69a1f"
+          },
+          {
+            "path": "docs/engineering/alpha-operations-evidence.json",
+            "sha256": "fb6216b5c9cfa17204348a3b75b360ff32df8653f02fb31d9cadb55526787152"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S3-04",
@@ -2134,9 +3108,35 @@
       "req": "FR-020",
       "doc": "A12",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/g3-evidence.json;docs/engineering/alpha-operations-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "受审 Provider callback 验签、去重与状态归并已有矩阵",
+        "remaining": [
+          "外部通知投递与生产告警输送链路"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/g3-evidence.json",
+            "sha256": "0bfe624fb3a752e18db887274325fa4ff927fdde0dd52687434220f4f8a69a1f"
+          },
+          {
+            "path": "docs/engineering/alpha-operations-evidence.json",
+            "sha256": "fb6216b5c9cfa17204348a3b75b360ff32df8653f02fb31d9cadb55526787152"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S3-05",
@@ -2152,9 +3152,31 @@
       "req": "FR-011",
       "doc": "A07;G04",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/g3-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "上游 MCP Client 与当前协议测试已存在",
+        "remaining": [
+          "真实第三方上游与旧协议完整兼容仍未认证"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/g3-evidence.json",
+            "sha256": "0bfe624fb3a752e18db887274325fa4ff927fdde0dd52687434220f4f8a69a1f"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S3-06",
@@ -2170,9 +3192,35 @@
       "req": "FR-009;FR-010",
       "doc": "A07",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/g3-evidence.json;docs/engineering/alpha-closure.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "Meta-tools／Fixed Toolset 经内部 SDK harness 验证",
+        "remaining": [
+          "外部客户端互通与原完整入口体验"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/g3-evidence.json",
+            "sha256": "0bfe624fb3a752e18db887274325fa4ff927fdde0dd52687434220f4f8a69a1f"
+          },
+          {
+            "path": "docs/engineering/alpha-closure.json",
+            "sha256": "d3f6789e182bf70096bacf9541209709fd2bc89131f27ed02cc4d4ec2dd960fc"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S3-07",
@@ -2188,9 +3236,31 @@
       "req": "FR-012",
       "doc": "A08;G04",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/g3-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "agent_http 含一次补充输入与 Artifact 收敛",
+        "remaining": [
+          "不覆盖 A2A 或通用多轮编排；对外实际 Provider 验收待补"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/g3-evidence.json",
+            "sha256": "0bfe624fb3a752e18db887274325fa4ff927fdde0dd52687434220f4f8a69a1f"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S3-08",
@@ -2206,9 +3276,35 @@
       "req": "NFR-010",
       "doc": "A07",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/g3-evidence.json;docs/engineering/alpha-operations-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "JSON 响应模式的取消、持久 Run 与幂等恢复已有证据",
+        "remaining": [
+          "SSE／代理取消路径仍后置"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/g3-evidence.json",
+            "sha256": "0bfe624fb3a752e18db887274325fa4ff927fdde0dd52687434220f4f8a69a1f"
+          },
+          {
+            "path": "docs/engineering/alpha-operations-evidence.json",
+            "sha256": "fb6216b5c9cfa17204348a3b75b360ff32df8653f02fb31d9cadb55526787152"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S3-09",
@@ -2224,9 +3320,26 @@
       "req": "FR-009",
       "doc": "A14",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S3-10",
@@ -2242,9 +3355,35 @@
       "req": "FR-006",
       "doc": "A14",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/2026-09-12-connection-oauth-alpha.md;frontend/apps/console/src/app/router.tsx",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "Console Connection 元数据、撤销与单 Provider OAuth 页面已存在",
+        "remaining": [
+          "多连接类型及真实浏览器授权验收"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/2026-09-12-connection-oauth-alpha.md",
+            "sha256": "481b4604aefb29b2ec16d78dcd650a40ee9a4147ba31d6d8f72dc448d0935047"
+          },
+          {
+            "path": "frontend/apps/console/src/app/router.tsx",
+            "sha256": "9cda013f377844123216113399f0fe0775b16223a10b78c401262ebc1cc05832"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S3-11",
@@ -2260,9 +3399,35 @@
       "req": "FR-012;FR-022",
       "doc": "A14",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "frontend/apps/console/src/app/router.tsx;docs/engineering/g3-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "运行结果与 Artifact 页面已有子集",
+        "remaining": [
+          "完整 Agent 输入、取消不确定与产物交互验收"
+        ],
+        "evidence": [
+          {
+            "path": "frontend/apps/console/src/app/router.tsx",
+            "sha256": "9cda013f377844123216113399f0fe0775b16223a10b78c401262ebc1cc05832"
+          },
+          {
+            "path": "docs/engineering/g3-evidence.json",
+            "sha256": "0bfe624fb3a752e18db887274325fa4ff927fdde0dd52687434220f4f8a69a1f"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S3-12",
@@ -2278,9 +3443,26 @@
       "req": "FR-010;FR-011",
       "doc": "A14",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S3-13",
@@ -2296,9 +3478,31 @@
       "req": "FR-011;NFR-010",
       "doc": "A16",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/g3-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "内部 SDK 当前版及旧版拒绝矩阵已有证据",
+        "remaining": [
+          "不能把旧版拒绝当旧版支持或第三方兼容认证"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/g3-evidence.json",
+            "sha256": "0bfe624fb3a752e18db887274325fa4ff927fdde0dd52687434220f4f8a69a1f"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S3-14",
@@ -2314,9 +3518,31 @@
       "req": "FR-006;FR-012",
       "doc": "A16",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/g3-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "OAuth、Agent、callback、Artifact 内部矩阵已有证据",
+        "remaining": [
+          "外部授权、Provider 与生产网络实测不由此认证"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/g3-evidence.json",
+            "sha256": "0bfe624fb3a752e18db887274325fa4ff927fdde0dd52687434220f4f8a69a1f"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S3-15",
@@ -2332,9 +3558,35 @@
       "req": "FR-009;FR-012",
       "doc": "B06",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待验收",
+      "progress": null,
+      "evidence": "docs/engineering/g3-evidence.json;backend/tests/integration/g3_entry_matrix_test.go",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "scoped_implemented",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "三类来源同主体内部集成与 Run/Artifact 收敛",
+        "remaining": [
+          "正式原范围验收；明确测试上游不等于真实供应商"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/g3-evidence.json",
+            "sha256": "0bfe624fb3a752e18db887274325fa4ff927fdde0dd52687434220f4f8a69a1f"
+          },
+          {
+            "path": "backend/tests/integration/g3_entry_matrix_test.go",
+            "sha256": "9e8213db505641404c7b9e4be769c15fae507ee743f317dcf17463fddaad848c"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S3-16",
@@ -2350,9 +3602,31 @@
       "req": "NFR-010",
       "doc": "A15",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/alpha-operations-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "边界配置与 JSON 请求取消有记录",
+        "remaining": [
+          "生产流式代理、独立 MCP SSE、应用 SSE 仍 deferred"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/alpha-operations-evidence.json",
+            "sha256": "fb6216b5c9cfa17204348a3b75b360ff32df8653f02fb31d9cadb55526787152"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S3-17",
@@ -2368,9 +3642,31 @@
       "req": "FR-020;FR-022",
       "doc": "A15",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/alpha-operations-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "本地产物到期与 callback 安全审计有记录",
+        "remaining": [
+          "外部告警通道与生产存储策略"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/alpha-operations-evidence.json",
+            "sha256": "fb6216b5c9cfa17204348a3b75b360ff32df8653f02fb31d9cadb55526787152"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S3-18",
@@ -2386,9 +3682,38 @@
       "req": "FR-011",
       "doc": "B06",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/alpha-closure.json;docs/engineering/g3-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "scoped_go",
+        "scope": "Core Alpha complete、G3 internal scoped-go；一个内部 SDK harness",
+        "remaining": [
+          "第三方客户端名单为空；外部用户反馈未收集；不能认定 G4/G5 通过"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/alpha-closure.json",
+            "sha256": "d3f6789e182bf70096bacf9541209709fd2bc89131f27ed02cc4d4ec2dd960fc"
+          },
+          {
+            "path": "docs/engineering/g3-evidence.json",
+            "sha256": "0bfe624fb3a752e18db887274325fa4ff927fdde0dd52687434220f4f8a69a1f"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": {
+          "path": "docs/engineering/alpha-closure.json",
+          "sha256": "d3f6789e182bf70096bacf9541209709fd2bc89131f27ed02cc4d4ec2dd960fc"
+        }
+      }
     },
     {
       "id": "S4-01",
@@ -2404,9 +3729,31 @@
       "req": "FR-015",
       "doc": "A09;G02;G04",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待验收",
+      "progress": null,
+      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "scoped_implemented",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "受审清单、发布状态机、精确审批与后端 API",
+        "remaining": [
+          "全量原任务验收；发布者／审核 UI 按 S4-09/10，非本切片已完成"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/s4a-plugin-publication-evidence.json",
+            "sha256": "3c7f8e7b5453fd1b253ef4c402d7fa9b5441895f688c408e4ae79d988dbbf7b2"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S4-02",
@@ -2422,9 +3769,35 @@
       "req": "FR-016;FR-018",
       "doc": "A10",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待验收",
+      "progress": null,
+      "evidence": "docs/engineering/s4c-dangerous-operation-jit-evidence.json;docs/engineering/s403-commerce-billing-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "scoped_implemented",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "限定危险动作与 JIT；后续增加 refund/adjustment 消费者",
+        "remaining": [
+          "全量原任务验收；S4-10 UI 与生产 MFA 不自动完成"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/s4c-dangerous-operation-jit-evidence.json",
+            "sha256": "01cd987ca6b8cb859e884b922f843fea52161c03a7e0798b3f64239d3866abde"
+          },
+          {
+            "path": "docs/engineering/s403-commerce-billing-evidence.json",
+            "sha256": "df0e0d323632116cd26b2150a1864db498ef5cbd61c3c145193986571e368ac9"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S4-03",
@@ -2440,9 +3813,31 @@
       "req": "FR-014;FR-019",
       "doc": "A11",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待验收",
+      "progress": null,
+      "evidence": "docs/engineering/s403-commerce-billing-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "scoped_implemented",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "独立业务账本、追加分录、退款／调账及对账后端",
+        "remaining": [
+          "原范围验收；ProviderCostEvent、真实资金及 S4-11 UI 仍有缺口"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/s403-commerce-billing-evidence.json",
+            "sha256": "df0e0d323632116cd26b2150a1864db498ef5cbd61c3c145193986571e368ac9"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S4-04",
@@ -2458,9 +3853,31 @@
       "req": "FR-015",
       "doc": "A09",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待验收",
+      "progress": null,
+      "evidence": "docs/engineering/s4b-release-governance-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "scoped_implemented",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "cohort 灰度、排空、回退、紧急禁用与固定 Run 版本",
+        "remaining": [
+          "原任务验收；百分比灰度／自动指标晋级非已实现范围"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/s4b-release-governance-evidence.json",
+            "sha256": "5fe6f982e96076671291c178c0ceb1755b366b8a248bcb92f1e83d85b23c2c35"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S4-05",
@@ -2476,9 +3893,31 @@
       "req": "FR-018",
       "doc": "A14",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待验收",
+      "progress": null,
+      "evidence": "docs/engineering/s4d-platform-admin-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "scoped_implemented",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "工作区冻结、Provider 隔离、事故与审计后端",
+        "remaining": [
+          "商业供应商准入、S4-10 平台运营 UI 及原任务验收"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/s4d-platform-admin-evidence.json",
+            "sha256": "901276ee9fc74682b7791ce36e7b1232a9a2eb2da3895f422a0a8a24a0492dfc"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S4-06",
@@ -2494,9 +3933,31 @@
       "req": "FR-019",
       "doc": "A11",
       "priority": "P1",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待验收",
+      "progress": null,
+      "evidence": "docs/engineering/s406-sandbox-payment-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "scoped_implemented",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "供应商中立 sandbox PaymentIntent、验签与回调对账",
+        "remaining": [
+          "原任务 sandbox 条件签署；真实 PSP／商户资格／真钱与 S4-11 UI 不得据此放行"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/s406-sandbox-payment-evidence.json",
+            "sha256": "a60bc0da2422619cacb053e231b3e0ae403c72c909227447035cb852ffe300e6"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S4-07",
@@ -2513,8 +3974,34 @@
       "doc": "A07",
       "priority": "P1",
       "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "progress": null,
+      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/s4b-release-governance-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_started",
+        "verification": "not_run",
+        "acceptance": "pending",
+        "scope": "当前切片均明确 CLI/Skill 分发后置",
+        "remaining": [
+          "原 CLI/Skill 合同、安装与多入口一致性测试"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/s4a-plugin-publication-evidence.json",
+            "sha256": "3c7f8e7b5453fd1b253ef4c402d7fa9b5441895f688c408e4ae79d988dbbf7b2"
+          },
+          {
+            "path": "docs/engineering/s4b-release-governance-evidence.json",
+            "sha256": "5fe6f982e96076671291c178c0ceb1755b366b8a248bcb92f1e83d85b23c2c35"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S4-08",
@@ -2530,9 +4017,26 @@
       "req": "FR-015;FR-023",
       "doc": "A09",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "未取得发布质量／健康任务完整交付证据",
+        "remaining": [
+          "核对真实实现再决定工作量；不能把 API health 探针当合成质量任务"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S4-09",
@@ -2549,8 +4053,34 @@
       "doc": "A14",
       "priority": "P1",
       "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "progress": null,
+      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;frontend/apps/console/src/app/router.tsx",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_started",
+        "verification": "not_run",
+        "acceptance": "pending",
+        "scope": "发布者工作台在插件证据中仍 deferred",
+        "remaining": [
+          "发布者草稿、测试、提交页面及 T31 浏览器验收"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/s4a-plugin-publication-evidence.json",
+            "sha256": "3c7f8e7b5453fd1b253ef4c402d7fa9b5441895f688c408e4ae79d988dbbf7b2"
+          },
+          {
+            "path": "frontend/apps/console/src/app/router.tsx",
+            "sha256": "9cda013f377844123216113399f0fe0775b16223a10b78c401262ebc1cc05832"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S4-10",
@@ -2566,9 +4096,47 @@
       "req": "FR-018",
       "doc": "A14",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "frontend/apps/admin/src/app/router.tsx;docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/s4b-release-governance-evidence.json;docs/engineering/s4c-dangerous-operation-jit-evidence.json;docs/engineering/s4d-platform-admin-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "已有 Catalog 审核／策略页面；新的发布、异常、JIT UI 尚缺",
+        "remaining": [
+          "接入现有 S4-02/05 后端；敏感操作、权限、失败路径和浏览器验收"
+        ],
+        "evidence": [
+          {
+            "path": "frontend/apps/admin/src/app/router.tsx",
+            "sha256": "ed7d489dfecaeabbbe4cd9a249928da5226bc6372e6cdee9f4a870afcc2245d0"
+          },
+          {
+            "path": "docs/engineering/s4a-plugin-publication-evidence.json",
+            "sha256": "3c7f8e7b5453fd1b253ef4c402d7fa9b5441895f688c408e4ae79d988dbbf7b2"
+          },
+          {
+            "path": "docs/engineering/s4b-release-governance-evidence.json",
+            "sha256": "5fe6f982e96076671291c178c0ceb1755b366b8a248bcb92f1e83d85b23c2c35"
+          },
+          {
+            "path": "docs/engineering/s4c-dangerous-operation-jit-evidence.json",
+            "sha256": "01cd987ca6b8cb859e884b922f843fea52161c03a7e0798b3f64239d3866abde"
+          },
+          {
+            "path": "docs/engineering/s4d-platform-admin-evidence.json",
+            "sha256": "901276ee9fc74682b7791ce36e7b1232a9a2eb2da3895f422a0a8a24a0492dfc"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S4-11",
@@ -2585,8 +4153,38 @@
       "doc": "A14",
       "priority": "P1",
       "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "progress": null,
+      "evidence": "docs/engineering/s403-commerce-billing-evidence.json;docs/engineering/s406-sandbox-payment-evidence.json;frontend/apps/admin/src/app/router.tsx",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_started",
+        "verification": "not_run",
+        "acceptance": "pending",
+        "scope": "账务与支付证据明确 UI deferred",
+        "remaining": [
+          "账单／支付／退款状态页面及非成功跳转真源验收"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/s403-commerce-billing-evidence.json",
+            "sha256": "df0e0d323632116cd26b2150a1864db498ef5cbd61c3c145193986571e368ac9"
+          },
+          {
+            "path": "docs/engineering/s406-sandbox-payment-evidence.json",
+            "sha256": "a60bc0da2422619cacb053e231b3e0ae403c72c909227447035cb852ffe300e6"
+          },
+          {
+            "path": "frontend/apps/admin/src/app/router.tsx",
+            "sha256": "ed7d489dfecaeabbbe4cd9a249928da5226bc6372e6cdee9f4a870afcc2245d0"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S4-12",
@@ -2602,9 +4200,35 @@
       "req": "FR-021",
       "doc": "A14",
       "priority": "P1",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/s406-sandbox-payment-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "已有合同及局部工程说明，本轮仅修正当前状态入口",
+        "remaining": [
+          "CLI／发布者路径齐备后的完整文档、示例与用户失败指引"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/s4a-plugin-publication-evidence.json",
+            "sha256": "3c7f8e7b5453fd1b253ef4c402d7fa9b5441895f688c408e4ae79d988dbbf7b2"
+          },
+          {
+            "path": "docs/engineering/s406-sandbox-payment-evidence.json",
+            "sha256": "a60bc0da2422619cacb053e231b3e0ae403c72c909227447035cb852ffe300e6"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S4-13",
@@ -2620,9 +4244,47 @@
       "req": "FR-015;FR-016",
       "doc": "A16",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/s4b-release-governance-evidence.json;docs/engineering/s4c-dangerous-operation-jit-evidence.json;docs/engineering/s4d-platform-admin-evidence.json;backend/tests/integration/postgres_test.go",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "插件、发布、审批、Admin 后端已有测试文件和范围记录",
+        "remaining": [
+          "S4-09/10 浏览器和端到端场景；原 T22–T24/T26/T31 全条件核对"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/s4a-plugin-publication-evidence.json",
+            "sha256": "3c7f8e7b5453fd1b253ef4c402d7fa9b5441895f688c408e4ae79d988dbbf7b2"
+          },
+          {
+            "path": "docs/engineering/s4b-release-governance-evidence.json",
+            "sha256": "5fe6f982e96076671291c178c0ceb1755b366b8a248bcb92f1e83d85b23c2c35"
+          },
+          {
+            "path": "docs/engineering/s4c-dangerous-operation-jit-evidence.json",
+            "sha256": "01cd987ca6b8cb859e884b922f843fea52161c03a7e0798b3f64239d3866abde"
+          },
+          {
+            "path": "docs/engineering/s4d-platform-admin-evidence.json",
+            "sha256": "901276ee9fc74682b7791ce36e7b1232a9a2eb2da3895f422a0a8a24a0492dfc"
+          },
+          {
+            "path": "backend/tests/integration/postgres_test.go",
+            "sha256": "da8e738ad040790a4ea76f962804f69333a03c58ae93ebbbc9956da0d894d30b"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S4-14",
@@ -2638,9 +4300,39 @@
       "req": "FR-019;FR-021",
       "doc": "A16",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/s403-commerce-billing-evidence.json;docs/engineering/s406-sandbox-payment-evidence.json;backend/tests/integration/postgres_test.go",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "业务账本和模拟支付已有自动化测试记录",
+        "remaining": [
+          "CLI/Skill、多入口及 S4-11 UI 联调；原 T20/T21/T27/T29 全条件核对"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/s403-commerce-billing-evidence.json",
+            "sha256": "df0e0d323632116cd26b2150a1864db498ef5cbd61c3c145193986571e368ac9"
+          },
+          {
+            "path": "docs/engineering/s406-sandbox-payment-evidence.json",
+            "sha256": "a60bc0da2422619cacb053e231b3e0ae403c72c909227447035cb852ffe300e6"
+          },
+          {
+            "path": "backend/tests/integration/postgres_test.go",
+            "sha256": "da8e738ad040790a4ea76f962804f69333a03c58ae93ebbbc9956da0d894d30b"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S4-15",
@@ -2656,9 +4348,26 @@
       "req": "NFR-009",
       "doc": "B07",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "尚无完整 G4 放行证据",
+        "remaining": [
+          "汇总 S4-13/14、明确剩余条件并形成正式 G4 决议"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S4-16",
@@ -2674,9 +4383,35 @@
       "req": "FR-015;NFR-002",
       "doc": "A09",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/s4b-release-governance-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "recorded",
+        "acceptance": "pending",
+        "scope": "受审 manifest／权限验证存在，签名和依赖扫描未全量认证",
+        "remaining": [
+          "制品签名、依赖扫描及准入阻断实测，不能用 checksum 代替"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/s4a-plugin-publication-evidence.json",
+            "sha256": "3c7f8e7b5453fd1b253ef4c402d7fa9b5441895f688c408e4ae79d988dbbf7b2"
+          },
+          {
+            "path": "docs/engineering/s4b-release-governance-evidence.json",
+            "sha256": "5fe6f982e96076671291c178c0ceb1755b366b8a248bcb92f1e83d85b23c2c35"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S4-17",
@@ -2692,9 +4427,35 @@
       "req": "NFR-005;NFR-008",
       "doc": "A15",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "进行中",
+      "progress": null,
+      "evidence": "docs/engineering/alpha-operations-evidence.json;docs/engineering/s4b-release-governance-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "partial",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "局部运行边界和回退 API 有说明",
+        "remaining": [
+          "实际备份恢复、值班责任、外部告警与事故演练"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/alpha-operations-evidence.json",
+            "sha256": "fb6216b5c9cfa17204348a3b75b360ff32df8653f02fb31d9cadb55526787152"
+          },
+          {
+            "path": "docs/engineering/s4b-release-governance-evidence.json",
+            "sha256": "5fe6f982e96076671291c178c0ceb1755b366b8a248bcb92f1e83d85b23c2c35"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S4-18",
@@ -2710,9 +4471,31 @@
       "req": "FR-019",
       "doc": "B07",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "docs/engineering/s406-sandbox-payment-evidence.json",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "未取得真实商户／地区／供应商许可与商业签署证据",
+        "remaining": [
+          "由业务责任人确认服务条款、收费、数据和供给许可；不得自动批准"
+        ],
+        "evidence": [
+          {
+            "path": "docs/engineering/s406-sandbox-payment-evidence.json",
+            "sha256": "a60bc0da2422619cacb053e231b3e0ae403c72c909227447035cb852ffe300e6"
+          }
+        ],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S5-01",
@@ -2728,9 +4511,26 @@
       "req": "NFR-003;NFR-008",
       "doc": "A16",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S5-02",
@@ -2746,9 +4546,26 @@
       "req": "NFR-005",
       "doc": "A15",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S5-03",
@@ -2764,9 +4581,26 @@
       "req": "FR-011;NFR-010",
       "doc": "A07",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S5-04",
@@ -2782,9 +4616,26 @@
       "req": "NFR-004",
       "doc": "A16",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S5-05",
@@ -2800,9 +4651,26 @@
       "req": "NFR-007",
       "doc": "A14",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S5-06",
@@ -2818,9 +4686,26 @@
       "req": "FR-017",
       "doc": "A14",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S5-07",
@@ -2836,9 +4721,26 @@
       "req": "NFR-001;NFR-002",
       "doc": "A16",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S5-08",
@@ -2854,9 +4756,26 @@
       "req": "NFR-004",
       "doc": "A16",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S5-09",
@@ -2872,9 +4791,26 @@
       "req": "NFR-005;NFR-008",
       "doc": "A16",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S5-10",
@@ -2890,9 +4826,26 @@
       "req": "NFR-009;NFR-016",
       "doc": "A16;G07;G08",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S5-11",
@@ -2908,9 +4861,26 @@
       "req": "NFR-002;NFR-005",
       "doc": "A15",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S5-12",
@@ -2926,9 +4896,26 @@
       "req": "NFR-009",
       "doc": "B11",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     },
     {
       "id": "S5-13",
@@ -2944,9 +4931,26 @@
       "req": "NFR-009",
       "doc": "B08",
       "priority": "P0",
-      "status": "未开始",
-      "progress": 0,
-      "evidence": ""
+      "status": "待复核",
+      "progress": null,
+      "evidence": "",
+      "baseline_execution": {
+        "status": "未开始",
+        "progress": 0,
+        "evidence": ""
+      },
+      "execution": {
+        "implementation": "not_reviewed",
+        "verification": "not_reviewed",
+        "acceptance": "pending",
+        "scope": "本轮没有完成该原任务逐项复核，不推断为未实现",
+        "remaining": [
+          "根据当前代码与原验收条件补齐实施、测试及验收证据"
+        ],
+        "evidence": [],
+        "verification_receipt": null,
+        "acceptance_record": null
+      }
     }
   ],
   "launch_checks": [
@@ -3453,5 +5457,66 @@
     ]
   ],
   "project_name": "Mender",
-  "baseline_notice": "设计基线 v1.1；任务状态以验收证据为准。当前工程进展见 docs/engineering/initialization-report.md。"
+  "baseline_notice": "原设计与估算保持 v1.1；baseline_execution 仅为最初计划快照。当前状态以 task.execution 和 docs/planning/current-status.md 为准，未知不再填 0%。历史切片 COMPLETE 不等于原任务全量验收。",
+  "execution_tracking": {
+    "schema_version": 1,
+    "reviewed_at": "2026-09-16",
+    "reviewed_head": "bfa8171409e5cc1baea3a89df6d23d94212ba4b9",
+    "review_basis": "local source and existing historical evidence; not a new business-test or external acceptance receipt",
+    "plan_fingerprint": "54a10bde509a7cd3c78ba6602cb73623fc4a446a946c3d38947ae625b21afc70",
+    "canonical_aliases": {
+      "S4-A": "S4-01",
+      "S4-B": "S4-04",
+      "S4-C": "S4-02",
+      "S4-D": "S4-05"
+    },
+    "current_phase": "S4",
+    "progress_policy": "null-until-full-acceptance",
+    "next_task_ids": [
+      "S4-10",
+      "S4-09",
+      "S4-11",
+      "S4-13",
+      "S4-14",
+      "S4-15",
+      "S4-16",
+      "S4-17",
+      "S4-18"
+    ],
+    "gates": [
+      {
+        "id": "G3",
+        "state": "scoped-go",
+        "evidence": {
+          "path": "docs/engineering/alpha-closure.json",
+          "sha256": "d3f6789e182bf70096bacf9541209709fd2bc89131f27ed02cc4d4ec2dd960fc"
+        },
+        "note": "限定内部集成；第三方客户端与外部用户验收继续待完成"
+      },
+      {
+        "id": "G4",
+        "state": "pending",
+        "evidence": null,
+        "note": "后端切片不代替完整商业准备验收"
+      },
+      {
+        "id": "G5",
+        "state": "pending",
+        "evidence": null,
+        "note": "未据此授予生产／商业 Beta 放行"
+      }
+    ],
+    "external_conditions": [
+      {
+        "id": "remote-merge-protection",
+        "state": "not-verified",
+        "note": "本轮不变更 GitHub 设置。仓库 CI 运行不等于主干强制门禁；需管理员核验并配置必需 check，记录真实证据。"
+      },
+      {
+        "id": "external-acceptance-and-live-payments",
+        "state": "pending",
+        "note": "第三方客户端、用户反馈、商户资格与真实支付未因内部测试或 sandbox 完成而取得认证。"
+      }
+    ]
+  }
 }

@@ -4,7 +4,7 @@
 
 Mender 为 Agent 开发者与团队提供统一的工具接入与管理入口，连接 HTTP API、MCP 工具和远程 Agent，集中管理授权、执行记录与调用费用。
 
-> 开发中：当前可本地预览 Console、Admin 和服务状态页，业务能力按[实施计划](docs/planning/README.md)推进。
+> 开发中：Core Alpha／G3 内部集成已按限定范围收口，正在推进原计划 S4。Console 已有 Workspace、Connection、Catalog、Launch、Usage、Run 页面；S4 的发布、审批、账务和模拟支付后端不等于对应 UI 或商业上线完成。当前状态与剩余条件统一见[实施与验收状态](docs/planning/current-status.md)。
 
 ## 产品规划
 
@@ -32,6 +32,7 @@ pnpm dev
 
 ## 文档
 
+- [当前实施与验收状态](docs/planning/current-status.md) — 从主台账生成；实现、测试证据和正式验收分开记录
 - [产品与系统架构](docs/design/01_Mender_产品与系统架构设计.md)
 - [实施路线与任务台账](docs/planning/README.md)
 - [接口合同](contracts/README.md)
