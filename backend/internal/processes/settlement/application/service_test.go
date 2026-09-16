@@ -19,6 +19,19 @@ type processScope struct {
 	settledAt, finishedAt          time.Time
 }
 
+func TestSettlementProcessDoesNotChargeUnknownReconcilingOutcome(t *testing.T) {
+	now := time.Date(2026, 9, 16, 4, 57, 0, 0, time.UTC)
+	candidate := processCandidate(now)
+	candidate.Outcome = "reconciling"
+	scope := &processScope{candidate: candidate, found: true}
+	service, _ := New(&processUoW{scope: scope}, processClock{now})
+
+	_, err := service.SettleOne(context.Background(), "ws_a")
+	if !errors.Is(err, ErrInvalid) || scope.settleCalls != 0 || scope.finishCalls != 0 {
+		t.Fatal("unknown provider outcome reached settlement", err, scope.settleCalls, scope.finishCalls)
+	}
+}
+
 func (s *processScope) Claim(context.Context) (Candidate, bool, error) {
 	return s.candidate, s.found, s.claimErr
 }
