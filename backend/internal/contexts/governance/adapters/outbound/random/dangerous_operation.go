@@ -14,3 +14,11 @@ func (DangerousOperationIDs) NewDangerousOperationID() (string, error) {
 	}
 	return "danger_" + hex.EncodeToString(value[:]), nil
 }
+
+func (DangerousOperationIDs) NewJITGrantID() (string, error) {
+	var value [16]byte
+	if _, err := rand.Read(value[:]); err != nil {
+		return "", err
+	}
+	return "jit_" + hex.EncodeToString(value[:]), nil
+}

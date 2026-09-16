@@ -15,6 +15,11 @@ func BrowserSessionRole(ctx context.Context, pool *pgxpool.Pool) error {
 	}
 	err := pool.QueryRow(ctx, `SELECT has_table_privilege(current_user,'identity.users','SELECT')
 	 AND has_table_privilege(current_user,'identity.workspace_memberships','SELECT')
+	 AND has_column_privilege(current_user,'identity.platform_staff','user_id','SELECT')
+	 AND has_column_privilege(current_user,'identity.platform_staff','role','SELECT')
+	 AND has_column_privilege(current_user,'identity.platform_staff','disabled','SELECT')
+	 AND has_column_privilege(current_user,'identity.platform_staff','created_at','SELECT')
+	 AND NOT has_table_privilege(current_user,'identity.platform_staff','INSERT,UPDATE,DELETE,TRUNCATE')
 	 AND has_table_privilege(current_user,'identity.oidc_identities','SELECT')
 	 AND has_table_privilege(current_user,'identity.browser_sessions','SELECT')
 	 AND has_table_privilege(current_user,'identity.run_delegations','SELECT')

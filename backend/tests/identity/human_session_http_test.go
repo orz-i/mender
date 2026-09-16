@@ -133,6 +133,9 @@ func (*humanRepo) ListWorkspaceMemberships(context.Context, string) ([]identityd
 func (*humanRepo) FindWorkspaceMembership(context.Context, string, string) (identitydomain.WorkspaceMembership, error) {
 	return identitydomain.WorkspaceMembership{WorkspaceID: "ws_alpha", UserID: "user_alpha", Role: identitydomain.RoleAdmin, CreatedAt: time.Now().UTC()}, nil
 }
+func (*humanRepo) FindPlatformStaff(context.Context, string) (identitydomain.PlatformStaff, error) {
+	return identitydomain.PlatformStaff{UserID: "user_alpha", Role: identitydomain.PlatformSupport, CreatedAt: time.Now().UTC()}, nil
+}
 
 type humanClock struct{ at time.Time }
 

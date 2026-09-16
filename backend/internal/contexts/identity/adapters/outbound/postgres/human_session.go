@@ -90,4 +90,16 @@ func (r *HumanSessions) FindWorkspaceMembership(ctx context.Context, userID, wor
 	return m, nil
 }
 
+func (r *HumanSessions) FindPlatformStaff(ctx context.Context, userID string) (domain.PlatformStaff, error) {
+	var staff domain.PlatformStaff
+	err := r.pool.QueryRow(ctx, `SELECT user_id,role,disabled,created_at FROM identity.platform_staff WHERE user_id=$1`, userID).Scan(&staff.UserID, &staff.Role, &staff.Disabled, &staff.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.PlatformStaff{}, application.ErrNotFound
+	}
+	if err != nil || !staff.Active() {
+		return domain.PlatformStaff{}, application.ErrUnavailable
+	}
+	return staff, nil
+}
+
 var _ application.HumanSessionRepository = (*HumanSessions)(nil)

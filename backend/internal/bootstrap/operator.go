@@ -20,10 +20,10 @@ import (
 // Only issue-key intentionally prints a generated secret, once, after durable insertion.
 func RunOperator(ctx context.Context, args []string, getenv func(string) string, out, errOut io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("operator requires migrate, grant-runtime, grant-browser-session, grant-connection-manager, grant-oauth-refresher, grant-catalog-manager, grant-publisher-manager, grant-release-manager, grant-dangerous-operation-manager, grant-governance-reviewer, grant-governance-policy-manager, grant-governance-execution-confirmer, grant-commerce-observer, grant-admission, grant-cancellation, grant-worker, grant-executor, grant-mcp-connector, grant-reconciler, grant-callback-ingestor, grant-callback-observer, grant-settlement, grant-artifact-materializer, grant-artifact-object-reader, provision-human, issue-key or revoke-key")
+		return errors.New("operator requires migrate, grant-runtime, grant-browser-session, grant-connection-manager, grant-oauth-refresher, grant-catalog-manager, grant-publisher-manager, grant-release-manager, grant-dangerous-operation-manager, grant-support-reader, grant-governance-reviewer, grant-governance-policy-manager, grant-governance-execution-confirmer, grant-commerce-observer, grant-admission, grant-cancellation, grant-worker, grant-executor, grant-mcp-connector, grant-reconciler, grant-callback-ingestor, grant-callback-observer, grant-settlement, grant-artifact-materializer, grant-artifact-object-reader, provision-human, provision-platform-staff, issue-key or revoke-key")
 	}
 	command := args[0]
-	if command != "migrate" && command != "grant-runtime" && command != "grant-browser-session" && command != "grant-connection-manager" && command != "grant-oauth-refresher" && command != "grant-catalog-manager" && command != "grant-publisher-manager" && command != "grant-release-manager" && command != "grant-dangerous-operation-manager" && command != "grant-governance-reviewer" && command != "grant-governance-policy-manager" && command != "grant-governance-execution-confirmer" && command != "grant-commerce-observer" && command != "grant-admission" && command != "grant-cancellation" && command != "grant-worker" && command != "grant-executor" && command != "grant-mcp-connector" && command != "grant-reconciler" && command != "grant-callback-ingestor" && command != "grant-callback-observer" && command != "grant-settlement" && command != "grant-artifact-materializer" && command != "grant-artifact-object-reader" && command != "provision-human" && command != "issue-key" && command != "revoke-key" {
+	if command != "migrate" && command != "grant-runtime" && command != "grant-browser-session" && command != "grant-connection-manager" && command != "grant-oauth-refresher" && command != "grant-catalog-manager" && command != "grant-publisher-manager" && command != "grant-release-manager" && command != "grant-dangerous-operation-manager" && command != "grant-support-reader" && command != "grant-governance-reviewer" && command != "grant-governance-policy-manager" && command != "grant-governance-execution-confirmer" && command != "grant-commerce-observer" && command != "grant-admission" && command != "grant-cancellation" && command != "grant-worker" && command != "grant-executor" && command != "grant-mcp-connector" && command != "grant-reconciler" && command != "grant-callback-ingestor" && command != "grant-callback-observer" && command != "grant-settlement" && command != "grant-artifact-materializer" && command != "grant-artifact-object-reader" && command != "provision-human" && command != "provision-platform-staff" && command != "issue-key" && command != "revoke-key" {
 		return errors.New("unknown operator command")
 	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
@@ -39,6 +39,7 @@ func RunOperator(ctx context.Context, args []string, getenv func(string) string,
 	issuer := flags.String("issuer", "", "reviewed OIDC issuer URL")
 	oidcSubject := flags.String("oidc-subject", "", "OIDC subject")
 	membershipRole := flags.String("membership-role", "viewer", "owner, admin, developer or viewer")
+	platformRole := flags.String("platform-role", "support", "support, reviewer, operator or auditor")
 	if err := flags.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -124,6 +125,12 @@ func RunOperator(ctx context.Context, args []string, getenv func(string) string,
 		}
 		_, err = io.WriteString(out, "Restricted dangerous-operation-manager grants applied.\n")
 		return err
+	case "grant-support-reader":
+		if err = migrations.GrantSupportReader(ctx, pool, *role); err != nil {
+			return err
+		}
+		_, err = io.WriteString(out, "Restricted support-reader grants applied.\n")
+		return err
 	case "grant-governance-reviewer":
 		if err = migrations.GrantGovernanceReviewer(ctx, pool, *role); err != nil {
 			return err
@@ -148,6 +155,13 @@ func RunOperator(ctx context.Context, args []string, getenv func(string) string,
 			return err
 		}
 		_, err = io.WriteString(out, "Human OIDC identity and Workspace membership provisioned.\n")
+		return err
+	case "provision-platform-staff":
+		value := identitypg.PlatformStaffProvision{UserID: *userID, Role: domain.PlatformStaffRole(*platformRole), CreatedAt: time.Now().UTC().Truncate(time.Microsecond)}
+		if err = identitypg.New(pool).ProvisionPlatformStaff(ctx, value); err != nil {
+			return err
+		}
+		_, err = io.WriteString(out, "Platform Staff role provisioned without Workspace membership.\n")
 		return err
 	case "grant-browser-session":
 		if err = migrations.GrantBrowserSession(ctx, pool, *role); err != nil {

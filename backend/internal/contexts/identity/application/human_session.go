@@ -23,6 +23,7 @@ type HumanSessionRepository interface {
 	RevokeBrowserSession(context.Context, string, time.Time) error
 	ListWorkspaceMemberships(context.Context, string) ([]domain.WorkspaceMembership, error)
 	FindWorkspaceMembership(context.Context, string, string) (domain.WorkspaceMembership, error)
+	FindPlatformStaff(context.Context, string) (domain.PlatformStaff, error)
 }
 
 type TokenCodec interface {
@@ -113,6 +114,17 @@ func (s *HumanSessionService) Authenticate(ctx context.Context, raw string) (Hum
 func (s *HumanSessionService) VerifyCSRF(principal HumanPrincipal, raw string) error {
 	digest, err := s.codec.Digest(raw)
 	if err != nil || !s.codec.EqualDigest(digest, principal.CSRFDigest) {
+		return ErrForbidden
+	}
+	return nil
+}
+
+func (s *HumanSessionService) AuthorizeUserPlatform(ctx context.Context, userID, action string) error {
+	if !domain.ValidID(userID) {
+		return ErrForbidden
+	}
+	staff, err := s.repository.FindPlatformStaff(ctx, userID)
+	if err != nil || staff.UserID != userID || !staff.Allows(action) {
 		return ErrForbidden
 	}
 	return nil

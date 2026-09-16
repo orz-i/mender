@@ -38,5 +38,8 @@ func (h *Human) AuthenticateMutation(ctx context.Context, raw, csrf string) (app
 func (h *Human) Authorize(ctx context.Context, actor application.Actor, workspace, action string) error {
 	return mapError(h.identity.AuthorizeHuman(ctx, identity.HumanPrincipal{UserID: actor.UserID}, workspace, action))
 }
+func (h *Human) AuthorizePlatform(ctx context.Context, actor application.Actor, action string) error {
+	return mapError(h.identity.AuthorizePlatformHuman(ctx, identity.HumanPrincipal{UserID: actor.UserID}, action))
+}
 
 var _ application.Authorizer = (*Human)(nil)

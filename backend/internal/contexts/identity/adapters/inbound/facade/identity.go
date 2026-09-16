@@ -65,6 +65,10 @@ func (f *HumanIdentity) AuthorizeHuman(ctx context.Context, principal identity.H
 	return mapError(f.sessions.AuthorizeUserWorkspace(ctx, principal.UserID, workspace, action))
 }
 
+func (f *HumanIdentity) AuthorizePlatformHuman(ctx context.Context, principal identity.HumanPrincipal, action string) error {
+	return mapError(f.sessions.AuthorizeUserPlatform(ctx, principal.UserID, action))
+}
+
 var _ identity.HumanIdentity = (*HumanIdentity)(nil)
 
 type RunDelegations struct {

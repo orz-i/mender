@@ -26,6 +26,7 @@ type HumanIdentity interface {
 	AuthenticateBrowser(context.Context, string) (HumanPrincipal, error)
 	AuthenticateBrowserMutation(context.Context, string, string) (HumanPrincipal, error)
 	AuthorizeHuman(context.Context, HumanPrincipal, string, string) error
+	AuthorizePlatformHuman(context.Context, HumanPrincipal, string) error
 }
 
 // RunDelegationPrincipal is the secret-free projection of an explicit,

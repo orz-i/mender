@@ -18,6 +18,42 @@ type HumanProvision struct {
 	CreatedAt                                         time.Time
 }
 
+type PlatformStaffProvision struct {
+	UserID    string
+	Role      domain.PlatformStaffRole
+	CreatedAt time.Time
+}
+
+func (r *Repository) ProvisionPlatformStaff(ctx context.Context, value PlatformStaffProvision) error {
+	if !domain.ValidID(value.UserID) || !value.Role.Valid() || value.CreatedAt.IsZero() {
+		return application.ErrForbidden
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return application.ErrUnavailable
+	}
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		_ = tx.Rollback(cleanup)
+	}()
+	var disabled bool
+	if err = tx.QueryRow(ctx, `SELECT disabled FROM identity.users WHERE id=$1 FOR SHARE`, value.UserID).Scan(&disabled); err != nil || disabled {
+		return application.ErrForbidden
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO identity.platform_staff(user_id,role,created_at) VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, value.UserID, value.Role, value.CreatedAt); err != nil {
+		return application.ErrUnavailable
+	}
+	var role domain.PlatformStaffRole
+	if err = tx.QueryRow(ctx, `SELECT role,disabled FROM identity.platform_staff WHERE user_id=$1 FOR SHARE`, value.UserID).Scan(&role, &disabled); err != nil || disabled || role != value.Role {
+		return application.ErrForbidden
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return application.ErrUnavailable
+	}
+	return nil
+}
+
 func (r *Repository) ProvisionHuman(ctx context.Context, value HumanProvision) error {
 	issuer, err := url.Parse(value.Issuer)
 	if !domain.ValidID(value.UserID) || !domain.ValidID(value.WorkspaceID) || !value.Role.Valid() || value.Subject == "" || len(value.Subject) > 512 || err != nil || issuer.Scheme != "https" || issuer.Host == "" || value.CreatedAt.IsZero() || len(value.DisplayName) > 200 {
