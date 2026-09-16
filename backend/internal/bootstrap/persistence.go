@@ -13,7 +13,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	commercehttp "github.com/orz-i/mender/backend/internal/contexts/commerce/adapters/inbound/httpapi"
 	commerceidentityaccess "github.com/orz-i/mender/backend/internal/contexts/commerce/adapters/outbound/identityaccess"
+	commercepaymenthmac "github.com/orz-i/mender/backend/internal/contexts/commerce/adapters/outbound/paymenthmac"
+	commercepaymentsecret "github.com/orz-i/mender/backend/internal/contexts/commerce/adapters/outbound/paymentsecret"
 	commercepg "github.com/orz-i/mender/backend/internal/contexts/commerce/adapters/outbound/postgres"
+	commercepaymentrandom "github.com/orz-i/mender/backend/internal/contexts/commerce/adapters/outbound/random"
 	commerceapp "github.com/orz-i/mender/backend/internal/contexts/commerce/application"
 	connectionhttp "github.com/orz-i/mender/backend/internal/contexts/connections/adapters/inbound/httpapi"
 	connectionidentityaccess "github.com/orz-i/mender/backend/internal/contexts/connections/adapters/outbound/identityaccess"
@@ -108,6 +111,11 @@ type APIConfig struct {
 	ProviderCallbackDatabaseURL             string
 	ProviderCallbackSecretRoot              string
 	ProviderCallbackReviewedKeys            map[string][]string
+	SandboxPaymentCallbacksEnabled          bool
+	PaymentCallbackDatabaseURL              string
+	PaymentCallbackSecretRoot               string
+	PaymentCallbackReviewedKeys             map[string][]string
+	PaymentMode                             string
 	StartRunAPIEnabled                      bool
 	AdmissionDatabaseURL                    string
 	MCPGatewayEnabled                       bool
@@ -144,6 +152,8 @@ type APIConfig struct {
 	PlatformAdminManagerDatabaseURL         string
 	AdminBillingEnabled                     bool
 	BillingManagerDatabaseURL               string
+	AdminPaymentsEnabled                    bool
+	PaymentManagerDatabaseURL               string
 	AdminCatalogReviewEnabled               bool
 	AdminPluginReviewEnabled                bool
 	GovernanceReviewerDatabaseURL           string
@@ -238,6 +248,76 @@ func parseReviewedCallbackKeys(raw string) (map[string][]string, error) {
 			keys[i] = key
 		}
 		result[pair[0]] = keys
+	}
+	return result, nil
+}
+
+func parseReviewedPaymentCallbackKeys(raw string) (map[string][]string, error) {
+	parts := strings.Split(raw, ",")
+	if len(parts) < 1 || len(parts) > 256 {
+		return nil, errors.New("payment callback keys require 1-256 reviewed provider/account entries")
+	}
+	validProvider := func(value string) bool {
+		if len(value) < 1 || len(value) > 128 {
+			return false
+		}
+		for _, ch := range value {
+			if !(ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9' || ch == '_' || ch == '-') {
+				return false
+			}
+		}
+		return true
+	}
+	validAccount := func(value string) bool {
+		if len(value) < 1 || len(value) > 128 {
+			return false
+		}
+		for _, ch := range value {
+			if !(ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9' || ch == '_' || ch == '-' || ch == '.' || ch == ':') {
+				return false
+			}
+		}
+		return true
+	}
+	validKey := func(value string) bool {
+		if len(value) < 1 || len(value) > 128 {
+			return false
+		}
+		for _, ch := range value {
+			if !(ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9' || ch == '_' || ch == '-') {
+				return false
+			}
+		}
+		return true
+	}
+	result := make(map[string][]string, len(parts))
+	for _, part := range parts {
+		pair := strings.Split(strings.TrimSpace(part), "=")
+		if len(pair) != 2 {
+			return nil, errors.New("payment callback keys must use provider/account=key_id[|key_id] entries")
+		}
+		owner := strings.Split(strings.TrimSpace(pair[0]), "/")
+		if len(owner) != 2 || !validProvider(owner[0]) || !validAccount(owner[1]) {
+			return nil, errors.New("payment callback keys contain invalid provider/account")
+		}
+		name := owner[0] + "/" + owner[1]
+		if _, exists := result[name]; exists {
+			return nil, errors.New("payment callback keys contain duplicate provider/account")
+		}
+		keys := strings.Split(pair[1], "|")
+		if len(keys) < 1 || len(keys) > 2 {
+			return nil, errors.New("payment callback keys allow one or two reviewed key IDs per provider/account")
+		}
+		seen := map[string]bool{}
+		for i, key := range keys {
+			key = strings.TrimSpace(key)
+			if !validKey(key) || seen[key] {
+				return nil, errors.New("payment callback keys contain invalid or duplicate key ID")
+			}
+			seen[key] = true
+			keys[i] = key
+		}
+		result[name] = keys
 	}
 	return result, nil
 }
@@ -388,6 +468,31 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 		}
 	default:
 		return c, errors.New("MENDER_ADMIN_BILLING_ENABLED must be true or false")
+	}
+	switch getenv("MENDER_ADMIN_PAYMENTS_ENABLED") {
+	case "", "false":
+	case "true":
+		if !c.ConsoleOIDCEnabled {
+			return APIConfig{}, errors.New("Admin Payments requires Console OIDC")
+		}
+		mode := strings.TrimSpace(getenv("MENDER_PAYMENT_MODE"))
+		if mode == "" {
+			mode = "sandbox"
+		}
+		if mode != "sandbox" {
+			return APIConfig{}, errors.New("Admin Payments currently supports sandbox mode only; live payments are blocked")
+		}
+		if c.PaymentMode != "" && c.PaymentMode != mode {
+			return APIConfig{}, errors.New("payment features must share one sandbox mode")
+		}
+		c.PaymentMode = mode
+		c.AdminPaymentsEnabled = true
+		c.PaymentManagerDatabaseURL = strings.TrimSpace(getenv("MENDER_PAYMENT_MANAGER_DATABASE_URL"))
+		if c.PaymentManagerDatabaseURL == "" {
+			return APIConfig{}, errors.New("Admin Payments requires a separate payment-manager database role")
+		}
+	default:
+		return c, errors.New("MENDER_ADMIN_PAYMENTS_ENABLED must be true or false")
 	}
 	switch getenv("MENDER_ADMIN_CATALOG_REVIEW_ENABLED") {
 	case "", "false":
@@ -598,6 +703,31 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	default:
 		return c, errors.New("MENDER_PROVIDER_CALLBACK_ENABLED must be true or false")
 	}
+	switch getenv("MENDER_SANDBOX_PAYMENT_CALLBACKS_ENABLED") {
+	case "", "false":
+	case "true":
+		mode := strings.TrimSpace(getenv("MENDER_PAYMENT_MODE"))
+		if mode == "" {
+			mode = "sandbox"
+		}
+		if mode != "sandbox" {
+			return APIConfig{}, errors.New("payment callbacks currently support sandbox mode only; live payments are blocked")
+		}
+		c.PaymentMode = mode
+		c.SandboxPaymentCallbacksEnabled = true
+		c.PaymentCallbackDatabaseURL = strings.TrimSpace(getenv("MENDER_PAYMENT_CALLBACK_INGESTOR_DATABASE_URL"))
+		c.PaymentCallbackSecretRoot = strings.TrimSpace(getenv("MENDER_PAYMENT_CALLBACK_SECRET_ROOT"))
+		if c.PaymentCallbackDatabaseURL == "" || c.PaymentCallbackSecretRoot == "" {
+			return APIConfig{}, errors.New("sandbox payment callbacks require callback-ingestor database URL and mounted secret root")
+		}
+		keys, err := parseReviewedPaymentCallbackKeys(strings.TrimSpace(getenv("MENDER_PAYMENT_CALLBACK_REVIEWED_KEYS")))
+		if err != nil {
+			return APIConfig{}, err
+		}
+		c.PaymentCallbackReviewedKeys = keys
+	default:
+		return c, errors.New("MENDER_SANDBOX_PAYMENT_CALLBACKS_ENABLED must be true or false")
+	}
 	switch getenv("MENDER_RUN_READ_API_ENABLED") {
 	case "", "false":
 	case "true":
@@ -701,7 +831,7 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	}
 	switch getenv("MENDER_RUN_API_ENABLED") {
 	case "", "false":
-		if c.RunReadAPIEnabled || c.AgentInputAPIEnabled || c.ArtifactObjectReadEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.ProviderCallbackEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleExecutionRiskEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleCatalogEnabled || c.AdminCatalogReviewEnabled || c.AdminCatalogPolicyEnabled || c.AdminProviderCallbacksEnabled || c.ConsoleConnectionOAuthEnabled {
+		if c.RunReadAPIEnabled || c.AgentInputAPIEnabled || c.ArtifactObjectReadEnabled || c.CoordinatedCancelEnabled || c.ProviderCancelEnabled || c.ProviderCallbackEnabled || c.SandboxPaymentCallbacksEnabled || c.StartRunAPIEnabled || c.MCPGatewayEnabled || c.MCPFixedToolsetEnabled || c.ConsoleOIDCEnabled || c.ConsoleRunDelegationEnabled || c.ConsoleHumanStartEnabled || c.ConsoleExecutionRiskEnabled || c.ConsoleLaunchDiscoveryEnabled || c.ConsoleUsageEnabled || c.ConsoleConnectionsEnabled || c.ConsoleCatalogEnabled || c.AdminCatalogReviewEnabled || c.AdminCatalogPolicyEnabled || c.AdminProviderCallbacksEnabled || c.AdminPaymentsEnabled || c.ConsoleConnectionOAuthEnabled {
 			return APIConfig{}, errors.New("Run capabilities require the authenticated Run API")
 		}
 		return c, nil
@@ -796,6 +926,7 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	var cancelPool *pgxpool.Pool
 	var artifactObjectPool *pgxpool.Pool
 	var callbackPool *pgxpool.Pool
+	var paymentCallbackPool *pgxpool.Pool
 	var admissionPool *pgxpool.Pool
 	var browserSessionPool *pgxpool.Pool
 	var connectionManagerPool *pgxpool.Pool
@@ -806,6 +937,7 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	var supportReaderPool *pgxpool.Pool
 	var platformAdminManagerPool *pgxpool.Pool
 	var billingManagerPool *pgxpool.Pool
+	var paymentManagerPool *pgxpool.Pool
 	var governanceReviewerPool *pgxpool.Pool
 	var governancePolicyManagerPool *pgxpool.Pool
 	var callbackObserverPool *pgxpool.Pool
@@ -827,6 +959,9 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 		}
 		if callbackPool != nil {
 			callbackPool.Close()
+		}
+		if paymentCallbackPool != nil {
+			paymentCallbackPool.Close()
 		}
 		if governanceExecutionConfirmerPool != nil {
 			governanceExecutionConfirmerPool.Close()
@@ -854,6 +989,9 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 		}
 		if billingManagerPool != nil {
 			billingManagerPool.Close()
+		}
+		if paymentManagerPool != nil {
+			paymentManagerPool.Close()
 		}
 		if catalogManagerPool != nil {
 			catalogManagerPool.Close()
@@ -1023,6 +1161,41 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 			return failed(buildErr)
 		}
 		registers = append(registers, callbackHandler.Register)
+	}
+	if c.SandboxPaymentCallbacksEnabled {
+		paymentCallbackPool, err = database.Open(start, c.PaymentCallbackDatabaseURL)
+		if err != nil {
+			return failed(err)
+		}
+		readerCfg, paymentCallbackCfg := pool.Config().ConnConfig, paymentCallbackPool.Config().ConnConfig
+		if readerCfg.Host != paymentCallbackCfg.Host || readerCfg.Port != paymentCallbackCfg.Port || readerCfg.Database != paymentCallbackCfg.Database ||
+			readerCfg.User == paymentCallbackCfg.User || (callbackPool != nil && callbackPool.Config().ConnConfig.User == paymentCallbackCfg.User) ||
+			(cancelPool != nil && cancelPool.Config().ConnConfig.User == paymentCallbackCfg.User) {
+			return failed(errors.New("sandbox payment callbacks require the same database with a distinct restricted role"))
+		}
+		if err = migrations.Verify(start, paymentCallbackPool); err != nil {
+			return failed(err)
+		}
+		if err = database.PaymentCallbackIngestorRole(start, paymentCallbackPool); err != nil {
+			return failed(err)
+		}
+		paymentSecrets, buildErr := commercepaymentsecret.New(c.PaymentCallbackSecretRoot, c.PaymentCallbackReviewedKeys)
+		if buildErr != nil {
+			return failed(buildErr)
+		}
+		paymentVerifier, buildErr := commercepaymenthmac.New(paymentSecrets)
+		if buildErr != nil {
+			return failed(buildErr)
+		}
+		paymentCallbackService, buildErr := commerceapp.NewPaymentCallbackService(commercepg.NewPaymentCallbacks(paymentCallbackPool), paymentVerifier, systemClock{})
+		if buildErr != nil {
+			return failed(buildErr)
+		}
+		paymentCallbackHandler, buildErr := commercehttp.NewPaymentCallback(paymentCallbackService)
+		if buildErr != nil {
+			return failed(buildErr)
+		}
+		registers = append(registers, paymentCallbackHandler.Register)
 	}
 	if c.ConsoleOIDCEnabled {
 		browserSessionPool, err = database.Open(start, c.BrowserSessionDatabaseURL)
@@ -1492,6 +1665,39 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 			}
 			registers = append(registers, billingHandler.Register)
 		}
+		if c.AdminPaymentsEnabled {
+			paymentManagerPool, buildErr = database.Open(start, c.PaymentManagerDatabaseURL)
+			if buildErr != nil {
+				return failed(buildErr)
+			}
+			paymentCfg := paymentManagerPool.Config().ConnConfig
+			if readerCfg.Host != paymentCfg.Host || readerCfg.Port != paymentCfg.Port || readerCfg.Database != paymentCfg.Database ||
+				paymentCfg.User == readerCfg.User || paymentCfg.User == sessionCfg.User ||
+				(paymentCallbackPool != nil && paymentCfg.User == paymentCallbackPool.Config().ConnConfig.User) ||
+				(billingManagerPool != nil && paymentCfg.User == billingManagerPool.Config().ConnConfig.User) ||
+				(dangerousOperationManagerPool != nil && paymentCfg.User == dangerousOperationManagerPool.Config().ConnConfig.User) ||
+				(platformAdminManagerPool != nil && paymentCfg.User == platformAdminManagerPool.Config().ConnConfig.User) ||
+				(supportReaderPool != nil && paymentCfg.User == supportReaderPool.Config().ConnConfig.User) ||
+				(commerceObserverPool != nil && paymentCfg.User == commerceObserverPool.Config().ConnConfig.User) {
+				return failed(errors.New("Admin Payments requires the same database with a distinct restricted role"))
+			}
+			if buildErr = migrations.Verify(start, paymentManagerPool); buildErr != nil {
+				return failed(buildErr)
+			}
+			if buildErr = database.PaymentManagerRole(start, paymentManagerPool); buildErr != nil {
+				return failed(buildErr)
+			}
+			paymentAccess := commerceidentityaccess.NewBilling(humanIdentity)
+			paymentService, serviceErr := commerceapp.NewPaymentAdminService(commercepg.NewPayments(paymentManagerPool), paymentAccess, commercepaymentrandom.PaymentIDs{}, systemClock{})
+			if serviceErr != nil {
+				return failed(serviceErr)
+			}
+			paymentHandler, handlerErr := commercehttp.NewPaymentAdmin(paymentService, paymentAccess)
+			if handlerErr != nil {
+				return failed(handlerErr)
+			}
+			registers = append(registers, paymentHandler.Register)
+		}
 		if c.AdminCatalogReviewEnabled || c.AdminPluginReviewEnabled {
 			governanceReviewerPool, buildErr = database.Open(start, c.GovernanceReviewerDatabaseURL)
 			if buildErr != nil {
@@ -1835,6 +2041,22 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 				return err
 			}
 			if err := database.BillingManagerRole(ctx, billingManagerPool); err != nil {
+				return err
+			}
+		}
+		if paymentManagerPool != nil {
+			if err := migrations.Verify(ctx, paymentManagerPool); err != nil {
+				return err
+			}
+			if err := database.PaymentManagerRole(ctx, paymentManagerPool); err != nil {
+				return err
+			}
+		}
+		if paymentCallbackPool != nil {
+			if err := migrations.Verify(ctx, paymentCallbackPool); err != nil {
+				return err
+			}
+			if err := database.PaymentCallbackIngestorRole(ctx, paymentCallbackPool); err != nil {
 				return err
 			}
 		}
