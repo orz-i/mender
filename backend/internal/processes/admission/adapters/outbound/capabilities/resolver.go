@@ -15,6 +15,7 @@ import (
 	commerce "github.com/orz-i/mender/backend/internal/contexts/commerce/public"
 	connections "github.com/orz-i/mender/backend/internal/contexts/connections/public"
 	distribution "github.com/orz-i/mender/backend/internal/contexts/distribution/public"
+	supply "github.com/orz-i/mender/backend/internal/contexts/supply/public"
 	"github.com/orz-i/mender/backend/internal/processes/admission/application"
 )
 
@@ -23,14 +24,15 @@ type Resolver struct {
 	catalog     catalog.Catalog
 	connections connections.Connections
 	pricing     commerce.Pricing
+	releases    supply.ReleaseRouter
 	clock       application.Clock
 }
 
-func NewResolver(toolsets distribution.Toolsets, catalogPort catalog.Catalog, connectionsPort connections.Connections, pricing commerce.Pricing, clock application.Clock) (*Resolver, error) {
-	if toolsets == nil || catalogPort == nil || connectionsPort == nil || pricing == nil || clock == nil {
+func NewResolver(toolsets distribution.Toolsets, catalogPort catalog.Catalog, connectionsPort connections.Connections, pricing commerce.Pricing, releases supply.ReleaseRouter, clock application.Clock) (*Resolver, error) {
+	if toolsets == nil || catalogPort == nil || connectionsPort == nil || pricing == nil || releases == nil || clock == nil {
 		return nil, application.ErrUnavailable
 	}
-	return &Resolver{toolsets: toolsets, catalog: catalogPort, connections: connectionsPort, pricing: pricing, clock: clock}, nil
+	return &Resolver{toolsets: toolsets, catalog: catalogPort, connections: connectionsPort, pricing: pricing, releases: releases, clock: clock}, nil
 }
 
 func mapContext(err error) error {
@@ -163,6 +165,18 @@ func (r *Resolver) Resolve(ctx context.Context, caller application.Caller, q app
 	if err = validateArguments(tool.InputSchema, canonicalArguments); err != nil {
 		return application.Plan{}, err
 	}
+	route, err := r.releases.ResolveReleaseRoute(ctx, supply.ReleaseRouteQuery{
+		WorkspaceID: caller.WorkspaceID, ToolsetVersionID: binding.ToolsetVersionID, ToolVersionID: tool.ID, DefaultDeploymentRevision: tool.DeploymentRevision,
+	})
+	if err != nil {
+		if e := mapContext(err); e != nil {
+			return application.Plan{}, e
+		}
+		if errors.Is(err, supply.ErrReleaseRouteBlocked) {
+			return application.Plan{}, application.ErrForbidden
+		}
+		return application.Plan{}, application.ErrUnavailable
+	}
 	now := r.clock.Now().UTC().Truncate(time.Microsecond)
 	if now.IsZero() {
 		return application.Plan{}, application.ErrUnavailable
@@ -194,7 +208,7 @@ func (r *Resolver) Resolve(ctx context.Context, caller application.Caller, q app
 	if access.ValidUntil.Before(validUntil) {
 		validUntil = access.ValidUntil
 	}
-	return application.Plan{ToolID: q.ToolID, ToolVersion: q.ToolVersion, ToolVersionID: tool.ID, ToolsetVersionID: binding.ToolsetVersionID, ConnectionID: access.ConnectionID, PriceVersionID: terms.PriceVersionID, DeploymentRevision: tool.DeploymentRevision, BudgetID: terms.BudgetID, PeriodID: terms.PeriodID, Currency: terms.Currency, ReserveMicro: terms.ReserveMicro, ValidUntil: validUntil}, nil
+	return application.Plan{ToolID: q.ToolID, ToolVersion: q.ToolVersion, ToolVersionID: tool.ID, ToolsetVersionID: binding.ToolsetVersionID, ConnectionID: access.ConnectionID, PriceVersionID: terms.PriceVersionID, DeploymentRevision: route.DeploymentRevision, BudgetID: terms.BudgetID, PeriodID: terms.PeriodID, Currency: terms.Currency, ReserveMicro: terms.ReserveMicro, ValidUntil: validUntil}, nil
 }
 
 var _ application.Resolver = (*Resolver)(nil)

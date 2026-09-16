@@ -14,6 +14,9 @@ import (
 	distributionfacade "github.com/orz-i/mender/backend/internal/contexts/distribution/adapters/inbound/facade"
 	distributionpg "github.com/orz-i/mender/backend/internal/contexts/distribution/adapters/outbound/postgres"
 	distributionapp "github.com/orz-i/mender/backend/internal/contexts/distribution/application"
+	supplyfacade "github.com/orz-i/mender/backend/internal/contexts/supply/adapters/inbound/facade"
+	supplypg "github.com/orz-i/mender/backend/internal/contexts/supply/adapters/outbound/postgres"
+	supplyapp "github.com/orz-i/mender/backend/internal/contexts/supply/application"
 	"github.com/orz-i/mender/backend/internal/processes/admission/adapters/outbound/capabilities"
 	admissionapp "github.com/orz-i/mender/backend/internal/processes/admission/application"
 )
@@ -40,11 +43,16 @@ func BuildAdmissionResolver(pool *pgxpool.Pool) (admissionapp.Resolver, error) {
 	if err != nil {
 		return nil, err
 	}
+	releaseRouting, err := supplyapp.NewReleaseRouting(supplypg.NewReleaseRoutingRepository(pool))
+	if err != nil {
+		return nil, err
+	}
 	return capabilities.NewResolver(
 		distributionfacade.New(distributionService),
 		catalogfacade.New(catalogService),
 		connectionsfacade.New(connectionsService),
 		pricingfacade.New(pricingService),
+		supplyfacade.NewReleaseRouter(releaseRouting),
 		systemClock{},
 	)
 }
