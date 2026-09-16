@@ -152,9 +152,9 @@
     "ses_b5722f72796d466797fdf8ce73b73715": {
       "path": "docs/session/ses_b5722f72796d466797fdf8ce73b73715.md",
       "title": "Mender 进度与验收纠偏",
-      "status": "active",
+      "status": "completed",
       "created_at": "unix:1789542235",
-      "updated_at": "unix:1789544147"
+      "updated_at": "unix:1789544361"
     },
     "ses_b73cf5f6073d42c5861409ba81162d3b": {
       "path": "docs/session/ses_b73cf5f6073d42c5861409ba81162d3b.md",
