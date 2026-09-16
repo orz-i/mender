@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "as_of": "2026-09-16",
+  "work_package": "S4-B",
+  "status": "complete",
+  "release_model": {
+    "scope_key": ["workspace_id", "toolset_version_id", "tool_version_id"],
+    "plan_states": ["draft", "canary", "active", "draining", "rolled_back", "disabled"],
+    "route_modes": ["stable", "canary", "draining", "disabled"],
+    "canary_strategy": "workspace-toolset-toolversion-cohort",
+    "percentage_random_split": false,
+    "published_tool_version_mutated": false,
+    "historical_run_repinning_allowed": false,
+    "route_snapshot_separate_from_release_plan": true
+  },
+  "routing": {
+    "new_admission_route_server_authoritative": true,
+    "canary_selects_candidate": true,
+    "drain_selects_prior_stable": true,
+    "rollback_selects_prior_stable": true,
+    "promotion_advances_route_stable": true,
+    "run_admission_deployment_revision_is_pin": true,
+    "route_cas_revisioned": true
+  },
+  "emergency_disable": {
+    "distinct_from_rollback": true,
+    "blocks_new_admission": true,
+    "candidate_deployment_disabled": true,
+    "rollback_reenables_candidate": false,
+    "existing_run_control_allows_disabled_deployment": true
+  },
+  "supply_evidence": {
+    "candidate_provider_must_match": true,
+    "stable_and_candidate_must_be_active_before_canary": true,
+    "published_plugin_version_required": true,
+    "published_toolset_binding_required": true,
+    "published_tool_version_required": true
+  },
+  "security": {
+    "force_rls": true,
+    "release_manager_least_privilege": true,
+    "runtime_route_function_only": true,
+    "release_manager_direct_route_dml_allowed": false,
+    "release_manager_direct_deployment_dml_allowed": false,
+    "release_manage_roles": ["owner", "admin"],
+    "developer_release_manage_allowed": false,
+    "browser_client_controls_state_revision_actor": false
+  },
+  "surfaces": {
+    "admin_release_api": "implemented",
+    "admission_route_resolver": "implemented",
+    "admin_release_frontend": "deferred",
+    "publisher_release_frontend": "deferred"
+  },
+  "verification": {
+    "real_postgres_test": "backend/tests/integration/release_governance_test.go",
+    "release_migration": "backend/migrations/0041_supply_release_governance.sql",
+    "admission_resolver": "backend/internal/processes/admission/adapters/outbound/capabilities/resolver.go",
+    "control_broker": "backend/internal/contexts/supply/application/broker.go",
+    "release_api": "backend/internal/contexts/supply/adapters/inbound/httpapi/release_governance.go"
+  },
+  "deferred": [
+    "percentage-weighted-canary",
+    "automated-metric-promotion",
+    "admin-release-frontend",
+    "publisher-release-frontend",
+    "dangerous-operation-jit-generalization",
+    "commercial-accounting",
+    "refund-ledger",
+    "payment-adapter",
+    "cli-skill-distribution",
+    "artifact-signing-dependency-scan",
+    "production-deploy"
+  ],
+  "next_work_package": "S4-C-dangerous-operation-jit",
+  "document": "docs/engineering/2026-09-16-s4b-release-governance-boundary.md"
+}
+

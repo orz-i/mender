@@ -277,6 +277,9 @@ func TestPostgresRuntimeContract(t *testing.T) {
 	t.Run("governed Plugin Publisher manifest and maker checker publication", func(t *testing.T) {
 		exercisePluginPublication(t, ctx, owner, runtimeURL.String())
 	})
+	t.Run("T23 governed release canary drain rollback and emergency disable", func(t *testing.T) {
+		exerciseReleaseGovernance(t, ctx, owner, runtime, runtimeURL.String())
+	})
 	t.Run("execution risk policy decisions and exact human confirmations", func(t *testing.T) {
 		exerciseExecutionRiskGovernance(t, ctx, owner, runtimeURL.String())
 	})
