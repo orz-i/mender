@@ -1,6 +1,6 @@
 # Mender 检查入口
 
-新增原子受理验证：`pnpm test:integration:docker` 使用自有临时 PostgreSQL 执行幂等受理、额度竞争、六个写入点故障回滚和已受理 Run 取消保护；`node scripts/backend.mjs test -race -count=1 ./tests/admission ./internal/contexts/commerce/...` 验证领域／用例。内部端口尚未装入公开 StartRun，完整边界见 [实现记录](../docs/engineering/2026-09-09-atomic-admission.md)。
+当前实现与剩余验收以[统一状态页](../docs/planning/current-status.md)为准。下方带日期记录属于历史验证说明，不能据早期“尚未接入”描述否定后来公共 StartRun。`pnpm test:integration:docker` 使用自有临时 PostgreSQL 验证持久化与故障恢复；是否通过必须以实际运行记录为准。
 
 均从仓库根使用 pnpm：
 
@@ -12,11 +12,13 @@
 | `pnpm check:toolchain` | Node／pnpm／Go 精确版本与清单一致 |
 | `pnpm check:workspace` | 必需包、scripts、workspace: 依赖、唯一锁文件 |
 | `pnpm check:docs` | 计划计数、任务引用和 Markdown 本地链接 |
+| `pnpm check:status` | 原任务集合、历史别名、实施／验证／验收分离、证据摘要、生成状态页与范围提升回执 |
+| `pnpm status:render` | 审阅并修改主台账后重新生成当前状态 Markdown，不改变任务状态或批准验收 |
 | `pnpm check:contracts` | Schema、样例、制品摘要、OpenAPI 结构 |
 | `pnpm check:architecture` | TypeScript 真实模块解析、前端分层／公开入口／源码循环，以及 Go AST 依赖规则与负向 fixture |
 | `pnpm lint` | JS／TS／React 语法和基础规则 |
 | `pnpm typecheck` | 工作区严格 TypeScript 检查 |
-| `pnpm test` | 健康传输测试，以及 TypeScript 边界、别名、type-only、re-export、动态加载和循环的负向样例 |
+| `pnpm test` | 显式列举的 Node／API 客户端测试及状态、证据、架构负向样例；不等于浏览器或真实数据库验收 |
 | `pnpm test:backend` | 探针／生命周期、Go 边界、Run、机器身份、HTTP 与配置单元测试；不执行 integration 标签 |
 | `pnpm test:integration` | 独立真实 PostgreSQL 套件；缺少专用测试连接与创建数据库授权即失败，不 Skip |
 | `pnpm vet:backend` | Go vet |
@@ -24,6 +26,8 @@
 | `pnpm build` | Console／Admin 独立构建 |
 
 脚本只校验其声明的范围，不将 AST／导入扫描当作完整语义纯度或数据库所有权证明。前端使用现有 TypeScript Compiler API 解析实际 tsconfig 和模块路径；检查代码不新增第三方依赖。Go 检查直接依赖与部分明显 I/O，不能证明任意调用链没有副作用。
+
+状态检查是阻断式配置一致性检查，不是新增产品阶段。`node --test scripts/project-status.test.mjs` 使用内存副本覆盖虚报完成、遗失任务、别名扩张、摘要漂移、目录穿越、生成页手改及将 sandbox／CI 成功当外部批准的反例；不会改写真实台账或创建真实批准回执。它仍不能证明人工签字身份、外部 URL 或远端分支保护实时有效，详见[状态维护约定](../docs/planning/status-tracking.md)与[合并门禁](../docs/engineering/merge-gate.md)。
 
 定向运行本轮测试：
 

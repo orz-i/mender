@@ -35,3 +35,11 @@ S4-01～06 的后端与 sandbox 范围不能顺带完成 S4-09～11 的页面；
 ## 复核与更新
 
 修改实际状态及证据后生成当前页，再运行状态负向测试和 `pnpm check`。触及业务逻辑时按影响运行实际 Go／数据库／浏览器套件，不能复用旧提交成功结论。更新验收字段需要独立决议记录；远端合并保护和生产权限保持人工／运营责任，不由仓库内容决定。
+
+## 提升状态需要的独立记录
+
+当前条目使用 `recorded`，没有伪造执行或批准记录。以后提升为 `passed`，`verification_receipt` 必须引用真实 JSON，包含 `record_type: task-verification`、原 task_id、command、environment、head、finished_at、result、exit_code 和带路径／摘要的 log。日志需来自对应命令实际运行，不能引用仅声明测试文件名的 scope manifest。
+
+完整 `accepted` 还需原范围 implementation=implemented、remaining 为空及独立的 `task-acceptance` 记录。记录包含 task_id、decision=accepted、coverage=task-full-scope、approved_by、approved_at、scope，并绑定同一 verification_receipt。仅检查这些字段不能鉴别人类身份或证明原验收语义完整，仍由真实评审人负责；负向测试的内存 fixture 不写入这些生产记录。
+
+G3 已有内部 scoped-go 作为历史决议保留；G4／G5 的 go 需要各自原阶段全部任务的完整验收记录，不能引用单一后端切片。若要正式改变 Gate 的范围化放行规则，先修订决议与状态 schema，不擅自删除剩余任务。外部条件提升为 verified 需要独立 `external-control-verification`，包含 control_id、external_reference、verified_by、verified_at 和 result，不接受本地 CI／支付模拟 JSON 代替远端观察。

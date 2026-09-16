@@ -46,7 +46,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: go mod download
         working-directory: backend
-      - run: pnpm check
+      - name: Project status, contracts and regression checks
+        run: pnpm check
       - name: Real PostgreSQL migration, RLS, CAS and HTTP integration
         run: pnpm test:integration
         env:
