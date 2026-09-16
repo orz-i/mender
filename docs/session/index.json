@@ -74,9 +74,9 @@
     "ses_54343b8f0fda4bfbb8d9f1d4e77018b1": {
       "path": "docs/session/ses_54343b8f0fda4bfbb8d9f1d4e77018b1.md",
       "title": "S4-03 Commerce supplemental ledger",
-      "status": "active",
+      "status": "completed",
       "created_at": "unix:1789533367",
-      "updated_at": "unix:1789536277",
+      "updated_at": "unix:1789536367",
       "parent_session_id": "ses_6f7c4394619e43c3836e4df8d639b9f2"
     },
     "ses_573cea0c83fc4e65a7c975502b2b1a3e": {
