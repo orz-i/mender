@@ -3731,7 +3731,7 @@
       "priority": "P0",
       "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md",
+      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md;docs/engineering/verification/s4-closeout/postgres.json",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
@@ -3739,7 +3739,7 @@
       },
       "execution": {
         "implementation": "scoped_implemented",
-        "verification": "recorded",
+        "verification": "passed",
         "acceptance": "pending",
         "scope": "受审manifest、发布状态机、精确独立审批和发布API保留；对应S4-09/10工作台已接入",
         "remaining": [
@@ -3757,9 +3757,16 @@
           {
             "path": "docs/engineering/2026-09-16-s4-closeout.md",
             "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
+          },
+          {
+            "path": "docs/engineering/verification/s4-closeout/postgres.json",
+            "sha256": "806838519e31db3bbbdf9fb2ad2bbdf847fbb5dde5e220dc7465769a93f0842e"
           }
         ],
-        "verification_receipt": null,
+        "verification_receipt": {
+          "path": "docs/engineering/verification/s4-closeout/S4-01.json",
+          "sha256": "c543c1af3f1d39742923590e680c8a27334d04869adb034bae05a26707c05932"
+        },
         "acceptance_record": null
       }
     },
@@ -3779,7 +3786,7 @@
       "priority": "P0",
       "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/s4c-dangerous-operation-jit-evidence.json;docs/engineering/s403-commerce-billing-evidence.json;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md",
+      "evidence": "docs/engineering/s4c-dangerous-operation-jit-evidence.json;docs/engineering/s403-commerce-billing-evidence.json;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md;docs/engineering/verification/s4-closeout/postgres.json",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
@@ -3787,7 +3794,7 @@
       },
       "execution": {
         "implementation": "scoped_implemented",
-        "verification": "recorded",
+        "verification": "passed",
         "acceptance": "pending",
         "scope": "危险操作与JIT以及refund/adjustment消费者保留，新增精确审批读取和工作台；撤销权限错误保持403",
         "remaining": [
@@ -3809,9 +3816,16 @@
           {
             "path": "docs/engineering/2026-09-16-s4-closeout.md",
             "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
+          },
+          {
+            "path": "docs/engineering/verification/s4-closeout/postgres.json",
+            "sha256": "806838519e31db3bbbdf9fb2ad2bbdf847fbb5dde5e220dc7465769a93f0842e"
           }
         ],
-        "verification_receipt": null,
+        "verification_receipt": {
+          "path": "docs/engineering/verification/s4-closeout/S4-02.json",
+          "sha256": "42485b7580cfc694d30661c7c745874428ef71edfb5a7b5e9c9d246d6d052ea0"
+        },
         "acceptance_record": null
       }
     },
@@ -3831,7 +3845,7 @@
       "priority": "P0",
       "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/s403-commerce-billing-evidence.json;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md",
+      "evidence": "docs/engineering/s403-commerce-billing-evidence.json;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md;docs/engineering/verification/s4-closeout/postgres.json",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
@@ -3839,7 +3853,7 @@
       },
       "execution": {
         "implementation": "scoped_implemented",
-        "verification": "recorded",
+        "verification": "passed",
         "acceptance": "pending",
         "scope": "不可变业务账本、追加分录、退款/调账及对账保留，S4-11界面与真实退款重放验证已接入",
         "remaining": [
@@ -3857,9 +3871,16 @@
           {
             "path": "docs/engineering/2026-09-16-s4-closeout.md",
             "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
+          },
+          {
+            "path": "docs/engineering/verification/s4-closeout/postgres.json",
+            "sha256": "806838519e31db3bbbdf9fb2ad2bbdf847fbb5dde5e220dc7465769a93f0842e"
           }
         ],
-        "verification_receipt": null,
+        "verification_receipt": {
+          "path": "docs/engineering/verification/s4-closeout/S4-03.json",
+          "sha256": "b158ffe43a51a07075d1bdb76d0e7c9a78e936c4aac4fed917951c633a3030ec"
+        },
         "acceptance_record": null
       }
     },
@@ -3879,7 +3900,7 @@
       "priority": "P0",
       "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/s4b-release-governance-evidence.json;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md",
+      "evidence": "docs/engineering/s4b-release-governance-evidence.json;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md;docs/engineering/verification/s4-closeout/postgres.json",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
@@ -3887,7 +3908,7 @@
       },
       "execution": {
         "implementation": "scoped_implemented",
-        "verification": "recorded",
+        "verification": "passed",
         "acceptance": "pending",
         "scope": "cohort灰度、排空、回退与紧急停用已接入工作台并纳入真实数据库回归",
         "remaining": [
@@ -3905,9 +3926,16 @@
           {
             "path": "docs/engineering/2026-09-16-s4-closeout.md",
             "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
+          },
+          {
+            "path": "docs/engineering/verification/s4-closeout/postgres.json",
+            "sha256": "806838519e31db3bbbdf9fb2ad2bbdf847fbb5dde5e220dc7465769a93f0842e"
           }
         ],
-        "verification_receipt": null,
+        "verification_receipt": {
+          "path": "docs/engineering/verification/s4-closeout/S4-04.json",
+          "sha256": "5e1dbcb7723387492295bdf26721dc9be6de3aeeaf9b00544ee1e83417bd062b"
+        },
         "acceptance_record": null
       }
     },
@@ -3927,7 +3955,7 @@
       "priority": "P0",
       "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/s4d-platform-admin-evidence.json;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md",
+      "evidence": "docs/engineering/s4d-platform-admin-evidence.json;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md;docs/engineering/verification/s4-closeout/postgres.json",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
@@ -3935,7 +3963,7 @@
       },
       "execution": {
         "implementation": "scoped_implemented",
-        "verification": "recorded",
+        "verification": "passed",
         "acceptance": "pending",
         "scope": "工作区冻结、Provider隔离、事故与审计后端及运营UI已接入，权限/版本冲突通过真实浏览器验证",
         "remaining": [
@@ -3953,9 +3981,16 @@
           {
             "path": "docs/engineering/2026-09-16-s4-closeout.md",
             "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
+          },
+          {
+            "path": "docs/engineering/verification/s4-closeout/postgres.json",
+            "sha256": "806838519e31db3bbbdf9fb2ad2bbdf847fbb5dde5e220dc7465769a93f0842e"
           }
         ],
-        "verification_receipt": null,
+        "verification_receipt": {
+          "path": "docs/engineering/verification/s4-closeout/S4-05.json",
+          "sha256": "b31af59d507e176042f58d9445dc5f33bcd287f38ab83325160c6d4aeab88cf4"
+        },
         "acceptance_record": null
       }
     },
@@ -3975,7 +4010,7 @@
       "priority": "P1",
       "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/s406-sandbox-payment-evidence.json;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md",
+      "evidence": "docs/engineering/s406-sandbox-payment-evidence.json;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md;docs/engineering/verification/s4-closeout/postgres.json",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
@@ -3983,7 +4018,7 @@
       },
       "execution": {
         "implementation": "scoped_implemented",
-        "verification": "recorded",
+        "verification": "passed",
         "acceptance": "pending",
         "scope": "供应商中立sandbox意图、验签、回调与对账及状态UI保留，不提供真实充值",
         "remaining": [
@@ -4001,9 +4036,16 @@
           {
             "path": "docs/engineering/2026-09-16-s4-closeout.md",
             "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
+          },
+          {
+            "path": "docs/engineering/verification/s4-closeout/postgres.json",
+            "sha256": "806838519e31db3bbbdf9fb2ad2bbdf847fbb5dde5e220dc7465769a93f0842e"
           }
         ],
-        "verification_receipt": null,
+        "verification_receipt": {
+          "path": "docs/engineering/verification/s4-closeout/S4-06.json",
+          "sha256": "13ad85c43ab54260ea3c44d7048472b8acc5e2bdd522158fd9766148934ca885"
+        },
         "acceptance_record": null
       }
     },
@@ -4023,7 +4065,7 @@
       "priority": "P1",
       "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/s4b-release-governance-evidence.json;docs/engineering/2026-09-16-s4-distribution-quality.md;docs/engineering/2026-09-16-s4-closeout.md",
+      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/s4b-release-governance-evidence.json;docs/engineering/2026-09-16-s4-distribution-quality.md;docs/engineering/2026-09-16-s4-closeout.md;docs/engineering/verification/s4-closeout/postgres.json",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
@@ -4031,7 +4073,7 @@
       },
       "execution": {
         "implementation": "scoped_implemented",
-        "verification": "recorded",
+        "verification": "passed",
         "acceptance": "pending",
         "scope": "官方Go SDK CLI与Skill已实现；通过同MCP授权/预算/Run执行、幂等重放、查询、取消和精确参数合同",
         "remaining": [
@@ -4053,9 +4095,16 @@
           {
             "path": "docs/engineering/2026-09-16-s4-closeout.md",
             "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
+          },
+          {
+            "path": "docs/engineering/verification/s4-closeout/postgres.json",
+            "sha256": "806838519e31db3bbbdf9fb2ad2bbdf847fbb5dde5e220dc7465769a93f0842e"
           }
         ],
-        "verification_receipt": null,
+        "verification_receipt": {
+          "path": "docs/engineering/verification/s4-closeout/S4-07.json",
+          "sha256": "a9575119be4bb1995c75a257ea29c9c634582b0656e60a893da9199c6adf24e2"
+        },
         "acceptance_record": null
       }
     },
@@ -4075,7 +4124,7 @@
       "priority": "P0",
       "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/2026-09-16-s4-distribution-quality.md;docs/engineering/2026-09-16-s4-closeout.md",
+      "evidence": "docs/engineering/2026-09-16-s4-distribution-quality.md;docs/engineering/2026-09-16-s4-closeout.md;docs/engineering/verification/s4-closeout/postgres.json",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
@@ -4083,7 +4132,7 @@
       },
       "execution": {
         "implementation": "scoped_implemented",
-        "verification": "recorded",
+        "verification": "passed",
         "acceptance": "pending",
         "scope": "只读MCP发现/合同快照、漂移拒绝、有界采样任务及无脚本质量报告已实现；不覆盖当前发布版本",
         "remaining": [
@@ -4097,9 +4146,16 @@
           {
             "path": "docs/engineering/2026-09-16-s4-closeout.md",
             "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
+          },
+          {
+            "path": "docs/engineering/verification/s4-closeout/postgres.json",
+            "sha256": "806838519e31db3bbbdf9fb2ad2bbdf847fbb5dde5e220dc7465769a93f0842e"
           }
         ],
-        "verification_receipt": null,
+        "verification_receipt": {
+          "path": "docs/engineering/verification/s4-closeout/S4-08.json",
+          "sha256": "3c2147c80cec26982c28e918ea199e9b29d240e24f7a0475dfd2a1b6d7aa35c9"
+        },
         "acceptance_record": null
       }
     },
@@ -4119,7 +4175,7 @@
       "priority": "P1",
       "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;frontend/apps/console/src/app/router.tsx;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md",
+      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;frontend/apps/console/src/app/router.tsx;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md;docs/engineering/verification/s4-closeout/postgres.json",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
@@ -4127,7 +4183,7 @@
       },
       "execution": {
         "implementation": "scoped_implemented",
-        "verification": "recorded",
+        "verification": "passed",
         "acceptance": "pending",
         "scope": "发布者工作台及真实Chromium/HTTP/隔离PostgreSQL草稿、预检、独立审核、发布与负向流程",
         "remaining": [
@@ -4149,9 +4205,16 @@
           {
             "path": "docs/engineering/2026-09-16-s4-closeout.md",
             "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
+          },
+          {
+            "path": "docs/engineering/verification/s4-closeout/postgres.json",
+            "sha256": "806838519e31db3bbbdf9fb2ad2bbdf847fbb5dde5e220dc7465769a93f0842e"
           }
         ],
-        "verification_receipt": null,
+        "verification_receipt": {
+          "path": "docs/engineering/verification/s4-closeout/S4-09.json",
+          "sha256": "cf2f7dcac2d201766f32ea2b6171c64f7f50acc563e4992b63d1012e219b20e0"
+        },
         "acceptance_record": null
       }
     },
@@ -4171,7 +4234,7 @@
       "priority": "P0",
       "status": "待验收",
       "progress": null,
-      "evidence": "frontend/apps/admin/src/app/router.tsx;docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/s4b-release-governance-evidence.json;docs/engineering/s4c-dangerous-operation-jit-evidence.json;docs/engineering/s4d-platform-admin-evidence.json;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md",
+      "evidence": "frontend/apps/admin/src/app/router.tsx;docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/s4b-release-governance-evidence.json;docs/engineering/s4c-dangerous-operation-jit-evidence.json;docs/engineering/s4d-platform-admin-evidence.json;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md;docs/engineering/verification/s4-closeout/postgres.json",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
@@ -4179,7 +4242,7 @@
       },
       "execution": {
         "implementation": "scoped_implemented",
-        "verification": "recorded",
+        "verification": "passed",
         "acceptance": "pending",
         "scope": "发布审核/回退、冻结/事故/审计和JIT工作台复用真实后端；CSRF、精确版本、不同审核主体及越权场景已验证",
         "remaining": [
@@ -4213,9 +4276,16 @@
           {
             "path": "docs/engineering/2026-09-16-s4-closeout.md",
             "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
+          },
+          {
+            "path": "docs/engineering/verification/s4-closeout/postgres.json",
+            "sha256": "806838519e31db3bbbdf9fb2ad2bbdf847fbb5dde5e220dc7465769a93f0842e"
           }
         ],
-        "verification_receipt": null,
+        "verification_receipt": {
+          "path": "docs/engineering/verification/s4-closeout/S4-10.json",
+          "sha256": "f7199415e48e4456247017a219ea72c2e9e39b4e0a523055ff2080b612fa1763"
+        },
         "acceptance_record": null
       }
     },
@@ -4235,7 +4305,7 @@
       "priority": "P1",
       "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/s403-commerce-billing-evidence.json;docs/engineering/s406-sandbox-payment-evidence.json;frontend/apps/admin/src/app/router.tsx;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md",
+      "evidence": "docs/engineering/s403-commerce-billing-evidence.json;docs/engineering/s406-sandbox-payment-evidence.json;frontend/apps/admin/src/app/router.tsx;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md;docs/engineering/verification/s4-closeout/postgres.json",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
@@ -4243,7 +4313,7 @@
       },
       "execution": {
         "implementation": "scoped_implemented",
-        "verification": "recorded",
+        "verification": "passed",
         "acceptance": "pending",
         "scope": "账本、对账、部分退款/调账审批与sandbox支付状态界面已有真实浏览器验证，不将跳转当到账",
         "remaining": [
@@ -4269,9 +4339,16 @@
           {
             "path": "docs/engineering/2026-09-16-s4-closeout.md",
             "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
+          },
+          {
+            "path": "docs/engineering/verification/s4-closeout/postgres.json",
+            "sha256": "806838519e31db3bbbdf9fb2ad2bbdf847fbb5dde5e220dc7465769a93f0842e"
           }
         ],
-        "verification_receipt": null,
+        "verification_receipt": {
+          "path": "docs/engineering/verification/s4-closeout/S4-11.json",
+          "sha256": "50003a2d29344cb9314b461bfa65530e6a3184e87f90ac5f105635359794e128"
+        },
         "acceptance_record": null
       }
     },
@@ -4291,7 +4368,7 @@
       "priority": "P1",
       "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/s406-sandbox-payment-evidence.json;docs/engineering/2026-09-16-s4-closeout.md",
+      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/s406-sandbox-payment-evidence.json;docs/engineering/2026-09-16-s4-closeout.md;docs/engineering/verification/s4-closeout/project.json",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
@@ -4299,7 +4376,7 @@
       },
       "execution": {
         "implementation": "scoped_implemented",
-        "verification": "recorded",
+        "verification": "passed",
         "acceptance": "pending",
         "scope": "已有实际CLI/Skill、五个工作台、质量、制品签名、依赖扫描和恢复引导；文档无真实秘密",
         "remaining": [
@@ -4317,9 +4394,16 @@
           {
             "path": "docs/engineering/2026-09-16-s4-closeout.md",
             "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
+          },
+          {
+            "path": "docs/engineering/verification/s4-closeout/project.json",
+            "sha256": "1e87428bc9742fa4d0eb8381bcd99f3e20809be3b1f62370b45089aeb4276e00"
           }
         ],
-        "verification_receipt": null,
+        "verification_receipt": {
+          "path": "docs/engineering/verification/s4-closeout/S4-12.json",
+          "sha256": "fa2abc74652ef037294110fd8e6505b2e7a6c54250b5269ae21c88fa93c3ea1d"
+        },
         "acceptance_record": null
       }
     },
@@ -4339,7 +4423,7 @@
       "priority": "P0",
       "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/s4b-release-governance-evidence.json;docs/engineering/s4c-dangerous-operation-jit-evidence.json;docs/engineering/s4d-platform-admin-evidence.json;backend/tests/integration/postgres_test.go;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md",
+      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/s4b-release-governance-evidence.json;docs/engineering/s4c-dangerous-operation-jit-evidence.json;docs/engineering/s4d-platform-admin-evidence.json;backend/tests/integration/postgres_test.go;docs/engineering/2026-09-16-s4-workbenches.md;docs/engineering/2026-09-16-s4-closeout.md;docs/engineering/verification/s4-closeout/postgres.json",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
@@ -4347,7 +4431,7 @@
       },
       "execution": {
         "implementation": "scoped_implemented",
-        "verification": "recorded",
+        "verification": "passed",
         "acceptance": "pending",
         "scope": "发布/回退/审批/Admin合同、真实数据库及Chromium工作台回归已执行；不只核对文件存在",
         "remaining": [
@@ -4381,9 +4465,16 @@
           {
             "path": "docs/engineering/2026-09-16-s4-closeout.md",
             "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
+          },
+          {
+            "path": "docs/engineering/verification/s4-closeout/postgres.json",
+            "sha256": "806838519e31db3bbbdf9fb2ad2bbdf847fbb5dde5e220dc7465769a93f0842e"
           }
         ],
-        "verification_receipt": null,
+        "verification_receipt": {
+          "path": "docs/engineering/verification/s4-closeout/S4-13.json",
+          "sha256": "79d8226725c883133f5046639bab360b19644ff6cd807a73226a8681e0b4d967"
+        },
         "acceptance_record": null
       }
     },
@@ -4403,7 +4494,7 @@
       "priority": "P0",
       "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/s403-commerce-billing-evidence.json;docs/engineering/s406-sandbox-payment-evidence.json;backend/tests/integration/postgres_test.go;docs/engineering/2026-09-16-s4-closeout.md",
+      "evidence": "docs/engineering/s403-commerce-billing-evidence.json;docs/engineering/s406-sandbox-payment-evidence.json;backend/tests/integration/postgres_test.go;docs/engineering/2026-09-16-s4-closeout.md;docs/engineering/verification/s4-closeout/postgres.json",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
@@ -4411,7 +4502,7 @@
       },
       "execution": {
         "implementation": "scoped_implemented",
-        "verification": "recorded",
+        "verification": "passed",
         "acceptance": "pending",
         "scope": "不可变账本、sandbox回调、部分退款重放、浏览器账务与CLI同授权/同预算路径已执行",
         "remaining": [
@@ -4433,9 +4524,16 @@
           {
             "path": "docs/engineering/2026-09-16-s4-closeout.md",
             "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
+          },
+          {
+            "path": "docs/engineering/verification/s4-closeout/postgres.json",
+            "sha256": "806838519e31db3bbbdf9fb2ad2bbdf847fbb5dde5e220dc7465769a93f0842e"
           }
         ],
-        "verification_receipt": null,
+        "verification_receipt": {
+          "path": "docs/engineering/verification/s4-closeout/S4-14.json",
+          "sha256": "994e0451b7f1926436c2312d8ba8563101b12cf45c4d113842a1e97005fc4f24"
+        },
         "acceptance_record": null
       }
     },
@@ -4455,7 +4553,7 @@
       "priority": "P0",
       "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/2026-09-16-s4-closeout.md",
+      "evidence": "docs/engineering/2026-09-16-s4-closeout.md;docs/engineering/verification/s4-closeout/project.json",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
@@ -4463,7 +4561,7 @@
       },
       "execution": {
         "implementation": "scoped_implemented",
-        "verification": "recorded",
+        "verification": "passed",
         "acceptance": "pending",
         "scope": "汇总原18任务、实际命令/日志/源码指纹及G4阻断清单；工程验证不伪造Gate批准",
         "remaining": [
@@ -4473,9 +4571,16 @@
           {
             "path": "docs/engineering/2026-09-16-s4-closeout.md",
             "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
+          },
+          {
+            "path": "docs/engineering/verification/s4-closeout/project.json",
+            "sha256": "1e87428bc9742fa4d0eb8381bcd99f3e20809be3b1f62370b45089aeb4276e00"
           }
         ],
-        "verification_receipt": null,
+        "verification_receipt": {
+          "path": "docs/engineering/verification/s4-closeout/S4-15.json",
+          "sha256": "638e588ad3e46b6487d00ace5a7002a94352f8b085009ce335cabe1ca3142e40"
+        },
         "acceptance_record": null
       }
     },
@@ -4495,7 +4600,7 @@
       "priority": "P0",
       "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/s4b-release-governance-evidence.json;docs/engineering/2026-09-16-s4-distribution-quality.md;docs/engineering/2026-09-16-s4-closeout.md",
+      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/s4b-release-governance-evidence.json;docs/engineering/2026-09-16-s4-distribution-quality.md;docs/engineering/2026-09-16-s4-closeout.md;docs/engineering/verification/s4-closeout/dependencies.json",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
@@ -4503,7 +4608,7 @@
       },
       "execution": {
         "implementation": "scoped_implemented",
-        "verification": "recorded",
+        "verification": "passed",
         "acceptance": "pending",
         "scope": "真实Ed25519签名/外部可信公钥验证、不可变制品摘要与路径限制、网络依赖扫描已实现；修复两项实际可达漏洞",
         "remaining": [
@@ -4525,9 +4630,16 @@
           {
             "path": "docs/engineering/2026-09-16-s4-closeout.md",
             "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
+          },
+          {
+            "path": "docs/engineering/verification/s4-closeout/dependencies.json",
+            "sha256": "a12c43fcc1c77fd67113691b84e049822a8402405c850e7b5388237d39bb920a"
           }
         ],
-        "verification_receipt": null,
+        "verification_receipt": {
+          "path": "docs/engineering/verification/s4-closeout/S4-16.json",
+          "sha256": "2f13b6587beda209a11367020f079b81ddf60b3ec592819024f9c4a734bcc7f0"
+        },
         "acceptance_record": null
       }
     },
@@ -4547,7 +4659,7 @@
       "priority": "P0",
       "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/alpha-operations-evidence.json;docs/engineering/s4b-release-governance-evidence.json;docs/engineering/2026-09-16-s4-operations-runbook.md;docs/engineering/2026-09-16-s4-closeout.md",
+      "evidence": "docs/engineering/alpha-operations-evidence.json;docs/engineering/s4b-release-governance-evidence.json;docs/engineering/2026-09-16-s4-operations-runbook.md;docs/engineering/2026-09-16-s4-closeout.md;docs/engineering/verification/s4-closeout/postgres.json",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
@@ -4555,7 +4667,7 @@
       },
       "execution": {
         "implementation": "scoped_implemented",
-        "verification": "recorded",
+        "verification": "passed",
         "acceptance": "pending",
         "scope": "已提供工作台回退/对账手册与自有临时容器pg_dump/pg_restore，核对Run/Job/预算/账本/支付/迁移事实，恢复后不启动Worker",
         "remaining": [
@@ -4577,9 +4689,16 @@
           {
             "path": "docs/engineering/2026-09-16-s4-closeout.md",
             "sha256": "b7eb1ce8e7f8afdddb30eafca862f4fdd509ab2d46d9b87a9a77e2c2dbdd699b"
+          },
+          {
+            "path": "docs/engineering/verification/s4-closeout/postgres.json",
+            "sha256": "806838519e31db3bbbdf9fb2ad2bbdf847fbb5dde5e220dc7465769a93f0842e"
           }
         ],
-        "verification_receipt": null,
+        "verification_receipt": {
+          "path": "docs/engineering/verification/s4-closeout/S4-17.json",
+          "sha256": "568aed9cda408e64901ff35060812f67567dee5fc594bfe862e0404438e8554e"
+        },
         "acceptance_record": null
       }
     },
@@ -5591,8 +5710,8 @@
   "execution_tracking": {
     "schema_version": 1,
     "reviewed_at": "2026-09-16",
-    "reviewed_head": "7549741603735fd2d2cb618864be5b38d77823a1",
-    "review_basis": "实现文件与已执行本地验证已复核；最终完整回执待汇总，不将已有记录当本次全部通过",
+    "reviewed_head": "6620b0a54c21363a5cf2fdfdc15c3feeef94dad4",
+    "review_basis": "本轮实际工具、依赖、pnpm、隔离PostgreSQL/Chromium/恢复回执；保留旧记录时间范围，未取得人工/商业批准",
     "plan_fingerprint": "54a10bde509a7cd3c78ba6602cb73623fc4a446a946c3d38947ae625b21afc70",
     "canonical_aliases": {
       "S4-A": "S4-01",

@@ -1,0 +1,21 @@
+{
+  "record_type": "task-verification",
+  "task_id": "S4-02",
+  "result": "passed",
+  "exit_code": 0,
+  "command": "pnpm test:integration:docker --browser --recovery",
+  "environment": "win32/x64; local Mender; isolated fixtures only",
+  "head": "7549741603735fd2d2cb618864be5b38d77823a1",
+  "source_sha256": "83c76d55a555eb86b29d2dcdb4817e59762196fa2de162f6cc2e7eb1b99674b2",
+  "finished_at": "2026-09-16T10:22:58.194Z",
+  "log": {
+    "path": "docs/engineering/verification/s4-closeout/postgres.txt",
+    "sha256": "25ad05216376824250bd15ac4df8744052ca2c6ad7eaac1fc177c7fffd23e7dd"
+  },
+  "suite_receipt": {
+    "path": "docs/engineering/verification/s4-closeout/postgres.json",
+    "sha256": "806838519e31db3bbbdf9fb2ad2bbdf847fbb5dde5e220dc7465769a93f0842e"
+  },
+  "scope": "危险操作与JIT以及refund/adjustment消费者保留，新增精确审批读取和工作台；撤销权限错误保持403",
+  "limitation": "Scoped automated verification, not full task or human acceptance."
+}

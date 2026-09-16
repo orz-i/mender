@@ -1,0 +1,21 @@
+{
+  "record_type": "task-verification",
+  "task_id": "S4-16",
+  "result": "passed",
+  "exit_code": 0,
+  "command": "pnpm check:dependencies",
+  "environment": "win32/x64; local Mender; isolated fixtures only",
+  "head": "7549741603735fd2d2cb618864be5b38d77823a1",
+  "source_sha256": "83c76d55a555eb86b29d2dcdb4817e59762196fa2de162f6cc2e7eb1b99674b2",
+  "finished_at": "2026-09-16T10:23:49.401Z",
+  "log": {
+    "path": "docs/engineering/verification/s4-closeout/dependencies.txt",
+    "sha256": "b647512e4f3bdfee861fb8dcdbff698a3cecd978fad16c46d66b07196a6f717a"
+  },
+  "suite_receipt": {
+    "path": "docs/engineering/verification/s4-closeout/dependencies.json",
+    "sha256": "a12c43fcc1c77fd67113691b84e049822a8402405c850e7b5388237d39bb920a"
+  },
+  "scope": "真实Ed25519签名/外部可信公钥验证、不可变制品摘要与路径限制、网络依赖扫描已实现；修复两项实际可达漏洞",
+  "limitation": "Scoped automated verification, not full task or human acceptance."
+}

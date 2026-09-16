@@ -1,0 +1,21 @@
+{
+  "record_type": "task-verification",
+  "task_id": "S4-12",
+  "result": "passed",
+  "exit_code": 0,
+  "command": "pnpm check",
+  "environment": "win32/x64; local Mender; isolated fixtures only",
+  "head": "7549741603735fd2d2cb618864be5b38d77823a1",
+  "source_sha256": "83c76d55a555eb86b29d2dcdb4817e59762196fa2de162f6cc2e7eb1b99674b2",
+  "finished_at": "2026-09-16T10:21:16.414Z",
+  "log": {
+    "path": "docs/engineering/verification/s4-closeout/project.txt",
+    "sha256": "ba59fc7994dfb5ffd65f0d2b0d5722dfcdd96e22f1864df7f638336064128d25"
+  },
+  "suite_receipt": {
+    "path": "docs/engineering/verification/s4-closeout/project.json",
+    "sha256": "1e87428bc9742fa4d0eb8381bcd99f3e20809be3b1f62370b45089aeb4276e00"
+  },
+  "scope": "已有实际CLI/Skill、五个工作台、质量、制品签名、依赖扫描和恢复引导；文档无真实秘密",
+  "limitation": "Scoped automated verification, not full task or human acceptance."
+}
