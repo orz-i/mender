@@ -78,6 +78,12 @@ func TestReleasePlanEmergencyDisableIsNotRollback(t *testing.T) {
 	if plan.Snapshot().State != ReleaseDisabled || plan.Snapshot().RolledBackAt.IsZero() == false {
 		t.Fatal("disable was conflated with rollback", plan.Snapshot())
 	}
+	if err := plan.Rollback(at.Add(3 * time.Minute)); err != nil {
+		t.Fatal("stable recovery after emergency disable failed", err)
+	}
+	if got, blocked := plan.Route(); got != "deploy_stable" || blocked || plan.Snapshot().DisabledAt.IsZero() {
+		t.Fatal("rollback must recover stable routing without erasing disable history", got, blocked, plan.Snapshot())
+	}
 }
 
 func TestReleasePlanRejectsUnsafeFactsAndTransitions(t *testing.T) {

@@ -120,8 +120,17 @@ func RuntimeRole(ctx context.Context, pool *pgxpool.Pool) error {
 	 AND NOT has_schema_privilege(current_user,'catalog','CREATE')
 	 AND NOT has_schema_privilege(current_user,'distribution','CREATE')
 	 AND NOT has_schema_privilege(current_user,'connections','CREATE')
-	 AND NOT has_schema_privilege(current_user,'supply','USAGE')`).Scan(&grants); err != nil || !grants {
+	 AND has_schema_privilege(current_user,'supply','USAGE')
+	 AND has_function_privilege(current_user,'supply.resolve_release_route(text,text,text,text)','EXECUTE')
+	 AND NOT has_table_privilege(current_user,'supply.release_plans','SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
+	 AND NOT has_table_privilege(current_user,'supply.release_routes','SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
+	 AND NOT has_table_privilege(current_user,'supply.release_audit_events','SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
+	 AND NOT has_table_privilege(current_user,'supply.deployments','SELECT,INSERT,UPDATE,DELETE,TRUNCATE')`).Scan(&grants); err != nil || !grants {
 		return errors.New("API admission plan grants are invalid")
+	}
+	var releaseRLS int
+	if err = pool.QueryRow(ctx, `SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='supply' AND c.relname IN ('release_plans','release_routes') AND c.relrowsecurity AND c.relforcerowsecurity`).Scan(&releaseRLS); err != nil || releaseRLS != 2 {
+		return errors.New("release routing RLS safeguards missing")
 	}
 	var planRLS int
 	if err = pool.QueryRow(ctx, `SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relrowsecurity AND c.relforcerowsecurity AND ((n.nspname='distribution' AND c.relname='toolset_bindings') OR (n.nspname='connections' AND c.relname IN('connections','connection_grants')) OR (n.nspname='commerce' AND c.relname='budget_periods'))`).Scan(&planRLS); err != nil || planRLS != 4 {

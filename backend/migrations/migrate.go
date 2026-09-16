@@ -18,7 +18,7 @@ import (
 
 //go:embed *.sql
 var files embed.FS
-var names = []string{"0001_identity.sql", "0002_execution.sql", "0003_execution_read_indexes.sql", "0004_atomic_admission.sql", "0005_coordinated_cancellation.sql", "0006_start_run_plan.sql", "0007_worker_leases.sql", "0008_supplier_submission.sql", "0009_supplier_runtime.sql", "0010_provider_results.sql", "0011_provider_reconciliation.sql", "0012_provider_cancellation.sql", "0013_provider_control_endpoints.sql", "0014_usage_settlement_contract.sql", "0015_terminal_settlement_jobs.sql", "0016_execution_artifacts.sql", "0017_fixed_toolset_contracts.sql", "0018_legacy_tool_contract_compat.sql", "0019_upstream_mcp_contracts.sql", "0020_upstream_mcp_routes.sql", "0021_human_browser_sessions.sql", "0022_run_delegations.sql", "0023_run_start_delegations.sql", "0024_catalog_toolset_management.sql", "0025_catalog_publication_workflow.sql", "0026_catalog_publication_approvals.sql", "0027_governance_publication_audit.sql", "0028_governance_publication_policy.sql", "0029_governance_policy_enforcement.sql", "0030_governance_execution_risk.sql", "0031_run_start_argument_binding.sql", "0032_governance_execution_policy_operations.sql", "0033_remote_agent_contracts.sql", "0034_provider_callback_inbox.sql", "0035_artifact_objects.sql", "0036_connection_oauth_refresh.sql", "0037_remote_agent_input.sql", "0038_remote_agent_input_runtime.sql", "0039_supply_plugin_publication.sql", "0040_governance_plugin_publication.sql"}
+var names = []string{"0001_identity.sql", "0002_execution.sql", "0003_execution_read_indexes.sql", "0004_atomic_admission.sql", "0005_coordinated_cancellation.sql", "0006_start_run_plan.sql", "0007_worker_leases.sql", "0008_supplier_submission.sql", "0009_supplier_runtime.sql", "0010_provider_results.sql", "0011_provider_reconciliation.sql", "0012_provider_cancellation.sql", "0013_provider_control_endpoints.sql", "0014_usage_settlement_contract.sql", "0015_terminal_settlement_jobs.sql", "0016_execution_artifacts.sql", "0017_fixed_toolset_contracts.sql", "0018_legacy_tool_contract_compat.sql", "0019_upstream_mcp_contracts.sql", "0020_upstream_mcp_routes.sql", "0021_human_browser_sessions.sql", "0022_run_delegations.sql", "0023_run_start_delegations.sql", "0024_catalog_toolset_management.sql", "0025_catalog_publication_workflow.sql", "0026_catalog_publication_approvals.sql", "0027_governance_publication_audit.sql", "0028_governance_publication_policy.sql", "0029_governance_policy_enforcement.sql", "0030_governance_execution_risk.sql", "0031_run_start_argument_binding.sql", "0032_governance_execution_policy_operations.sql", "0033_remote_agent_contracts.sql", "0034_provider_callback_inbox.sql", "0035_artifact_objects.sql", "0036_connection_oauth_refresh.sql", "0037_remote_agent_input.sql", "0038_remote_agent_input_runtime.sql", "0039_supply_plugin_publication.sql", "0040_governance_plugin_publication.sql", "0041_supply_release_governance.sql"}
 
 func migrationBody(name string) ([]byte, error) {
 	body, err := files.ReadFile(name)
@@ -110,7 +110,7 @@ func GrantRuntime(ctx context.Context, pool *pgxpool.Pool, role string) error {
 	}
 	defer rollback(tx)
 	for _, sql := range []string{
-		"GRANT USAGE ON SCHEMA identity,execution,mender_meta,catalog,distribution,connections,commerce TO " + id,
+		"GRANT USAGE ON SCHEMA identity,execution,mender_meta,catalog,distribution,connections,commerce,supply TO " + id,
 		"GRANT SELECT ON identity.workspaces,identity.service_accounts,identity.api_keys,mender_meta.schema_migrations,execution.runs TO " + id,
 		"GRANT UPDATE (state,version,updated_at) ON execution.runs TO " + id,
 		"GRANT SELECT,INSERT ON execution.run_events TO " + id,
@@ -120,6 +120,7 @@ func GrantRuntime(ctx context.Context, pool *pgxpool.Pool, role string) error {
 		"GRANT SELECT (workspace_id,id,provider_id,state,revision,created_at,expires_at) ON connections.connections TO " + id,
 		"GRANT SELECT (workspace_id,connection_id,subject_id,active,created_at,expires_at) ON connections.connection_grants TO " + id,
 		"GRANT SELECT (workspace_id,budget_id,period_id,currency,starts_at,ends_at,active) ON commerce.budget_periods TO " + id,
+		"GRANT EXECUTE ON FUNCTION supply.resolve_release_route(text,text,text,text) TO " + id,
 	} {
 		if _, err = tx.Exec(ctx, sql); err != nil {
 			return errors.New("runtime grant failed")

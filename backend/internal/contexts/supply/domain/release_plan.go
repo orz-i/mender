@@ -134,7 +134,7 @@ func validateReleaseSnapshot(s ReleasePlanSnapshot) error {
 			return ErrInvalidReleasePlan
 		}
 	case ReleaseRolledBack:
-		if !validReleaseTime(s.CanaryStartedAt) || !validReleaseTime(s.ObservationUntil) || !validReleaseTime(s.RolledBackAt) || s.RolledBackAt.Before(s.CanaryStartedAt) || !s.DisabledAt.IsZero() {
+		if !validReleaseTime(s.CanaryStartedAt) || !validReleaseTime(s.ObservationUntil) || !validReleaseTime(s.RolledBackAt) || s.RolledBackAt.Before(s.CanaryStartedAt) || (!s.DisabledAt.IsZero() && (s.RolledBackAt.Before(s.DisabledAt) || !validReleaseTime(s.DisabledAt))) {
 			return ErrInvalidReleasePlan
 		}
 	case ReleaseDisabled:
@@ -215,7 +215,7 @@ func (p *ReleasePlan) Drain(at time.Time) error {
 }
 
 func (p *ReleasePlan) Rollback(at time.Time) error {
-	if p.snapshot.State != ReleaseCanary && p.snapshot.State != ReleaseActive && p.snapshot.State != ReleaseDraining {
+	if p.snapshot.State != ReleaseCanary && p.snapshot.State != ReleaseActive && p.snapshot.State != ReleaseDraining && p.snapshot.State != ReleaseDisabled {
 		return ErrReleaseTransition
 	}
 	if err := p.transition(at); err != nil {
