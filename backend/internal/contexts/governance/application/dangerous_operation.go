@@ -16,6 +16,51 @@ type DangerousOperationApproval struct {
 	RequestedAt, ExpiresAt, ReviewedAt, ConsumedAt           time.Time
 }
 
+// Get permits an exact approval to be inspected before an independent decision.
+// Platform finance/support reviewers must not acquire tenant membership merely
+// to view their approval binding. This does not grant a tenant-wide listing.
+func (s *DangerousOperationService) Get(ctx context.Context, actor Actor, workspace, id string) (DangerousOperationApproval, error) {
+	if !validID(actor.UserID) || !validID(workspace) || !validID(id) {
+		return DangerousOperationApproval{}, ErrInvalid
+	}
+	item, err := s.repository.GetDangerousOperation(ctx, workspace, id)
+	if err != nil {
+		return DangerousOperationApproval{}, err
+	}
+	if item.ID != id || !validDangerousProjection(item, workspace) {
+		return DangerousOperationApproval{}, ErrUnavailable
+	}
+	switch item.Action {
+	case domain.DangerousActionReleaseEmergencyDisable:
+		err = s.auth.Authorize(ctx, actor, workspace, "release:manage")
+	case domain.DangerousActionSupportWorkspaceRead:
+		if item.RequesterUserID == actor.UserID {
+			err = s.auth.AuthorizePlatform(ctx, actor, "support:request")
+		} else {
+			err = s.auth.AuthorizePlatform(ctx, actor, "dangerous:review")
+		}
+	case domain.DangerousActionCommerceRefund, domain.DangerousActionCommerceAdjustment:
+		if item.RequesterUserID == actor.UserID {
+			err = s.auth.AuthorizePlatform(ctx, actor, "platform:operate")
+		} else {
+			err = s.auth.AuthorizePlatform(ctx, actor, "dangerous:review")
+		}
+	default:
+		err = ErrForbidden
+	}
+	if err != nil {
+		return DangerousOperationApproval{}, err
+	}
+	at, err := s.dangerousNow()
+	if err != nil {
+		return DangerousOperationApproval{}, err
+	}
+	if (item.State == domain.DangerousApprovalPending || item.State == domain.DangerousApprovalApproved) && !at.Before(item.ExpiresAt) {
+		item.State = domain.DangerousApprovalExpired
+	}
+	return item, nil
+}
+
 func validCommerceBusinessKey(value string) bool {
 	if len(value) < 1 || len(value) > 200 {
 		return false

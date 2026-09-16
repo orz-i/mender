@@ -114,8 +114,10 @@ func (r *SupportReadRepository) ListSupportRuns(ctx context.Context, workspace, 
 		}
 		items = append(items, item)
 	}
-	if rows.Err() != nil {
-		return nil, application.ErrUnavailable
+	if err = rows.Err(); err != nil {
+		// PostgreSQL may deliver the JIT permission error while rows are consumed,
+		// rather than from Query. Preserve the same denial classification in both paths.
+		return nil, dangerousError(err)
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return nil, application.ErrUnavailable

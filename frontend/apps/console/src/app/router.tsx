@@ -29,6 +29,11 @@ export const router = createBrowserRouter([{
     { path: 'launch', element: <ToolLaunchPage gateway={launchGateway} /> },
     { path: 'usage', element: <UsagePage gateway={usageGateway} /> },
     { path: 'runs', element: <RunExplorerPage gateway={runGateway} /> },
+    { path: 'publisher', lazy: async () => {
+      const { PublisherWorkbenchPage, createPublisherWorkbenchGateway } = await import('../modules/publisher-workbench');
+      const gateway = createPublisherWorkbenchGateway();
+      return { Component: function PublisherRoute() { return <PublisherWorkbenchPage gateway={gateway} />; } };
+    } },
     { path: '*', element: <NotFound /> },
   ],
 }]);

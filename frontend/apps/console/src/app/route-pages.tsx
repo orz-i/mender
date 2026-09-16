@@ -10,6 +10,7 @@ export function Layout() {
     <NavLink className="nav-link" to="/launch">启动工具</NavLink>
     <NavLink className="nav-link" to="/usage">额度用量</NavLink>
     <NavLink className="nav-link" to="/runs">运行记录</NavLink>
+    <NavLink className="nav-link" to="/publisher">发布者工作台</NavLink>
     <NavLink className="nav-link" to="/status">服务状态</NavLink>
   </>}><Outlet /></Shell>;
 }

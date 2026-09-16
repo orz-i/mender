@@ -6,7 +6,10 @@
   "description": "Mender — Agent 能力集成、治理与分发平台",
   "license": "MIT",
   "packageManager": "pnpm@11.18.0",
-  "engines": { "node": "24.19.0", "pnpm": "11.18.0" },
+  "engines": {
+    "node": "24.19.0",
+    "pnpm": "11.18.0"
+  },
   "scripts": {
     "preinstall": "node scripts/check-toolchain.mjs",
     "dev": "pnpm --filter @mender/console --filter @mender/admin --parallel run dev",
@@ -18,10 +21,11 @@
     "build:backend": "node scripts/backend.mjs build ./...",
     "lint": "eslint frontend scripts eslint.config.mjs --max-warnings 0",
     "typecheck": "pnpm -r run typecheck",
-    "test": "node --test scripts/project-status.test.mjs scripts/architecture.test.mjs scripts/postgres-test.test.mjs scripts/g3-evidence.test.mjs scripts/alpha-operations.test.mjs scripts/alpha-closure.test.mjs scripts/s4a-plugin-publication.test.mjs scripts/s4b-release-governance.test.mjs scripts/s4c-dangerous-operation-jit.test.mjs scripts/s4d-platform-admin.test.mjs scripts/s403-commerce-billing.test.mjs scripts/s406-sandbox-payment.test.mjs frontend/packages/api-client/src/health.test.mjs frontend/packages/api-client/src/runs.test.mjs frontend/packages/api-client/src/console-identity.test.mjs frontend/packages/api-client/src/console-connections.test.mjs frontend/packages/api-client/src/console-run-delegation.test.mjs frontend/packages/api-client/src/console-launch.test.mjs frontend/packages/api-client/src/console-start-run.test.mjs frontend/packages/api-client/src/console-execution-risk.test.mjs frontend/packages/api-client/src/console-usage.test.mjs frontend/packages/api-client/src/console-catalog.test.mjs frontend/packages/api-client/src/admin-governance.test.mjs",
+    "test": "node --test scripts/project-status.test.mjs scripts/architecture.test.mjs scripts/postgres-test.test.mjs scripts/g3-evidence.test.mjs scripts/alpha-operations.test.mjs scripts/alpha-closure.test.mjs scripts/s4a-plugin-publication.test.mjs scripts/s4b-release-governance.test.mjs scripts/s4c-dangerous-operation-jit.test.mjs scripts/s4d-platform-admin.test.mjs scripts/s403-commerce-billing.test.mjs scripts/s406-sandbox-payment.test.mjs frontend/packages/api-client/src/health.test.mjs frontend/packages/api-client/src/runs.test.mjs frontend/packages/api-client/src/console-identity.test.mjs frontend/packages/api-client/src/console-connections.test.mjs frontend/packages/api-client/src/console-run-delegation.test.mjs frontend/packages/api-client/src/console-launch.test.mjs frontend/packages/api-client/src/console-start-run.test.mjs frontend/packages/api-client/src/console-execution-risk.test.mjs frontend/packages/api-client/src/console-usage.test.mjs frontend/packages/api-client/src/console-catalog.test.mjs frontend/packages/api-client/src/admin-governance.test.mjs frontend/packages/api-client/src/commercial.test.mjs",
     "test:backend": "node scripts/backend.mjs test ./...",
     "test:integration": "node scripts/backend.mjs test -tags=integration -count=1 -timeout=120s ./tests/integration",
     "test:integration:docker": "node scripts/test-postgres.mjs",
+    "test:s4:browser": "pnpm build && node scripts/test-postgres.mjs --browser",
     "db:migrate": "node scripts/backend.mjs run ./cmd/operator migrate",
     "db:grant-runtime": "node scripts/backend.mjs run ./cmd/operator grant-runtime",
     "db:grant-browser-session": "node scripts/backend.mjs run ./cmd/operator grant-browser-session",
@@ -76,6 +80,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@playwright/test": "1.58.2",
     "@types/node": "24.13.3",
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1",

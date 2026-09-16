@@ -17,6 +17,26 @@ type DangerousOperationHandler struct {
 	auth    application.Authorizer
 }
 
+func (h *DangerousOperationHandler) get(c *gin.Context) {
+	configure(c)
+	workspace, id := c.Param("workspace_id"), c.Param("approval_id")
+	if c.Request.URL.RawQuery != "" || !validID(workspace) || !validID(id) {
+		fail(c, application.ErrInvalid)
+		return
+	}
+	ctx, cancel, actor, ok := dangerousActor(c, h.auth, false)
+	defer cancel()
+	if !ok {
+		return
+	}
+	item, err := h.service.Get(ctx, actor, workspace, id)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": dangerousView(item)})
+}
+
 type dangerousCommerceRequestInput struct {
 	Action      string `json:"action"`
 	BusinessKey string `json:"business_key"`
@@ -68,6 +88,7 @@ func NewDangerousOperation(service *application.DangerousOperationService, auth 
 func (h *DangerousOperationHandler) Register(router *gin.Engine) {
 	base := "/api/admin/v1/workspaces/:workspace_id/dangerous-operations"
 	router.GET(base, h.list)
+	router.GET(base+"/:approval_id", h.get)
 	router.POST(base+"/release-emergency-requests", h.requestReleaseEmergency)
 	router.POST(base+"/commerce-requests", h.requestCommerce)
 	router.POST(base+"/:approval_id/approve", h.approve)

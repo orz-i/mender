@@ -49,7 +49,11 @@ func TestPostgresRuntimeContract(t *testing.T) {
 	if !strings.EqualFold(u.Hostname(), "localhost") && (ip == nil || !ip.IsLoopback()) {
 		t.Fatal("integration tests only create databases on an explicit loopback test server")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	suiteTimeout := 90 * time.Second
+	if os.Getenv("MENDER_S4_BROWSER") == "true" {
+		suiteTimeout = 4 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), suiteTimeout)
 	defer cancel()
 	admin, err := database.Open(ctx, dsn)
 	must(t, err)
@@ -344,6 +348,9 @@ func TestPostgresRuntimeContract(t *testing.T) {
 		}
 	})
 	t.Run("checksum drift and elevated runtime are rejected", func(t *testing.T) {
+		if os.Getenv("MENDER_S4_BROWSER") == "true" {
+			t.Run("S4 real browser HTTP and PostgreSQL workbenches", func(t *testing.T) { exerciseS4Browser(t, ctx, owner, runtimeURL.String()) })
+		}
 		if h, _, e := bootstrap.BuildAPI(ctx, bootstrap.APIConfig{RunAPIEnabled: true, DatabaseURL: dbURL.String()}); e == nil || h != nil {
 			t.Fatal("migration owner accepted by API")
 		}

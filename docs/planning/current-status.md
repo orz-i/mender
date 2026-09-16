@@ -48,9 +48,9 @@
 | S4-06 实现支付供应商适配与回调对账 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | 供应商中立 sandbox PaymentIntent、验签与回调对账；**剩余：**原任务 sandbox 条件签署；真实 PSP／商户资格／真钱与 S4-11 UI 不得据此放行 |
 | S4-07 实现 CLI 与 Skill 分发合同 | 未开始 | 未执行 | 待验收 | 当前切片均明确 CLI/Skill 分发后置；**剩余：**原 CLI/Skill 合同、安装与多入口一致性测试 |
 | S4-08 实现发布质量与健康检查任务 | 待复核 | 待复核 | 待验收 | 未取得发布质量／健康任务完整交付证据；**剩余：**核对真实实现再决定工作量；不能把 API health 探针当合成质量任务 |
-| S4-09 实现发布者草稿、测试与提交页面 | 未开始 | 未执行 | 待验收 | 发布者工作台在插件证据中仍 deferred；**剩余：**发布者草稿、测试、提交页面及 T31 浏览器验收 |
-| S4-10 实现 Admin 审核、异常与 JIT 界面 | 部分实现 | 待复核 | 待验收 | 已有 Catalog 审核／策略页面；新的发布、异常、JIT UI 尚缺；**剩余：**接入现有 S4-02/05 后端；敏感操作、权限、失败路径和浏览器验收 |
-| S4-11 实现账单、支付及退款状态界面 | 未开始 | 未执行 | 待验收 | 账务与支付证据明确 UI deferred；**剩余：**账单／支付／退款状态页面及非成功跳转真源验收 |
+| S4-09 实现发布者草稿、测试与提交页面 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | 五个S4工作台中对应原任务的固定端点表单、显式确认、只读事实和权限错误流程；真实Chromium/HTTP/隔离PostgreSQL已执行，正式回执随最终收口归档；**剩余：**首发发布者用户验收；发布预检不是上游试调用，真实供应商任务须另行授权验证 |
+| S4-10 实现 Admin 审核、异常与 JIT 界面 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | 五个S4工作台中对应原任务的固定端点表单、显式确认、只读事实和权限错误流程；真实Chromium/HTTP/隔离PostgreSQL已执行，正式回执随最终收口归档；**剩余：**正式运营用户验收和生产身份保证；发布/平台/JIT能力均继续服务端授权 |
+| S4-11 实现账单、支付及退款状态界面 | 限定范围已实现 | 已有记录（非本次重跑） | 待验收 | 五个S4工作台中对应原任务的固定端点表单、显式确认、只读事实和权限错误流程；真实Chromium/HTTP/隔离PostgreSQL已执行，正式回执随最终收口归档；**剩余：**正式财务用户验收；仅sandbox意图与回调对账，真实商户/支付网络仍阻断 |
 | S4-12 补齐文档、API 示例与发布引导 | 部分实现 | 待复核 | 待验收 | 已有合同及局部工程说明，本轮仅修正当前状态入口；**剩余：**CLI／发布者路径齐备后的完整文档、示例与用户失败指引 |
 | S4-13 测试发布、回退、审批与 Admin | 部分实现 | 已有记录（非本次重跑） | 待验收 | 插件、发布、审批、Admin 后端已有测试文件和范围记录；**剩余：**S4-09/10 浏览器和端到端场景；原 T22–T24/T26/T31 全条件核对 |
 | S4-14 测试支付、对账与多入口一致性 | 部分实现 | 已有记录（非本次重跑） | 待验收 | 业务账本和模拟支付已有自动化测试记录；**剩余：**CLI/Skill、多入口及 S4-11 UI 联调；原 T20/T21/T27/T29 全条件核对 |
@@ -61,9 +61,9 @@
 
 ## 下一步仍使用原任务
 
-- **S4-10 实现 Admin 审核、异常与 JIT 界面**：接入现有 S4-02/05 后端；敏感操作、权限、失败路径和浏览器验收
-- **S4-09 实现发布者草稿、测试与提交页面**：发布者草稿、测试、提交页面及 T31 浏览器验收
-- **S4-11 实现账单、支付及退款状态界面**：账单／支付／退款状态页面及非成功跳转真源验收
+- **S4-10 实现 Admin 审核、异常与 JIT 界面**：正式运营用户验收和生产身份保证；发布/平台/JIT能力均继续服务端授权
+- **S4-09 实现发布者草稿、测试与提交页面**：首发发布者用户验收；发布预检不是上游试调用，真实供应商任务须另行授权验证
+- **S4-11 实现账单、支付及退款状态界面**：正式财务用户验收；仅sandbox意图与回调对账，真实商户/支付网络仍阻断
 - **S4-13 测试发布、回退、审批与 Admin**：S4-09/10 浏览器和端到端场景；原 T22–T24/T26/T31 全条件核对
 - **S4-14 测试支付、对账与多入口一致性**：CLI/Skill、多入口及 S4-11 UI 联调；原 T20/T21/T27/T29 全条件核对
 - **S4-15 执行商业化准备回归与 G4 证据整理**：汇总 S4-13/14、明确剩余条件并形成正式 G4 决议
@@ -146,9 +146,9 @@
 | S4-06 实现支付供应商适配与回调对账 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s406-sandbox-payment-evidence.json) |
 | S4-07 实现 CLI 与 Skill 分发合同 | 未开始 | 未开始／未执行／待验收 | [证据1](../engineering/s4a-plugin-publication-evidence.json)、[证据2](../engineering/s4b-release-governance-evidence.json) |
 | S4-08 实现发布质量与健康检查任务 | 待复核 | 待复核／待复核／待验收 | 未复核；不推断未实现 |
-| S4-09 实现发布者草稿、测试与提交页面 | 未开始 | 未开始／未执行／待验收 | [证据1](../engineering/s4a-plugin-publication-evidence.json)、[证据2](../../frontend/apps/console/src/app/router.tsx) |
-| S4-10 实现 Admin 审核、异常与 JIT 界面 | 进行中 | 部分实现／待复核／待验收 | [证据1](../../frontend/apps/admin/src/app/router.tsx)、[证据2](../engineering/s4a-plugin-publication-evidence.json)、[证据3](../engineering/s4b-release-governance-evidence.json)、[证据4](../engineering/s4c-dangerous-operation-jit-evidence.json)、[证据5](../engineering/s4d-platform-admin-evidence.json) |
-| S4-11 实现账单、支付及退款状态界面 | 未开始 | 未开始／未执行／待验收 | [证据1](../engineering/s403-commerce-billing-evidence.json)、[证据2](../engineering/s406-sandbox-payment-evidence.json)、[证据3](../../frontend/apps/admin/src/app/router.tsx) |
+| S4-09 实现发布者草稿、测试与提交页面 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s4a-plugin-publication-evidence.json)、[证据2](../../frontend/apps/console/src/app/router.tsx)、[证据3](../engineering/2026-09-16-s4-workbenches.md) |
+| S4-10 实现 Admin 审核、异常与 JIT 界面 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../../frontend/apps/admin/src/app/router.tsx)、[证据2](../engineering/s4a-plugin-publication-evidence.json)、[证据3](../engineering/s4b-release-governance-evidence.json)、[证据4](../engineering/s4c-dangerous-operation-jit-evidence.json)、[证据5](../engineering/s4d-platform-admin-evidence.json)、[证据6](../engineering/2026-09-16-s4-workbenches.md) |
+| S4-11 实现账单、支付及退款状态界面 | 待验收 | 限定范围已实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s403-commerce-billing-evidence.json)、[证据2](../engineering/s406-sandbox-payment-evidence.json)、[证据3](../../frontend/apps/admin/src/app/router.tsx)、[证据4](../engineering/2026-09-16-s4-workbenches.md) |
 | S4-12 补齐文档、API 示例与发布引导 | 进行中 | 部分实现／待复核／待验收 | [证据1](../engineering/s4a-plugin-publication-evidence.json)、[证据2](../engineering/s406-sandbox-payment-evidence.json) |
 | S4-13 测试发布、回退、审批与 Admin | 进行中 | 部分实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s4a-plugin-publication-evidence.json)、[证据2](../engineering/s4b-release-governance-evidence.json)、[证据3](../engineering/s4c-dangerous-operation-jit-evidence.json)、[证据4](../engineering/s4d-platform-admin-evidence.json)、[证据5](../../backend/tests/integration/postgres_test.go) |
 | S4-14 测试支付、对账与多入口一致性 | 进行中 | 部分实现／已有记录（非本次重跑）／待验收 | [证据1](../engineering/s403-commerce-billing-evidence.json)、[证据2](../engineering/s406-sandbox-payment-evidence.json)、[证据3](../../backend/tests/integration/postgres_test.go) |

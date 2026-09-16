@@ -8,6 +8,10 @@ export function Layout() {
     <NavLink className="nav-link" to="/publication-history">审计历史</NavLink>
     <NavLink className="nav-link" to="/publication-policy">发布策略</NavLink>
     <NavLink className="nav-link" to="/execution-governance">执行治理</NavLink>
+    <NavLink className="nav-link" to="/release-management">插件审核与发布</NavLink>
+    <NavLink className="nav-link" to="/platform-operations">平台运营与异常</NavLink>
+    <NavLink className="nav-link" to="/support-approvals">危险审批与临时支持</NavLink>
+    <NavLink className="nav-link" to="/billing">账单与模拟支付</NavLink>
     <NavLink className="nav-link" to="/status">服务状态</NavLink>
   </>}><Outlet /></Shell>;
 }

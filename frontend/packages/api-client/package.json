@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "exports": { ".": "./src/index.ts", "./commercial": "./src/commercial.ts" },
   "scripts": { "typecheck": "tsc --project tsconfig.json" },
   "devDependencies": { "@mender/config": "workspace:*", "typescript": "6.0.3" }
 }

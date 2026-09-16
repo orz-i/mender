@@ -1932,11 +1932,11 @@
         "evidence": [
           {
             "path": "frontend/apps/console/src/app/router.tsx",
-            "sha256": "9cda013f377844123216113399f0fe0775b16223a10b78c401262ebc1cc05832"
+            "sha256": "ef763b32662b806ecdb3314fc1e984d95ec66f713e22c3b426404a794c486dfc"
           },
           {
             "path": "frontend/apps/admin/src/app/router.tsx",
-            "sha256": "ed7d489dfecaeabbbe4cd9a249928da5226bc6372e6cdee9f4a870afcc2245d0"
+            "sha256": "8f94bba579e08cb7b1895e2a23fc3fff34b94988c9e69b46b8a802564103647a"
           },
           {
             "path": "pnpm-workspace.yaml",
@@ -1984,7 +1984,7 @@
           },
           {
             "path": "frontend/apps/console/src/app/router.tsx",
-            "sha256": "9cda013f377844123216113399f0fe0775b16223a10b78c401262ebc1cc05832"
+            "sha256": "ef763b32662b806ecdb3314fc1e984d95ec66f713e22c3b426404a794c486dfc"
           }
         ],
         "verification_receipt": null,
@@ -2024,7 +2024,7 @@
         "evidence": [
           {
             "path": "frontend/apps/console/src/app/router.tsx",
-            "sha256": "9cda013f377844123216113399f0fe0775b16223a10b78c401262ebc1cc05832"
+            "sha256": "ef763b32662b806ecdb3314fc1e984d95ec66f713e22c3b426404a794c486dfc"
           }
         ],
         "verification_receipt": null,
@@ -2656,7 +2656,7 @@
           },
           {
             "path": "frontend/apps/console/src/app/router.tsx",
-            "sha256": "9cda013f377844123216113399f0fe0775b16223a10b78c401262ebc1cc05832"
+            "sha256": "ef763b32662b806ecdb3314fc1e984d95ec66f713e22c3b426404a794c486dfc"
           }
         ],
         "verification_receipt": null,
@@ -3378,7 +3378,7 @@
           },
           {
             "path": "frontend/apps/console/src/app/router.tsx",
-            "sha256": "9cda013f377844123216113399f0fe0775b16223a10b78c401262ebc1cc05832"
+            "sha256": "ef763b32662b806ecdb3314fc1e984d95ec66f713e22c3b426404a794c486dfc"
           }
         ],
         "verification_receipt": null,
@@ -3418,7 +3418,7 @@
         "evidence": [
           {
             "path": "frontend/apps/console/src/app/router.tsx",
-            "sha256": "9cda013f377844123216113399f0fe0775b16223a10b78c401262ebc1cc05832"
+            "sha256": "ef763b32662b806ecdb3314fc1e984d95ec66f713e22c3b426404a794c486dfc"
           },
           {
             "path": "docs/engineering/g3-evidence.json",
@@ -4052,21 +4052,21 @@
       "req": "FR-023",
       "doc": "A14",
       "priority": "P1",
-      "status": "未开始",
+      "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;frontend/apps/console/src/app/router.tsx",
+      "evidence": "docs/engineering/s4a-plugin-publication-evidence.json;frontend/apps/console/src/app/router.tsx;docs/engineering/2026-09-16-s4-workbenches.md",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
         "evidence": ""
       },
       "execution": {
-        "implementation": "not_started",
-        "verification": "not_run",
+        "implementation": "scoped_implemented",
+        "verification": "recorded",
         "acceptance": "pending",
-        "scope": "发布者工作台在插件证据中仍 deferred",
+        "scope": "五个S4工作台中对应原任务的固定端点表单、显式确认、只读事实和权限错误流程；真实Chromium/HTTP/隔离PostgreSQL已执行，正式回执随最终收口归档",
         "remaining": [
-          "发布者草稿、测试、提交页面及 T31 浏览器验收"
+          "首发发布者用户验收；发布预检不是上游试调用，真实供应商任务须另行授权验证"
         ],
         "evidence": [
           {
@@ -4075,7 +4075,11 @@
           },
           {
             "path": "frontend/apps/console/src/app/router.tsx",
-            "sha256": "9cda013f377844123216113399f0fe0775b16223a10b78c401262ebc1cc05832"
+            "sha256": "ef763b32662b806ecdb3314fc1e984d95ec66f713e22c3b426404a794c486dfc"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-workbenches.md",
+            "sha256": "01d166c0903941190b1a09390ddb80c9de5548d81b26f03efbbfe53bc8e015c4"
           }
         ],
         "verification_receipt": null,
@@ -4096,26 +4100,26 @@
       "req": "FR-018",
       "doc": "A14",
       "priority": "P0",
-      "status": "进行中",
+      "status": "待验收",
       "progress": null,
-      "evidence": "frontend/apps/admin/src/app/router.tsx;docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/s4b-release-governance-evidence.json;docs/engineering/s4c-dangerous-operation-jit-evidence.json;docs/engineering/s4d-platform-admin-evidence.json",
+      "evidence": "frontend/apps/admin/src/app/router.tsx;docs/engineering/s4a-plugin-publication-evidence.json;docs/engineering/s4b-release-governance-evidence.json;docs/engineering/s4c-dangerous-operation-jit-evidence.json;docs/engineering/s4d-platform-admin-evidence.json;docs/engineering/2026-09-16-s4-workbenches.md",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
         "evidence": ""
       },
       "execution": {
-        "implementation": "partial",
-        "verification": "not_reviewed",
+        "implementation": "scoped_implemented",
+        "verification": "recorded",
         "acceptance": "pending",
-        "scope": "已有 Catalog 审核／策略页面；新的发布、异常、JIT UI 尚缺",
+        "scope": "五个S4工作台中对应原任务的固定端点表单、显式确认、只读事实和权限错误流程；真实Chromium/HTTP/隔离PostgreSQL已执行，正式回执随最终收口归档",
         "remaining": [
-          "接入现有 S4-02/05 后端；敏感操作、权限、失败路径和浏览器验收"
+          "正式运营用户验收和生产身份保证；发布/平台/JIT能力均继续服务端授权"
         ],
         "evidence": [
           {
             "path": "frontend/apps/admin/src/app/router.tsx",
-            "sha256": "ed7d489dfecaeabbbe4cd9a249928da5226bc6372e6cdee9f4a870afcc2245d0"
+            "sha256": "8f94bba579e08cb7b1895e2a23fc3fff34b94988c9e69b46b8a802564103647a"
           },
           {
             "path": "docs/engineering/s4a-plugin-publication-evidence.json",
@@ -4132,6 +4136,10 @@
           {
             "path": "docs/engineering/s4d-platform-admin-evidence.json",
             "sha256": "901276ee9fc74682b7791ce36e7b1232a9a2eb2da3895f422a0a8a24a0492dfc"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-workbenches.md",
+            "sha256": "01d166c0903941190b1a09390ddb80c9de5548d81b26f03efbbfe53bc8e015c4"
           }
         ],
         "verification_receipt": null,
@@ -4152,21 +4160,21 @@
       "req": "FR-019",
       "doc": "A14",
       "priority": "P1",
-      "status": "未开始",
+      "status": "待验收",
       "progress": null,
-      "evidence": "docs/engineering/s403-commerce-billing-evidence.json;docs/engineering/s406-sandbox-payment-evidence.json;frontend/apps/admin/src/app/router.tsx",
+      "evidence": "docs/engineering/s403-commerce-billing-evidence.json;docs/engineering/s406-sandbox-payment-evidence.json;frontend/apps/admin/src/app/router.tsx;docs/engineering/2026-09-16-s4-workbenches.md",
       "baseline_execution": {
         "status": "未开始",
         "progress": 0,
         "evidence": ""
       },
       "execution": {
-        "implementation": "not_started",
-        "verification": "not_run",
+        "implementation": "scoped_implemented",
+        "verification": "recorded",
         "acceptance": "pending",
-        "scope": "账务与支付证据明确 UI deferred",
+        "scope": "五个S4工作台中对应原任务的固定端点表单、显式确认、只读事实和权限错误流程；真实Chromium/HTTP/隔离PostgreSQL已执行，正式回执随最终收口归档",
         "remaining": [
-          "账单／支付／退款状态页面及非成功跳转真源验收"
+          "正式财务用户验收；仅sandbox意图与回调对账，真实商户/支付网络仍阻断"
         ],
         "evidence": [
           {
@@ -4179,7 +4187,11 @@
           },
           {
             "path": "frontend/apps/admin/src/app/router.tsx",
-            "sha256": "ed7d489dfecaeabbbe4cd9a249928da5226bc6372e6cdee9f4a870afcc2245d0"
+            "sha256": "8f94bba579e08cb7b1895e2a23fc3fff34b94988c9e69b46b8a802564103647a"
+          },
+          {
+            "path": "docs/engineering/2026-09-16-s4-workbenches.md",
+            "sha256": "01d166c0903941190b1a09390ddb80c9de5548d81b26f03efbbfe53bc8e015c4"
           }
         ],
         "verification_receipt": null,
@@ -4279,7 +4291,7 @@
           },
           {
             "path": "backend/tests/integration/postgres_test.go",
-            "sha256": "da8e738ad040790a4ea76f962804f69333a03c58ae93ebbbc9956da0d894d30b"
+            "sha256": "2819bb1f9758e2d3ee7cb6d956399d67f58e036dd93d15c2b331d144a5f574e9"
           }
         ],
         "verification_receipt": null,
@@ -4327,7 +4339,7 @@
           },
           {
             "path": "backend/tests/integration/postgres_test.go",
-            "sha256": "da8e738ad040790a4ea76f962804f69333a03c58ae93ebbbc9956da0d894d30b"
+            "sha256": "2819bb1f9758e2d3ee7cb6d956399d67f58e036dd93d15c2b331d144a5f574e9"
           }
         ],
         "verification_receipt": null,
