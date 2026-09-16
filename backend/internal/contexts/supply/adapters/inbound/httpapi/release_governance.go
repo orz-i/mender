@@ -136,6 +136,10 @@ type releaseCreateInput struct {
 type releaseReasonInput struct {
 	Reason string `json:"reason"`
 }
+type releaseEmergencyInput struct {
+	ApprovalID string `json:"approval_id"`
+	Reason     string `json:"reason"`
+}
 type releaseCanaryInput struct {
 	Reason             string `json:"reason"`
 	ObservationSeconds int64  `json:"observation_seconds"`
@@ -184,7 +188,23 @@ func (h *ReleaseGovernanceHandler) promote(c *gin.Context)  { h.reasonAction(c, 
 func (h *ReleaseGovernanceHandler) drain(c *gin.Context)    { h.reasonAction(c, h.service.Drain) }
 func (h *ReleaseGovernanceHandler) rollback(c *gin.Context) { h.reasonAction(c, h.service.Rollback) }
 func (h *ReleaseGovernanceHandler) disable(c *gin.Context) {
-	h.reasonAction(c, h.service.EmergencyDisable)
+	publicationConfigure(c)
+	var in releaseEmergencyInput
+	if err := releaseDecode(c, &in); err != nil {
+		publicationFail(c, err)
+		return
+	}
+	ctx, cancel, actor, ok := releaseActor(c, h.auth, true)
+	defer cancel()
+	if !ok {
+		return
+	}
+	v, err := h.service.EmergencyDisable(ctx, actor, c.Param("workspace_id"), c.Param("release_id"), in.ApprovalID, in.Reason)
+	if err != nil {
+		publicationFail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": releasePlanView(v)})
 }
 func (h *ReleaseGovernanceHandler) reasonAction(c *gin.Context, action func(context.Context, application.PublisherActor, string, string, string) (application.ReleasePlan, error)) {
 	publicationConfigure(c)

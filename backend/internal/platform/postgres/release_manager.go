@@ -25,7 +25,7 @@ func ReleaseManagerRole(ctx context.Context, pool *pgxpool.Pool) error {
 	 AND has_function_privilege(current_user,'supply.promote_release(text,text,text,text,timestamptz)','EXECUTE')
 	 AND has_function_privilege(current_user,'supply.drain_release(text,text,text,text,timestamptz)','EXECUTE')
 	 AND has_function_privilege(current_user,'supply.rollback_release(text,text,text,text,timestamptz)','EXECUTE')
-	 AND has_function_privilege(current_user,'supply.emergency_disable_release(text,text,text,text,timestamptz)','EXECUTE')
+	 AND has_function_privilege(current_user,'supply.emergency_disable_release(text,text,text,text,text,timestamptz)','EXECUTE')
 	 AND NOT has_table_privilege(current_user,'supply.deployments','SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
 	 AND NOT has_table_privilege(current_user,'supply.plugin_versions','SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
 	 AND NOT has_schema_privilege(current_user,'catalog','USAGE')

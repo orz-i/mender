@@ -215,8 +215,23 @@ func (r *ReleaseGovernanceRepository) DrainRelease(ctx context.Context, workspac
 func (r *ReleaseGovernanceRepository) RollbackRelease(ctx context.Context, workspace, id, actor, reason string, at time.Time) (application.ReleasePlan, error) {
 	return r.releaseAction(ctx, workspace, id, actor, reason, at, `SELECT supply.rollback_release($1,$2,$3,$4,$5)`)
 }
-func (r *ReleaseGovernanceRepository) EmergencyDisableRelease(ctx context.Context, workspace, id, actor, reason string, at time.Time) (application.ReleasePlan, error) {
-	return r.releaseAction(ctx, workspace, id, actor, reason, at, `SELECT supply.emergency_disable_release($1,$2,$3,$4,$5)`)
+func (r *ReleaseGovernanceRepository) EmergencyDisableRelease(ctx context.Context, workspace, id, approvalID, actor, reason string, at time.Time) (application.ReleasePlan, error) {
+	tx, err := r.beginRelease(ctx, workspace)
+	if err != nil {
+		return application.ReleasePlan{}, err
+	}
+	defer rollbackReleaseGovernance(tx)
+	if _, err = tx.Exec(ctx, `SELECT supply.emergency_disable_release($1,$2,$3,$4,$5,$6)`, workspace, id, approvalID, actor, reason, at); err != nil {
+		return application.ReleasePlan{}, releaseGovernanceError(err)
+	}
+	v, err := r.planAfter(ctx, tx, workspace, id)
+	if err != nil {
+		return v, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return v, application.ErrPublicationUnavailable
+	}
+	return v, nil
 }
 
 var _ application.ReleaseGovernanceRepository = (*ReleaseGovernanceRepository)(nil)

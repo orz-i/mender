@@ -136,6 +136,8 @@ type APIConfig struct {
 	PublisherManagerDatabaseURL             string
 	AdminReleaseGovernanceEnabled           bool
 	ReleaseManagerDatabaseURL               string
+	AdminDangerousOperationEnabled          bool
+	DangerousOperationManagerDatabaseURL    string
 	AdminCatalogReviewEnabled               bool
 	AdminPluginReviewEnabled                bool
 	GovernanceReviewerDatabaseURL           string
@@ -324,6 +326,20 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 		}
 	default:
 		return c, errors.New("MENDER_ADMIN_RELEASE_GOVERNANCE_ENABLED must be true or false")
+	}
+	switch getenv("MENDER_ADMIN_DANGEROUS_OPERATION_ENABLED") {
+	case "", "false":
+	case "true":
+		if !c.ConsoleOIDCEnabled {
+			return APIConfig{}, errors.New("Admin Dangerous Operation requires Console OIDC")
+		}
+		c.AdminDangerousOperationEnabled = true
+		c.DangerousOperationManagerDatabaseURL = strings.TrimSpace(getenv("MENDER_DANGEROUS_OPERATION_MANAGER_DATABASE_URL"))
+		if c.DangerousOperationManagerDatabaseURL == "" {
+			return APIConfig{}, errors.New("Admin Dangerous Operation requires a separate dangerous-operation-manager database role")
+		}
+	default:
+		return c, errors.New("MENDER_ADMIN_DANGEROUS_OPERATION_ENABLED must be true or false")
 	}
 	switch getenv("MENDER_ADMIN_CATALOG_REVIEW_ENABLED") {
 	case "", "false":
@@ -738,6 +754,7 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 	var catalogManagerPool *pgxpool.Pool
 	var publisherManagerPool *pgxpool.Pool
 	var releaseManagerPool *pgxpool.Pool
+	var dangerousOperationManagerPool *pgxpool.Pool
 	var governanceReviewerPool *pgxpool.Pool
 	var governancePolicyManagerPool *pgxpool.Pool
 	var callbackObserverPool *pgxpool.Pool
@@ -774,6 +791,9 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 		}
 		if releaseManagerPool != nil {
 			releaseManagerPool.Close()
+		}
+		if dangerousOperationManagerPool != nil {
+			dangerousOperationManagerPool.Close()
 		}
 		if catalogManagerPool != nil {
 			catalogManagerPool.Close()
@@ -1285,6 +1305,35 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 			}
 			registers = append(registers, releaseHandler.Register)
 		}
+		if c.AdminDangerousOperationEnabled {
+			dangerousOperationManagerPool, buildErr = database.Open(start, c.DangerousOperationManagerDatabaseURL)
+			if buildErr != nil {
+				return failed(buildErr)
+			}
+			dangerousCfg := dangerousOperationManagerPool.Config().ConnConfig
+			if readerCfg.Host != dangerousCfg.Host || readerCfg.Port != dangerousCfg.Port || readerCfg.Database != dangerousCfg.Database || dangerousCfg.User == readerCfg.User || dangerousCfg.User == sessionCfg.User ||
+				(catalogManagerPool != nil && dangerousCfg.User == catalogManagerPool.Config().ConnConfig.User) || (publisherManagerPool != nil && dangerousCfg.User == publisherManagerPool.Config().ConnConfig.User) ||
+				(releaseManagerPool != nil && dangerousCfg.User == releaseManagerPool.Config().ConnConfig.User) || (connectionManagerPool != nil && dangerousCfg.User == connectionManagerPool.Config().ConnConfig.User) ||
+				(commerceObserverPool != nil && dangerousCfg.User == commerceObserverPool.Config().ConnConfig.User) {
+				return failed(errors.New("Admin Dangerous Operation requires the same database with a distinct restricted role"))
+			}
+			if buildErr = migrations.Verify(start, dangerousOperationManagerPool); buildErr != nil {
+				return failed(buildErr)
+			}
+			if buildErr = database.DangerousOperationManagerRole(start, dangerousOperationManagerPool); buildErr != nil {
+				return failed(buildErr)
+			}
+			dangerousAccess := governanceidentity.New(humanIdentity)
+			dangerousService, serviceErr := governanceapp.NewDangerousOperationService(governancepg.NewDangerousOperation(dangerousOperationManagerPool), dangerousAccess, governancerandom.DangerousOperationIDs{}, systemClock{})
+			if serviceErr != nil {
+				return failed(serviceErr)
+			}
+			dangerousHandler, handlerErr := governancehttp.NewDangerousOperation(dangerousService, dangerousAccess)
+			if handlerErr != nil {
+				return failed(handlerErr)
+			}
+			registers = append(registers, dangerousHandler.Register)
+		}
 		if c.AdminCatalogReviewEnabled || c.AdminPluginReviewEnabled {
 			governanceReviewerPool, buildErr = database.Open(start, c.GovernanceReviewerDatabaseURL)
 			if buildErr != nil {
@@ -1596,6 +1645,14 @@ func BuildAPI(ctx context.Context, c APIConfig) (http.Handler, func(), error) {
 				return err
 			}
 			if err := database.ReleaseManagerRole(ctx, releaseManagerPool); err != nil {
+				return err
+			}
+		}
+		if dangerousOperationManagerPool != nil {
+			if err := migrations.Verify(ctx, dangerousOperationManagerPool); err != nil {
+				return err
+			}
+			if err := database.DangerousOperationManagerRole(ctx, dangerousOperationManagerPool); err != nil {
 				return err
 			}
 		}

@@ -17,6 +17,25 @@ type releaseHTTPAuth struct{}
 func (releaseHTTPAuth) Authenticate(context.Context, string) (application.PublisherActor, error) {
 	return application.PublisherActor{UserID: "admin_release"}, nil
 }
+
+func TestReleaseEmergencyDisableRejectsApprovalLikeClientFlags(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &releaseHTTPRepo{}
+	auth := releaseHTTPAuth{}
+	service, _ := application.NewReleaseGovernance(repo, auth, releaseHTTPID{}, releaseHTTPClock{})
+	handler, _ := NewReleaseGovernance(service, auth)
+	router := gin.New()
+	handler.Register(router)
+	body := []byte(`{"approval_id":"danger_a","reason":"incident","approved":true,"revision":"2"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/v1/workspaces/ws_release/releases/plans/release_test/emergency-disable", bytes.NewReader(body))
+	req.AddCookie(&http.Cookie{Name: publicationSessionCookie, Value: "session"})
+	req.Header.Set("X-Mender-CSRF", "csrf")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatal(rec.Code, rec.Body.String())
+	}
+}
 func (releaseHTTPAuth) AuthenticateMutation(context.Context, string, string) (application.PublisherActor, error) {
 	return application.PublisherActor{UserID: "admin_release"}, nil
 }
@@ -53,7 +72,7 @@ func (r *releaseHTTPRepo) DrainRelease(context.Context, string, string, string, 
 func (r *releaseHTTPRepo) RollbackRelease(context.Context, string, string, string, string, time.Time) (application.ReleasePlan, error) {
 	return application.ReleasePlan{}, nil
 }
-func (r *releaseHTTPRepo) EmergencyDisableRelease(context.Context, string, string, string, string, time.Time) (application.ReleasePlan, error) {
+func (r *releaseHTTPRepo) EmergencyDisableRelease(context.Context, string, string, string, string, string, time.Time) (application.ReleasePlan, error) {
 	return application.ReleasePlan{}, nil
 }
 

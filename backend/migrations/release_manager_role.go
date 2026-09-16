@@ -36,7 +36,7 @@ func GrantReleaseManager(ctx context.Context, pool *pgxpool.Pool, role string) e
 		"GRANT EXECUTE ON FUNCTION supply.promote_release(text,text,text,text,timestamptz) TO " + id,
 		"GRANT EXECUTE ON FUNCTION supply.drain_release(text,text,text,text,timestamptz) TO " + id,
 		"GRANT EXECUTE ON FUNCTION supply.rollback_release(text,text,text,text,timestamptz) TO " + id,
-		"GRANT EXECUTE ON FUNCTION supply.emergency_disable_release(text,text,text,text,timestamptz) TO " + id,
+		"GRANT EXECUTE ON FUNCTION supply.emergency_disable_release(text,text,text,text,text,timestamptz) TO " + id,
 	} {
 		if _, err = tx.Exec(ctx, sql); err != nil {
 			return errors.New("release-manager grant failed")

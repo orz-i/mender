@@ -42,6 +42,14 @@ func exerciseReleaseGovernance(t *testing.T, ctx context.Context, owner, runtime
 	// Production Admission uses the real system clock. Keep the reviewed
 	// Connection/Price fixture comfortably active for the duration of this run.
 	base := time.Date(2026, 9, 15, 20, 0, 0, 0, time.UTC)
+	_, err := owner.Exec(ctx, `INSERT INTO identity.workspaces(id,created_at) VALUES($1,$2) ON CONFLICT(id) DO NOTHING`, workspace, base)
+	must(t, err)
+	_, err = owner.Exec(ctx, `INSERT INTO identity.users(id,display_name,created_at) VALUES
+	 ('admin_release','Release Admin',$1),('review_release','Release Reviewer',$1) ON CONFLICT(id) DO NOTHING`, base)
+	must(t, err)
+	_, err = owner.Exec(ctx, `INSERT INTO identity.workspace_memberships(workspace_id,user_id,role,created_at) VALUES
+	 ($1,'admin_release','admin',$2),($1,'review_release','admin',$2) ON CONFLICT(workspace_id,user_id) DO NOTHING`, workspace, base)
+	must(t, err)
 	deployments := []string{"deploy_release_stable", "deploy_release_candidate", "deploy_release_promote", "deploy_release_disable"}
 	for _, revision := range deployments {
 		_, err := owner.Exec(ctx, `INSERT INTO supply.deployments(
@@ -51,7 +59,7 @@ func exerciseReleaseGovernance(t *testing.T, ctx context.Context, owner, runtime
 		must(t, err)
 	}
 
-	_, err := owner.Exec(ctx, `INSERT INTO commerce.price_versions(id,tool_version_id,currency,reserve_micro,starts_at,ends_at,active,charge_micro,billing_policy)
+	_, err = owner.Exec(ctx, `INSERT INTO commerce.price_versions(id,tool_version_id,currency,reserve_micro,starts_at,ends_at,active,charge_micro,billing_policy)
 	 VALUES('price_release','tv_release','USD',100,$1,$2,true,100,'fixed_success_only')`, base.Add(-time.Hour), base.Add(24*time.Hour))
 	must(t, err)
 	_, err = owner.Exec(ctx, `INSERT INTO catalog.tool_versions(
@@ -168,7 +176,16 @@ func exerciseReleaseGovernance(t *testing.T, ctx context.Context, owner, runtime
 	execReleaseManager(t, ctx, manager, workspace, `SELECT supply.create_release_plan($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
 		workspace, "release_t23_3", "example.release", "1.0.0", "set_release", "tv_release", "provider_release", "deploy_release_promote", "deploy_release_disable", "admin_release", "prepare emergency drill", base.Add(9*time.Minute))
 	execReleaseManager(t, ctx, manager, workspace, `SELECT supply.start_release_canary($1,$2,$3,$4,$5,$6)`, workspace, "release_t23_3", "admin_release", "observe emergency drill", base.Add(10*time.Minute), base.Add(11*time.Minute))
-	execReleaseManager(t, ctx, manager, workspace, `SELECT supply.emergency_disable_release($1,$2,$3,$4,$5)`, workspace, "release_t23_3", "admin_release", "candidate unhealthy", base.Add(10*time.Minute+30*time.Second))
+	approvalTx := beginWorkspaceTx(t, ctx, owner, workspace)
+	_, err = approvalTx.Exec(ctx, `SELECT governance.request_release_emergency_approval($1,$2,$3,$4,$5,$6,$7)`,
+		workspace, "danger_release_t23", "admin_release", "release_t23_3", "candidate unhealthy", base.Add(10*time.Minute+10*time.Second), base.Add(20*time.Minute))
+	must(t, err)
+	_, err = approvalTx.Exec(ctx, `SELECT governance.approve_dangerous_operation($1,$2,$3,$4,$5)`,
+		workspace, "danger_release_t23", "review_release", base.Add(10*time.Minute+20*time.Second), "confirmed incident")
+	must(t, err)
+	must(t, approvalTx.Commit(ctx))
+	execReleaseManager(t, ctx, manager, workspace, `SELECT supply.emergency_disable_release($1,$2,$3,$4,$5,$6)`,
+		workspace, "release_t23_3", "danger_release_t23", "admin_release", "candidate unhealthy", base.Add(10*time.Minute+30*time.Second))
 	if _, resolveErr := resolver.Resolve(ctx, admissionapp.Caller{WorkspaceID: workspace, SubjectID: "sa_release", CredentialID: "key_release"}, admissionapp.Request{ToolsetVersionID: "set_release", ToolID: "tool_release", ToolVersion: "1.0.0", ConnectionID: "conn_release", Currency: "USD"}, `{}`); resolveErr == nil {
 		t.Fatal("emergency-disabled release still admitted new traffic")
 	}

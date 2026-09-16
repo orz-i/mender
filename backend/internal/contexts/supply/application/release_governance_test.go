@@ -71,7 +71,7 @@ func (r *releaseRepoStub) DrainRelease(context.Context, string, string, string, 
 func (r *releaseRepoStub) RollbackRelease(context.Context, string, string, string, string, time.Time) (ReleasePlan, error) {
 	return ReleasePlan{}, nil
 }
-func (r *releaseRepoStub) EmergencyDisableRelease(context.Context, string, string, string, string, time.Time) (ReleasePlan, error) {
+func (r *releaseRepoStub) EmergencyDisableRelease(context.Context, string, string, string, string, string, time.Time) (ReleasePlan, error) {
 	return ReleasePlan{}, nil
 }
 

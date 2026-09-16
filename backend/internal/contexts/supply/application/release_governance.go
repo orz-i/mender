@@ -47,7 +47,7 @@ type ReleaseGovernanceRepository interface {
 	PromoteRelease(context.Context, string, string, string, string, time.Time) (ReleasePlan, error)
 	DrainRelease(context.Context, string, string, string, string, time.Time) (ReleasePlan, error)
 	RollbackRelease(context.Context, string, string, string, string, time.Time) (ReleasePlan, error)
-	EmergencyDisableRelease(context.Context, string, string, string, string, time.Time) (ReleasePlan, error)
+	EmergencyDisableRelease(context.Context, string, string, string, string, string, time.Time) (ReleasePlan, error)
 }
 
 type ReleaseGovernance struct {
@@ -170,8 +170,25 @@ func (s *ReleaseGovernance) Drain(ctx context.Context, actor PublisherActor, wor
 func (s *ReleaseGovernance) Rollback(ctx context.Context, actor PublisherActor, workspace, id, reason string) (ReleasePlan, error) {
 	return s.transition(ctx, actor, workspace, id, reason, "rollback", 0)
 }
-func (s *ReleaseGovernance) EmergencyDisable(ctx context.Context, actor PublisherActor, workspace, id, reason string) (ReleasePlan, error) {
-	return s.transition(ctx, actor, workspace, id, reason, "disable", 0)
+func (s *ReleaseGovernance) EmergencyDisable(ctx context.Context, actor PublisherActor, workspace, id, approvalID, reason string) (ReleasePlan, error) {
+	if !validPublisherID(actor.UserID) || !validPublisherID(workspace) || !validPublisherID(id) || !validPublisherID(approvalID) || !validReleaseReason(reason) {
+		return ReleasePlan{}, ErrPublicationInvalid
+	}
+	if err := s.authorizer.Authorize(ctx, actor, workspace, "release:manage"); err != nil {
+		return ReleasePlan{}, err
+	}
+	at, err := releaseNow(s.clock)
+	if err != nil {
+		return ReleasePlan{}, err
+	}
+	value, err := s.repository.EmergencyDisableRelease(ctx, workspace, id, approvalID, actor.UserID, reason, at)
+	if err != nil {
+		return ReleasePlan{}, err
+	}
+	if err = validateReleaseProjection(value, workspace, id); err != nil {
+		return ReleasePlan{}, err
+	}
+	return value, nil
 }
 
 func (s *ReleaseGovernance) transition(ctx context.Context, actor PublisherActor, workspace, id, reason, action string, observation time.Duration) (ReleasePlan, error) {
@@ -195,8 +212,6 @@ func (s *ReleaseGovernance) transition(ctx context.Context, actor PublisherActor
 		value, err = s.repository.DrainRelease(ctx, workspace, id, actor.UserID, reason, at)
 	case "rollback":
 		value, err = s.repository.RollbackRelease(ctx, workspace, id, actor.UserID, reason, at)
-	case "disable":
-		value, err = s.repository.EmergencyDisableRelease(ctx, workspace, id, actor.UserID, reason, at)
 	default:
 		return ReleasePlan{}, ErrPublicationInvalid
 	}
