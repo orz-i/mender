@@ -60,6 +60,21 @@ export function fileInventory(root) {
  function walk(dir){for(const e of readdirSync(dir,{withFileTypes:true})){const p=join(dir,e.name);if(e.isSymbolicLink())throw Error('Release must contain regular files only');if(e.isDirectory())walk(p);else if(e.isFile()){const b=readFileSync(p);result.push({path:relative(root,p).split(sep).join('/'),size:b.length,sha256:createHash('sha256').update(b).digest('hex')});}}}
  walk(root);return result.sort((a,b)=>a.path.localeCompare(b.path));
 }
+export function applyLocalDemoFixture(compose,release){
+ compose.services['api-console'].environment.MENDER_CONSOLE_EXECUTION_RISK_ENABLED='true';
+ compose.services['api-console'].environment.MENDER_GOVERNANCE_EXECUTION_CONFIRMER_DATABASE_URL_FILE='/run/secrets/dsn_governance_execution_confirmer';
+ if(!compose.services['api-console'].secrets.includes('dsn_governance_execution_confirmer'))compose.services['api-console'].secrets.push('dsn_governance_execution_confirmer');
+ Object.assign(compose.services.worker.environment,{
+  MENDER_WORKER_DISPATCH_ENABLED:'true',MENDER_REVIEWED_WORKER_RUNTIME_ENABLED:'true',MENDER_REVIEWED_HTTP_DISPATCH_ENABLED:'true',MENDER_REVIEWED_PROVIDER_CONTROL_ENABLED:'true',MENDER_REVIEWED_SETTLEMENT_ENABLED:'true',
+  MENDER_REVIEWED_SECRET_ROOT:'/run/mender/provider-secrets',MENDER_EXECUTOR_DATABASE_URL_FILE:'/run/secrets/dsn_executor',MENDER_RECONCILER_DATABASE_URL_FILE:'/run/secrets/dsn_reconciler',MENDER_SETTLEMENT_DATABASE_URL_FILE:'/run/secrets/dsn_settlement',
+  MENDER_WORKER_DEPLOYMENT_REVISIONS:'deploy_local_demo',MENDER_REVIEWED_PROVIDER_IDS:'provider_local_demo',MENDER_REVIEWED_EGRESS_ALLOWED_HOSTS:'127.0.0.1',MENDER_REVIEWED_EGRESS_ALLOW_HTTP:'true',MENDER_REVIEWED_EGRESS_ALLOW_LOOPBACK:'true'
+ });
+ for(const name of ['dsn_executor','dsn_reconciler','dsn_settlement'])if(!compose.services.worker.secrets.includes(name))compose.services.worker.secrets.push(name);
+ compose.services.worker.tmpfs=['/run/mender/provider-secrets'];
+ compose.services.operator.environment.MENDER_LOCAL_DEMO_ENABLED='true';
+ compose.services['local-provider']={image:release.runtime_image,entrypoint:['/mender/localprovider'],read_only:true,user:'65532:65532',cap_drop:['ALL'],security_opt:['no-new-privileges:true'],restart:'unless-stopped',pids_limit:64,mem_limit:'128m',network_mode:'service:worker',environment:{MENDER_LOCAL_PROVIDER_ENABLED:'true',MENDER_LOCAL_PROVIDER_ADDR:'0.0.0.0:19080'},depends_on:{worker:{condition:'service_started'}},healthcheck:{test:['CMD','/mender/localprovider','health'],interval:'2s',timeout:'3s',retries:30,start_period:'2s'},logging:{driver:'json-file',options:{'max-size':'5m','max-file':'2'}}};
+ return compose;
+}
 export function nginxConfig(c){
  const hosts=[new URL(c.console_origin).hostname,new URL(c.admin_origin).hostname];
  const servers=hosts.map((host,i)=>`server {
@@ -126,9 +141,9 @@ export function writeDeployment(root,dir,c,release){
  add('web_certificate',cert);add('web_private_key',key);
  const common={GIN_MODE:'release',MENDER_HTTP_ADDR:'0.0.0.0:18080',MENDER_RUN_API_ENABLED:'true',MENDER_RUN_READ_API_ENABLED:'true',MENDER_CURSOR_SIGNING_KEY_FILE:'/run/secrets/cursor',MENDER_PAYMENT_MODE:'sandbox',MENDER_CONSOLE_COOKIE_SECURE:'true',MENDER_RUN_START_API_ENABLED:'true',MENDER_RUN_COORDINATED_CANCEL_ENABLED:'true',MENDER_MCP_GATEWAY_ENABLED:'true',MENDER_MCP_FIXED_TOOLSET_ENABLED:'true'};
  const session={MENDER_CONSOLE_OIDC_ENABLED:'true',MENDER_CONSOLE_OIDC_ISSUER:c.oidc_issuer,MENDER_CONSOLE_OIDC_CLIENT_ID:c.oidc_client_id,MENDER_CONSOLE_OIDC_CLIENT_SECRET_FILE:'/run/secrets/oidc_client_secret'};
- const consoleCaps=['runtime','admission','cancellation','browser-session','catalog-manager','connection-manager','publisher-manager','commerce-observer'];
+ const consoleCaps=['runtime','admission','cancellation','browser-session','catalog-manager','connection-manager','publisher-manager','governance-execution-confirmer','commerce-observer'];
  const adminCaps=['runtime','admission','cancellation','browser-session','catalog-manager','publisher-manager','governance-reviewer','governance-policy-manager','release-manager','dangerous-operation-manager','support-reader','platform-admin-manager','billing-manager','payment-manager'];
- const consoleEnv={...common,...(c.oidc_issuer?{...session,MENDER_CONSOLE_OIDC_REDIRECT_URL:c.console_origin+'/auth/callback',MENDER_CONSOLE_FLOW_SIGNING_KEY_FILE:'/run/secrets/flow_console',MENDER_CONSOLE_CATALOG_ENABLED:'true',MENDER_CONSOLE_CONNECTIONS_ENABLED:'true',MENDER_CONSOLE_PUBLISHER_ENABLED:'true',MENDER_CONSOLE_USAGE_ENABLED:'true',MENDER_CONSOLE_LAUNCH_DISCOVERY_ENABLED:'true',MENDER_CONSOLE_RUN_DELEGATION_ENABLED:'true',MENDER_CONSOLE_HUMAN_START_ENABLED:'true'}:{})};
+ const consoleEnv={...common,...(c.oidc_issuer?{...session,MENDER_CONSOLE_OIDC_REDIRECT_URL:c.console_origin+'/auth/callback',MENDER_CONSOLE_FLOW_SIGNING_KEY_FILE:'/run/secrets/flow_console',MENDER_CONSOLE_CATALOG_ENABLED:'true',MENDER_CONSOLE_CONNECTIONS_ENABLED:'true',MENDER_CONSOLE_PUBLISHER_ENABLED:'true',MENDER_CONSOLE_USAGE_ENABLED:'true',MENDER_CONSOLE_LAUNCH_DISCOVERY_ENABLED:'true',MENDER_CONSOLE_RUN_DELEGATION_ENABLED:'true',MENDER_CONSOLE_HUMAN_START_ENABLED:'true',MENDER_CONSOLE_EXECUTION_RISK_ENABLED:'true'}:{})};
  const adminEnv={...common,...(c.oidc_issuer?{...session,MENDER_CONSOLE_OIDC_REDIRECT_URL:c.admin_origin+'/auth/callback',MENDER_CONSOLE_FLOW_SIGNING_KEY_FILE:'/run/secrets/flow_admin',MENDER_CONSOLE_CATALOG_ENABLED:'true',MENDER_CONSOLE_PUBLISHER_ENABLED:'true',MENDER_ADMIN_CATALOG_REVIEW_ENABLED:'true',MENDER_ADMIN_PLUGIN_REVIEW_ENABLED:'true',MENDER_ADMIN_CATALOG_POLICY_ENABLED:'true',MENDER_ADMIN_RELEASE_GOVERNANCE_ENABLED:'true',MENDER_ADMIN_DANGEROUS_OPERATION_ENABLED:'true',MENDER_ADMIN_SUPPORT_ACCESS_ENABLED:'true',MENDER_ADMIN_PLATFORM_OPERATIONS_ENABLED:'true',MENDER_ADMIN_BILLING_ENABLED:'true',MENDER_ADMIN_PAYMENTS_ENABLED:'true'}:{})};
  function api(env,caps,flow){const needed=c.oidc_issuer?caps:['runtime','admission','cancellation'];for(const g of needed){const [,k]=capabilities.find(x=>x[0]===g);env[k+'_FILE']=mappings[k+'_FILE'];}return {image:release.runtime_image,read_only:true,user:'65532:65532',cap_drop:['ALL'],security_opt:['no-new-privileges:true'],restart:'unless-stopped',stop_grace_period:'15s',pids_limit:128,mem_limit:'512m',environment:env,networks:['private','egress'],secrets:['db_ca','cursor',...needed.map(g=>'dsn_'+g.replaceAll('-','_')),...(c.oidc_issuer?['oidc_client_secret',flow]:[])],depends_on:{database:{condition:'service_healthy'}},healthcheck:{test:['CMD','/mender/healthcheck'],interval:'10s',timeout:'4s',retries:6,start_period:'20s'},logging:{driver:'json-file',options:{'max-size':'10m','max-file':'3'}}};}
  const dbScript='#!/bin/sh\nset -eu\ncp /run/secrets/db_certificate /tmp/server.crt\ncp /run/secrets/db_private_key /tmp/server.key\nchown postgres:postgres /tmp/server.crt /tmp/server.key\nchmod 600 /tmp/server.key\nexec docker-entrypoint.sh postgres -c ssl=on -c ssl_cert_file=/tmp/server.crt -c ssl_key_file=/tmp/server.key -c log_statement=none\n';
@@ -147,17 +162,7 @@ export function writeDeployment(root,dir,c,release){
   compose.services['api-console'].depends_on['local-idp']={condition:'service_healthy'};
   compose.services['api-admin'].depends_on['local-idp']={condition:'service_healthy'};
  }
- if(c.local_demo_fixture){
-  Object.assign(compose.services.worker.environment,{
-   MENDER_WORKER_DISPATCH_ENABLED:'true',MENDER_REVIEWED_WORKER_RUNTIME_ENABLED:'true',MENDER_REVIEWED_HTTP_DISPATCH_ENABLED:'true',MENDER_REVIEWED_PROVIDER_CONTROL_ENABLED:'true',MENDER_REVIEWED_SETTLEMENT_ENABLED:'true',
-   MENDER_REVIEWED_SECRET_ROOT:'/run/mender/provider-secrets',MENDER_EXECUTOR_DATABASE_URL_FILE:'/run/secrets/dsn_executor',MENDER_RECONCILER_DATABASE_URL_FILE:'/run/secrets/dsn_reconciler',MENDER_SETTLEMENT_DATABASE_URL_FILE:'/run/secrets/dsn_settlement',
-   MENDER_REVIEWED_PROVIDER_IDS:'provider_local_demo',MENDER_REVIEWED_EGRESS_ALLOWED_HOSTS:'127.0.0.1',MENDER_REVIEWED_EGRESS_ALLOW_HTTP:'true',MENDER_REVIEWED_EGRESS_ALLOW_LOOPBACK:'true'
-  });
-  compose.services.worker.secrets.push('dsn_executor','dsn_reconciler','dsn_settlement');
-  compose.services.worker.tmpfs=['/run/mender/provider-secrets'];
-  compose.services.operator.environment.MENDER_LOCAL_DEMO_ENABLED='true';
-  compose.services['local-provider']={image:release.runtime_image,entrypoint:['/mender/localprovider'],read_only:true,user:'65532:65532',cap_drop:['ALL'],security_opt:['no-new-privileges:true'],restart:'unless-stopped',pids_limit:64,mem_limit:'128m',network_mode:'service:worker',environment:{MENDER_LOCAL_PROVIDER_ENABLED:'true',MENDER_LOCAL_PROVIDER_ADDR:'0.0.0.0:19080'},depends_on:{worker:{condition:'service_started'}},healthcheck:{test:['CMD','/mender/localprovider','health'],interval:'2s',timeout:'3s',retries:30,start_period:'2s'},logging:{driver:'json-file',options:{'max-size':'5m','max-file':'2'}}};
- }
+ if(c.local_demo_fixture)applyLocalDemoFixture(compose,release);
  for(const name of ['api-console','api-admin']){
   if(c.oidc_ca_file){compose.services[name].secrets.push('oidc_ca');compose.services[name].environment.SSL_CERT_FILE='/run/secrets/oidc_ca';}
   else if(c.local_oidc_fixture)compose.services[name].environment.SSL_CERT_FILE='/run/secrets/db_ca';

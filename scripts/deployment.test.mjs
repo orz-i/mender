@@ -20,7 +20,7 @@ test('embedded local OIDC fixture is explicit, isolated and never valid for prod
 });
 test('local product demo is explicit and wires only a loopback reviewed provider fixture',()=>{
  const source=readFileSync('scripts/lib/deployment.mjs','utf8');
- assert.match(source,/local_demo_fixture/u);assert.match(source,/MENDER_REVIEWED_PROVIDER_IDS:'provider_local_demo'/u);
+ assert.match(source,/local_demo_fixture/u);assert.match(source,/MENDER_CONSOLE_EXECUTION_RISK_ENABLED:'true'/u);assert.match(source,/governance-execution-confirmer/u);assert.match(source,/MENDER_WORKER_DEPLOYMENT_REVISIONS:'deploy_local_demo'/u);assert.match(source,/MENDER_REVIEWED_PROVIDER_IDS:'provider_local_demo'/u);
  assert.match(source,/MENDER_REVIEWED_EGRESS_ALLOWED_HOSTS:'127\.0\.0\.1'/u);assert.match(source,/MENDER_REVIEWED_EGRESS_ALLOW_LOOPBACK:'true'/u);
  assert.match(source,/network_mode:'service:worker'/u);assert.match(source,/MENDER_LOCAL_PROVIDER_ENABLED:'true'/u);
  const build=readFileSync('scripts/deploy.mjs','utf8');assert.match(build,/localidp','localprovider'/u);

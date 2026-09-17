@@ -22,6 +22,9 @@ func seedLocalDemo(ctx context.Context, pool *pgxpool.Pool, workspace, userID st
 		return err
 	}
 	defer tx.Rollback(ctx)
+	if _, err = tx.Exec(ctx, `SELECT set_config('mender.workspace_id',$1,true)`, workspace); err != nil {
+		return err
+	}
 	var member bool
 	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM identity.workspace_memberships WHERE workspace_id=$1 AND user_id=$2)`, workspace, userID).Scan(&member); err != nil || !member {
 		return ErrLocalDemoUnavailable
@@ -71,6 +74,18 @@ func seedLocalDemo(ctx context.Context, pool *pgxpool.Pool, workspace, userID st
 	 VALUES($1,'set_local_demo_v1','company_lookup','1.0.0','tv_local_company_lookup','budget_local_demo','conn_local_demo','company_lookup',true,'published',$2)
 	 ON CONFLICT(workspace_id,toolset_version_id,tool_version_id) DO NOTHING`, workspace, created); err != nil {
 		return err
+	}
+	var activePolicies int
+	if err = tx.QueryRow(ctx, `SELECT count(*) FROM governance.execution_policy_revisions WHERE workspace_id=$1 AND state='active'`, workspace).Scan(&activePolicies); err != nil {
+		return err
+	}
+	if activePolicies == 0 {
+		if _, err = tx.Exec(ctx, `SELECT governance.create_execution_policy($1,'execution_policy_local_demo_v1',$2,'low','low',true,60,$3)`, workspace, userID, created); err != nil {
+			return err
+		}
+		if _, err = tx.Exec(ctx, `SELECT governance.activate_execution_policy($1,'execution_policy_local_demo_v1',$2,$3)`, workspace, userID, created); err != nil {
+			return err
+		}
 	}
 	return tx.Commit(ctx)
 }

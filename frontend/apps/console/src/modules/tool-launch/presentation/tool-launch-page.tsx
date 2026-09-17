@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router';
 import { Alert, AlertDescription, AlertTitle, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle, Field, FieldDescription, FieldGroup, FieldLabel, Input, Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue, Textarea } from '@mender/ui';
@@ -94,14 +94,6 @@ export function ToolLaunchPage({ gateway }: { gateway: LaunchGateway }) {
   const effectiveCap = maxCharge || selected?.reserveMicro || '';
   const locked = prepared !== null || busy;
 
-  useEffect(() => {
-    if (!selected || !simpleFields) return;
-    const next = Object.fromEntries(simpleFields.map((field) => [field.name, '']));
-    setSimpleValues(next);
-    setArgumentsText(JSON.stringify(simpleArguments(simpleFields, next), null, 2));
-    setPrepared(null); setRisk(null); setResult(null); setError(null);
-  }, [selected?.toolVersionId]);
-
   const currentArguments = () => simpleFields ? simpleArguments(simpleFields, simpleValues) : parseArguments(argumentsText);
 
   const resetPrepared = async () => {
@@ -176,8 +168,8 @@ export function ToolLaunchPage({ gateway }: { gateway: LaunchGateway }) {
         <Card className="launch-tool-card">
           <CardHeader><div className="tool-card-heading"><div><CardTitle>{selected.title}</CardTitle><CardDescription>{selected.description || selected.providerId}</CardDescription></div><Badge variant={selected.sideEffect === 'read_only' ? 'secondary' : 'outline'}>{selected.sideEffect === 'read_only' ? 'Read only' : 'Writes data'}</Badge></div></CardHeader>
           <CardContent className="flex flex-col gap-5">
-            {options.data!.length > 1 && <Field><FieldLabel>Tool</FieldLabel><Select disabled={locked} value={launchOptionKey(selected)} onValueChange={(value) => { setOptionKey(value); setMaxCharge(''); resetRisk(); }}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectGroup>{options.data!.map((item) => <SelectItem key={launchOptionKey(item)} value={launchOptionKey(item)}>{item.title}</SelectItem>)}</SelectGroup></SelectContent></Select></Field>}
-            {simpleFields ? <FieldGroup>{simpleFields.map((field) => <Field key={field.name}><FieldLabel htmlFor={`launch-${field.name}`}>{field.label}</FieldLabel><Input id={`launch-${field.name}`} disabled={locked} required={field.required} inputMode={field.type === 'string' ? 'text' : 'decimal'} value={simpleValues[field.name] ?? ''} onChange={(event) => { const next = { ...simpleValues, [field.name]: event.target.value }; setSimpleValues(next); setArgumentsText(JSON.stringify(simpleArguments(simpleFields, next), null, 2)); resetRisk(); }} />{field.description && <FieldDescription>{field.description}</FieldDescription>}</Field>)}</FieldGroup>
+            {options.data!.length > 1 && <Field><FieldLabel>Tool</FieldLabel><Select disabled={locked} value={launchOptionKey(selected)} onValueChange={(value) => { setOptionKey(value); setSimpleValues({}); setArgumentsText('{}'); setMaxCharge(''); resetRisk(); }}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectGroup>{options.data!.map((item) => <SelectItem key={launchOptionKey(item)} value={launchOptionKey(item)}>{item.title}</SelectItem>)}</SelectGroup></SelectContent></Select></Field>}
+            {simpleFields ? <FieldGroup>{simpleFields.map((field) => <Field key={field.name}><FieldLabel htmlFor={`launch-${field.name}`}>{field.label}</FieldLabel><Input id={`launch-${field.name}`} disabled={locked} required={field.required} inputMode={field.type === 'string' ? 'text' : 'decimal'} value={simpleValues[field.name] ?? ''} onChange={(event) => { setSimpleValues((current) => ({ ...current, [field.name]: event.target.value })); resetRisk(); }} />{field.description && <FieldDescription>{field.description}</FieldDescription>}</Field>)}</FieldGroup>
               : <Field><FieldLabel htmlFor="launch-arguments">Inputs (JSON)</FieldLabel><Textarea id="launch-arguments" disabled={locked} value={argumentsText} onChange={(event) => { setArgumentsText(event.target.value); resetRisk(); }} spellCheck={false} rows={10} /><FieldDescription>This tool uses a schema that cannot be represented as a simple form yet.</FieldDescription></Field>}
             <div className="launch-summary-row"><div><span>Connection</span><strong>{selected.connectionId}</strong></div><div><span>Version</span><strong>{selected.toolVersion}</strong></div></div>
             <details className="advanced-panel"><summary>Advanced</summary><div className="advanced-panel-body"><Field><FieldLabel>Maximum charge (micro units)</FieldLabel><Input disabled={locked} inputMode="numeric" value={effectiveCap} onChange={(event) => setMaxCharge(event.target.value)} /></Field><pre className="schema-preview">{JSON.stringify(selected.inputSchema, null, 2)}</pre></div></details>

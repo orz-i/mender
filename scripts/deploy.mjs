@@ -4,13 +4,13 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, cpSync, copyFileSyn
 import { join, relative, sep, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse, stringify } from 'yaml';
-import { scopedPath, validateConfig, validateWebCertificate, fileInventory, writeDeployment } from './lib/deployment.mjs';
+import { scopedPath, validateConfig, validateWebCertificate, fileInventory, writeDeployment, applyLocalDemoFixture } from './lib/deployment.mjs';
 import { inventory, verifyRelease } from './lib/release-artifact.mjs';
 import { waitForIngress } from './lib/deployment-readiness.mjs';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
 const hash=b=>createHash('sha256').update(b).digest('hex');
-const usage='Mender deployment CLI (package script, not pnpm workspace deployment)\nUsage: pnpm run deploy build dist/releases/ID | prepare CONFIG RELEASE_DIR .local/deploy/ID | preflight DIR [--signed FILE --trusted-key FILE] | up DIR --apply [--signed FILE --trusted-key FILE] | status DIR | stop DIR | backup DIR .local/backups/ID --apply | switch-release DIR RELEASE_DIR --apply --migrations-reviewed [--signed FILE --trusted-key FILE] | operator DIR provision-human|provision-platform-staff|issue-key|revoke-key ...';
+const usage='Mender deployment CLI (package script, not pnpm workspace deployment)\nUsage: pnpm run deploy build dist/releases/ID | prepare CONFIG RELEASE_DIR .local/deploy/ID | preflight DIR [--signed FILE --trusted-key FILE] | up DIR --apply [--signed FILE --trusted-key FILE] | status DIR | stop DIR | backup DIR .local/backups/ID --apply | switch-release DIR RELEASE_DIR --apply --migrations-reviewed [--signed FILE --trusted-key FILE] | enable-local-demo DIR --apply | operator DIR provision-human|provision-platform-staff|seed-local-demo|issue-key|revoke-key ...';
 function run(exe,args,options={}){
  const p=spawnSync(exe,args,{cwd:root,shell:false,windowsHide:true,encoding:'utf8',timeout:600000,maxBuffer:8*1024*1024,...options});
  if(p.status!==0){if(options.publicOutput)process.stderr.write((p.stderr||'').slice(-8000));throw Error(`${exe} ${args[0]} failed (exit ${p.status}); no deployment success asserted`);}
@@ -109,11 +109,24 @@ function switchRelease(input,releasePath,signed,keyFile){
  if(d.config.environment==='production'||signed||keyFile)verifyProductionSignature(nextDir,signed,keyFile);
  const running=run('docker',['ps','-q','--filter',`label=com.docker.compose.project=${c.name}`]);if(running)throw Error('Stop this deployment before switching release; take a backup and review migration compatibility');
  const revision='revision-'+Date.now();const archive=join(dir,revision);mkdirSync(archive,{mode:0o700});for(const name of ['compose.yaml','deployment.json'])copyFileSync(join(dir,name),join(archive,name));
- for(const name of ['api-console','api-admin','worker','provision','operator',...(d.config.local_oidc_fixture?['local-idp']:[])])c.services[name].image=next.runtime_image;c.services.web.image=next.web_image;
+ for(const name of ['api-console','api-admin','worker','provision','operator',...(d.config.local_oidc_fixture?['local-idp']:[]),...(d.config.local_demo_fixture?['local-provider']:[])])c.services[name].image=next.runtime_image;c.services.web.image=next.web_image;
  const composeText=stringify(c);d.previous_revision=revision;d.release=next;d.release_path=releasePath;d.controls.find(x=>x.path==='compose.yaml').sha256=hash(composeText);
  writeFileSync(join(dir,'compose.yaml.next'),composeText,{mode:0o600,flag:'wx'});writeFileSync(join(dir,'deployment.json.next'),JSON.stringify(d,null,2),{mode:0o600,flag:'wx'});
  renameSync(join(dir,'compose.yaml.next'),join(dir,'compose.yaml'));renameSync(join(dir,'deployment.json.next'),join(dir,'deployment.json'));
  console.log(`Release switched; previous controls preserved in ${revision}. No database migration or process startup performed; run preflight and explicit up next.`);
+}
+function enableLocalDemo(input){
+ const {dir,d,c}=readDeployment(input);
+ if(d.config.environment!=='local'||!d.config.local_oidc_fixture||!d.config.worker_workspaces?.includes('ws_local'))throw Error('Local demo can only be enabled for the reviewed ws_local embedded-OIDC fixture');
+ const running=run('docker',['ps','-q','--filter',`label=com.docker.compose.project=${c.name}`]);if(running)throw Error('Stop this deployment before enabling the local demo fixture');
+ const nextConfig=validateConfig({...d.config,local_demo_fixture:true});
+ applyLocalDemoFixture(c,d.release);
+ c.services['local-provider'].user=c.services.worker.user;
+ c.services['local-provider'].labels={'io.mender.instance':d.config.instance,'io.mender.ownership':d.ownership};
+ const composeText=stringify(c);d.config=nextConfig;d.controls.find(x=>x.path==='compose.yaml').sha256=hash(composeText);
+ writeFileSync(join(dir,'compose.yaml.next'),composeText,{mode:0o600,flag:'wx'});writeFileSync(join(dir,'deployment.json.next'),JSON.stringify(d,null,2),{mode:0o600,flag:'wx'});
+ renameSync(join(dir,'compose.yaml.next'),join(dir,'compose.yaml'));renameSync(join(dir,'deployment.json.next'),join(dir,'deployment.json'));
+ console.log('Local demo enabled in deployment controls. Run preflight, up, then seed-local-demo explicitly.');
 }
 async function main(){
  const [command,...args]=process.argv.slice(2);
@@ -126,14 +139,15 @@ async function main(){
   while(args.length){const flag=args.shift();if(flag==='--signed')signed=args.shift();else if(flag==='--trusted-key')key=args.shift();else if(flag==='--apply')apply=true;else if(flag==='--migrations-reviewed')reviewed=true;else throw Error('Unknown switch-release argument');}
   if(!apply||!reviewed)throw Error('switch-release requires --apply and --migrations-reviewed');return switchRelease(input,releasePath,signed,key);
  }
+ if(command==='enable-local-demo'&&args.length===2&&args[1]==='--apply')return enableLocalDemo(args[0]);
  if(['preflight','up'].includes(command)){
   const input=args.shift();let signed,key;while(args.length){const flag=args.shift();if(flag==='--signed')signed=args.shift();else if(flag==='--trusted-key')key=args.shift();else if(flag==='--apply'&&command==='up')continue;else throw Error('Unknown deployment argument');}
   if(command==='up'&&!process.argv.includes('--apply'))throw Error('up requires explicit --apply; it creates persistent local resources');
   const {dir,d}=preflight(input,signed,key);if(command==='preflight')return;
-  compose(dir,['up','-d','--wait','database']);compose(dir,['run','--rm','--no-deps','provision'],{publicOutput:true});compose(dir,['up','-d','--wait','--wait-timeout','120','api-console','api-admin','worker'],{publicOutput:true});compose(dir,['up','-d','--force-recreate','--wait','--wait-timeout','90','web'],{publicOutput:true});await waitForIngress(d.config,dir);console.log('Stack started with both published HTTPS ingress endpoints verified. Database volume is persistent; no production or G4 approval is implied.');return;
+  compose(dir,['up','-d','--wait','database']);compose(dir,['run','--rm','--no-deps','provision'],{publicOutput:true});compose(dir,['up','-d','--wait','--wait-timeout','120','api-console','api-admin','worker',...(d.config.local_demo_fixture?['local-provider']:[])],{publicOutput:true});compose(dir,['up','-d','--force-recreate','--wait','--wait-timeout','90','web'],{publicOutput:true});await waitForIngress(d.config,dir);console.log('Stack started with both published HTTPS ingress endpoints verified. Database volume is persistent; no production or G4 approval is implied.');return;
  }
  if(['status','stop'].includes(command)&&args.length===1){const {dir}=readDeployment(args[0]);console.log(compose(dir,command==='status'?['ps']:['stop']));return;}
- if(command==='operator'&&args.length>=2){const {dir}=readDeployment(args.shift());const allowed=['provision-human','provision-platform-staff','issue-key','revoke-key'];if(!allowed.includes(args[0]))throw Error('Use explicit provisioning for schema/role operations');console.log(compose(dir,['run','--rm','--no-deps','operator',...args]));return;}
+ if(command==='operator'&&args.length>=2){const {dir}=readDeployment(args.shift());const allowed=['provision-human','provision-platform-staff','seed-local-demo','issue-key','revoke-key'];if(!allowed.includes(args[0]))throw Error('Use explicit provisioning for schema/role operations');console.log(compose(dir,['run','--rm','--no-deps','operator',...args]));return;}
  throw Error(usage);
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){main().catch(e=>{console.error(e.message);process.exitCode=1;});}
