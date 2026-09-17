@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router';
-import { Button } from '@mender/ui';
+import { Alert, AlertDescription, AlertTitle, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle, Field, FieldDescription, FieldGroup, FieldLabel, Input, Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue, Textarea } from '@mender/ui';
 import { LaunchLoginRequiredError, type LaunchGateway, type LaunchRiskReview, type PreparedRunStart, type StartedRun } from '../application/launch-gateway';
 import { launchOptionKey } from '../domain/launch';
 
@@ -14,22 +14,53 @@ function parseArguments(raw: string) {
 }
 
 const riskLabel = { low: '低', medium: '中', high: '高', critical: '关键' } as const;
-const outcomeLabel = { allow: '允许执行', confirmation_required: '需要人工确认', deny: '拒绝执行' } as const;
 const reasonLabel: Record<string, string> = {
   tool_read_only_safe: '只读且安全重试', tool_read_only_non_safe: '只读但幂等合同较弱', tool_write_idempotent: '写操作且可幂等重试', tool_write_unsafe: '不可安全重试的写操作',
   tool_write_contract_mismatch: '写操作合同不完整', within_unconfirmed_risk: '风险在无需确认的策略阈值内', human_confirmation_required: '当前策略要求 Human 显式确认',
   machine_confirmation_unavailable: '非 Human 调用不能提供人工确认', unsafe_write_denied: '当前策略禁止 unsafe write',
 };
 
+interface SimpleInputField {
+  name: string;
+  label: string;
+  description: string;
+  required: boolean;
+  type: 'string' | 'number' | 'integer';
+}
+
+function simpleInputFields(schema: Record<string, unknown>): SimpleInputField[] | null {
+  if (schema.type !== 'object' || typeof schema.properties !== 'object' || schema.properties === null || Array.isArray(schema.properties)) return null;
+  const required = new Set(Array.isArray(schema.required) ? schema.required.filter((item): item is string => typeof item === 'string') : []);
+  const result: SimpleInputField[] = [];
+  for (const [name, raw] of Object.entries(schema.properties as Record<string, unknown>)) {
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+    const value = raw as Record<string, unknown>;
+    if (value.enum !== undefined || !['string', 'number', 'integer'].includes(String(value.type))) return null;
+    result.push({ name, label: typeof value.title === 'string' ? value.title : name.replaceAll('_', ' '), description: typeof value.description === 'string' ? value.description : '', required: required.has(name), type: value.type as SimpleInputField['type'] });
+  }
+  return result.length > 0 && result.length <= 12 ? result : null;
+}
+
+function simpleArguments(fields: SimpleInputField[], values: Record<string, string>) {
+  const result: Record<string, string | number> = {};
+  for (const field of fields) {
+    const raw = values[field.name]?.trim() ?? '';
+    if (!raw && !field.required) continue;
+    if (field.type === 'string') { result[field.name] = raw; continue; }
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || (field.type === 'integer' && !Number.isInteger(parsed))) throw new Error(`${field.label} 必须是有效${field.type === 'integer' ? '整数' : '数字'}。`);
+    result[field.name] = parsed;
+  }
+  return result;
+}
+
 function RiskStatus({ value }: { value: LaunchRiskReview }) {
   const decision = value.decision;
-  const className = decision.outcome === 'allow' ? 'success-panel' : 'error-panel';
-  return <div className={className} role="status"><strong>服务端执行风险：{riskLabel[decision.riskLevel]} · {outcomeLabel[decision.outcome]}</strong>
-    <span>Policy <span className="mono">{decision.policyRevisionId}</span> revision {decision.policyRevision} · decision #{decision.sequence}</span>
-    <span>Arguments SHA-256 <span className="mono">{decision.argumentsHash}</span></span>
-    {decision.reasonCodes.map((reason) => <span key={reason}>{reasonLabel[reason] ?? reason}</span>)}
-    {value.confirmationId && <span>Confirmation <span className="mono">{value.confirmationId}</span> · expires {value.confirmationExpiresAt ?? '—'}</span>}
-  </div>;
+  return <Alert variant={decision.outcome === 'deny' ? 'destructive' : 'default'}>
+    <AlertTitle>{decision.outcome === 'allow' ? 'Ready to run' : decision.outcome === 'confirmation_required' ? 'Confirmation required' : 'Run blocked'} · {riskLabel[decision.riskLevel]} risk</AlertTitle>
+    <AlertDescription>{decision.reasonCodes.map((reason) => reasonLabel[reason] ?? reason).join(' · ')}</AlertDescription>
+    <details className="risk-details"><summary>Advanced policy details</summary><div>Policy {decision.policyRevisionId} · revision {decision.policyRevision} · decision #{decision.sequence}</div><div className="mono">Arguments {decision.argumentsHash}</div>{value.confirmationId && <div>Confirmation {value.confirmationId} · expires {value.confirmationExpiresAt ?? '—'}</div>}</details>
+  </Alert>;
 }
 
 function money(micro: string, currency: string) {
@@ -51,6 +82,8 @@ export function ToolLaunchPage({ gateway }: { gateway: LaunchGateway }) {
     const items = options.data ?? [];
     return items.find((item) => launchOptionKey(item) === optionKey) ?? items[0] ?? null;
   }, [options.data, optionKey]);
+  const simpleFields = useMemo(() => selected ? simpleInputFields(selected.inputSchema) : null, [selected]);
+  const [simpleValues, setSimpleValues] = useState<Record<string, string>>({});
   const [argumentsText, setArgumentsText] = useState('{}');
   const [maxCharge, setMaxCharge] = useState('');
   const [prepared, setPrepared] = useState<PreparedRunStart | null>(null);
@@ -60,6 +93,16 @@ export function ToolLaunchPage({ gateway }: { gateway: LaunchGateway }) {
   const [busy, setBusy] = useState(false);
   const effectiveCap = maxCharge || selected?.reserveMicro || '';
   const locked = prepared !== null || busy;
+
+  useEffect(() => {
+    if (!selected || !simpleFields) return;
+    const next = Object.fromEntries(simpleFields.map((field) => [field.name, '']));
+    setSimpleValues(next);
+    setArgumentsText(JSON.stringify(simpleArguments(simpleFields, next), null, 2));
+    setPrepared(null); setRisk(null); setResult(null); setError(null);
+  }, [selected?.toolVersionId]);
+
+  const currentArguments = () => simpleFields ? simpleArguments(simpleFields, simpleValues) : parseArguments(argumentsText);
 
   const resetPrepared = async () => {
     const current = prepared;
@@ -83,7 +126,7 @@ export function ToolLaunchPage({ gateway }: { gateway: LaunchGateway }) {
     if (!selected || !workspaceId) return;
     setBusy(true); setError(null); setResult(null);
     try {
-      const args = parseArguments(argumentsText);
+      const args = currentArguments();
       if (prepared) {
         if (!risk || risk.idempotencyKey !== prepared.idempotencyKey || risk.decision.argumentsHash !== prepared.argumentsHash) throw new Error('执行风险证据与启动委托不一致，请撤销后重新评估。');
         await startPrepared(risk, args);
@@ -100,7 +143,7 @@ export function ToolLaunchPage({ gateway }: { gateway: LaunchGateway }) {
     if (!selected || !workspaceId || !risk || risk.decision.outcome !== 'confirmation_required') return;
     setBusy(true); setError(null); setResult(null);
     try {
-      const args = parseArguments(argumentsText);
+      const args = currentArguments();
       const confirmed = await gateway.confirm(workspaceId, selected, args, risk.idempotencyKey);
       setRisk(confirmed);
       if (confirmed.decision.argumentsHash !== risk.decision.argumentsHash) throw new Error('服务端确认与当前 Arguments 不一致，请重新评估。');
@@ -114,35 +157,42 @@ export function ToolLaunchPage({ gateway }: { gateway: LaunchGateway }) {
   function resetRisk() { setRisk(null); setResult(null); setError(null); }
 
   if (workspaces.error instanceof LaunchLoginRequiredError || options.error instanceof LaunchLoginRequiredError) return <>
-    <p className="eyebrow">Mender / Launch</p><h1>登录 Console</h1><p className="lead">Tool 启动使用显式 Human capability，不接受页面手填 Machine Key。</p><Button asChild><a href="/auth/login">使用 OIDC 登录</a></Button>
+    <Empty><EmptyHeader><EmptyTitle>Sign in to run tools</EmptyTitle><EmptyDescription>Mender uses your workspace session to determine which tools and connections you may use.</EmptyDescription></EmptyHeader><EmptyContent><Button asChild><a href="/auth/login">Sign in</a></Button></EmptyContent></Empty>
   </>;
 
   return <>
-    <p className="eyebrow">Mender / Launch</p>
-    <div className="page-heading-row"><div><h1>启动工具</h1><p className="lead">从服务端过滤后的 Toolset、ToolVersion 与 Connection 中选择目标。最终 Schema、授权、价格、Budget 与额度仍由 Admission 重新裁决。</p></div></div>
-    {workspaces.isPending && <div className="empty-state"><strong>正在读取 Workspace…</strong></div>}
-    {workspaces.error && <div className="error-panel" role="alert">{message(workspaces.error)}</div>}
+    <div className="page-heading-row product-heading"><div><h1>Run a tool</h1><p className="lead">Choose a capability, provide its inputs, and review cost and risk before Mender starts the run.</p></div><Button asChild variant="outline"><Link to="/catalog">Back to tools</Link></Button></div>
+    {workspaces.isPending && <Empty><EmptyHeader><EmptyTitle>Loading workspace…</EmptyTitle></EmptyHeader></Empty>}
+    {workspaces.error && <Alert variant="destructive"><AlertTitle>Workspace unavailable</AlertTitle><AlertDescription>{message(workspaces.error)}</AlertDescription></Alert>}
     {workspaces.data && workspaces.data.length > 0 && <section className="launch-panel">
-      <div className="launch-toolbar"><label>Workspace<select disabled={locked} value={workspaceId} onChange={(event) => { setSelection(event.target.value); setOptionKey(''); setMaxCharge(''); resetRisk(); }}>{workspaces.data.map((item) => <option key={item.id} value={item.id}>{item.id} · {item.role}</option>)}</select></label></div>
-      <div className="success-panel" role="note"><strong>Execution risk 与 run:create 权限全部由服务端裁决</strong><span>页面只展示服务端 risk/outcome/reasons；Workspace role、side-effect 与 idempotency 不用于浏览器本地授权或风险计算。</span></div>
-      <>
-        {options.isPending && <div className="empty-state"><strong>正在解析可启动能力…</strong></div>}
-        {options.error && <div className="error-panel" role="alert">{message(options.error)}</div>}
-        {options.data && options.data.length === 0 && <div className="empty-state"><strong>没有可启动能力</strong><span>需要发布中的 Toolset/ToolVersion、当前用户的 Connection Grant、PriceVersion 与 Budget window。</span></div>}
-        {selected && <div className="launch-grid">
-          <div className="launch-options"><label>Tool / Connection<select disabled={locked} value={launchOptionKey(selected)} onChange={(event) => { setOptionKey(event.target.value); setMaxCharge(''); resetRisk(); }}>{options.data!.map((item) => <option key={launchOptionKey(item)} value={launchOptionKey(item)}>{item.title} · {item.connectionId}</option>)}</select></label>
-            <article className="launch-card"><p className="section-kicker">{selected.sideEffect === 'read_only' ? 'Read only' : 'Write'} · {selected.idempotency}</p><h2>{selected.title}</h2><p>{selected.description || '无描述'}</p><dl className="fact-grid"><div><dt>Tool</dt><dd className="mono">{selected.toolId}@{selected.toolVersion}</dd></div><div><dt>Toolset</dt><dd className="mono">{selected.toolsetVersionId}</dd></div><div><dt>Provider</dt><dd className="mono">{selected.providerId}</dd></div><div><dt>Connection</dt><dd className="mono">{selected.connectionId}</dd></div></dl></article>
-          </div>
-          <div className="launch-request"><label>Arguments JSON<textarea disabled={locked} value={argumentsText} onChange={(event) => { setArgumentsText(event.target.value); resetRisk(); }} spellCheck={false} rows={12} /></label><details><summary>输入 Schema</summary><pre className="schema-preview">{JSON.stringify(selected.inputSchema, null, 2)}</pre></details>
-            <label>本次最大费用（micro units）<input disabled={locked} inputMode="numeric" value={effectiveCap} onChange={(event) => setMaxCharge(event.target.value)} /></label><p className="muted-copy">当前 reserve quote：{money(selected.reserveMicro, selected.currency)}。提高上限不会改变服务端价格；低于实际 reserve 会被 Admission 拒绝。</p>
-            <div className="credential-actions">{risk?.decision.outcome === 'confirmation_required' && !prepared ? <Button type="button" disabled={busy || !effectiveCap} onClick={() => void confirmAndStart()}>{busy ? '正在确认…' : '确认危险动作并启动'}</Button> : risk?.decision.outcome === 'deny' && !prepared ? <Button type="button" disabled>策略拒绝</Button> : <Button type="button" disabled={busy || !effectiveCap} onClick={() => void previewAndMaybeStart()}>{busy ? '正在评估…' : prepared ? '使用同一幂等请求重试' : '评估风险并启动'}</Button>}{prepared && <Button type="button" variant="outline" disabled={busy} onClick={() => void resetPrepared()}>撤销并重置</Button>}</div>
+      <div className="launch-toolbar product-launch-toolbar">
+        <Field><FieldLabel>Workspace</FieldLabel><Select disabled={locked} value={workspaceId} onValueChange={(value) => { setSelection(value); setOptionKey(''); setMaxCharge(''); resetRisk(); }}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectGroup>{workspaces.data.map((item) => <SelectItem key={item.id} value={item.id}>{item.id}</SelectItem>)}</SelectGroup></SelectContent></Select></Field>
+        {selected && <div className="launch-price"><span>Maximum charge</span><strong>{money(selected.reserveMicro, selected.currency)}</strong></div>}
+      </div>
+      {options.isPending && <Empty><EmptyHeader><EmptyTitle>Loading tools…</EmptyTitle></EmptyHeader></Empty>}
+      {options.error && <Alert variant="destructive"><AlertTitle>Tools unavailable</AlertTitle><AlertDescription>{message(options.error)}</AlertDescription></Alert>}
+      {options.data && options.data.length === 0 && <Empty><EmptyHeader><EmptyTitle>No runnable tools yet</EmptyTitle><EmptyDescription>Publish a tool and grant this account access to its connection. It will appear here automatically.</EmptyDescription></EmptyHeader><EmptyContent><Button asChild variant="outline"><Link to="/publisher/catalog">Open Publisher</Link></Button></EmptyContent></Empty>}
+      {selected && <div className="product-launch-grid">
+        <Card className="launch-tool-card">
+          <CardHeader><div className="tool-card-heading"><div><CardTitle>{selected.title}</CardTitle><CardDescription>{selected.description || selected.providerId}</CardDescription></div><Badge variant={selected.sideEffect === 'read_only' ? 'secondary' : 'outline'}>{selected.sideEffect === 'read_only' ? 'Read only' : 'Writes data'}</Badge></div></CardHeader>
+          <CardContent className="flex flex-col gap-5">
+            {options.data!.length > 1 && <Field><FieldLabel>Tool</FieldLabel><Select disabled={locked} value={launchOptionKey(selected)} onValueChange={(value) => { setOptionKey(value); setMaxCharge(''); resetRisk(); }}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectGroup>{options.data!.map((item) => <SelectItem key={launchOptionKey(item)} value={launchOptionKey(item)}>{item.title}</SelectItem>)}</SelectGroup></SelectContent></Select></Field>}
+            {simpleFields ? <FieldGroup>{simpleFields.map((field) => <Field key={field.name}><FieldLabel htmlFor={`launch-${field.name}`}>{field.label}</FieldLabel><Input id={`launch-${field.name}`} disabled={locked} required={field.required} inputMode={field.type === 'string' ? 'text' : 'decimal'} value={simpleValues[field.name] ?? ''} onChange={(event) => { const next = { ...simpleValues, [field.name]: event.target.value }; setSimpleValues(next); setArgumentsText(JSON.stringify(simpleArguments(simpleFields, next), null, 2)); resetRisk(); }} />{field.description && <FieldDescription>{field.description}</FieldDescription>}</Field>)}</FieldGroup>
+              : <Field><FieldLabel htmlFor="launch-arguments">Inputs (JSON)</FieldLabel><Textarea id="launch-arguments" disabled={locked} value={argumentsText} onChange={(event) => { setArgumentsText(event.target.value); resetRisk(); }} spellCheck={false} rows={10} /><FieldDescription>This tool uses a schema that cannot be represented as a simple form yet.</FieldDescription></Field>}
+            <div className="launch-summary-row"><div><span>Connection</span><strong>{selected.connectionId}</strong></div><div><span>Version</span><strong>{selected.toolVersion}</strong></div></div>
+            <details className="advanced-panel"><summary>Advanced</summary><div className="advanced-panel-body"><Field><FieldLabel>Maximum charge (micro units)</FieldLabel><Input disabled={locked} inputMode="numeric" value={effectiveCap} onChange={(event) => setMaxCharge(event.target.value)} /></Field><pre className="schema-preview">{JSON.stringify(selected.inputSchema, null, 2)}</pre></div></details>
+          </CardContent>
+        </Card>
+        <div className="launch-run-column">
+          <Card><CardHeader><CardTitle>Review & run</CardTitle><CardDescription>Mender checks access, budget, price and execution policy again when the run is submitted.</CardDescription></CardHeader><CardContent className="flex flex-col gap-4">
             {risk && <RiskStatus value={risk} />}
-            {prepared && <p className="muted-copy">前一次响应未确认。短时 token 只保存在本页内存；重试继续使用同一 Idempotency-Key，不会创建第二个逻辑 Run。</p>}
-            {error !== null && <div className="error-panel" role="alert">{message(error)}</div>}
-            {result && <div className="success-panel" role="status"><strong>Run 已受理：<span className="mono">{result.runId}</span></strong><span>{result.replayed ? '已通过相同幂等请求收敛。' : '预算已预留，等待 Worker 执行。'}</span><Button asChild variant="outline"><Link to={`/runs?workspace=${encodeURIComponent(workspaceId)}`}>打开 Run Explorer</Link></Button></div>}
-          </div>
-        </div>}
-      </>
+            {prepared && <Alert><AlertTitle>Previous response was uncertain</AlertTitle><AlertDescription>Retrying keeps the same idempotency key, so Mender will not intentionally create a second logical run.</AlertDescription></Alert>}
+            {error !== null && <Alert variant="destructive"><AlertTitle>Run not started</AlertTitle><AlertDescription>{message(error)}</AlertDescription></Alert>}
+            {result ? <Alert><AlertTitle>Run accepted</AlertTitle><AlertDescription>{result.replayed ? 'The same idempotent request was recovered.' : 'Your run was accepted and is being processed.'}</AlertDescription><Button asChild className="mt-3" variant="outline"><Link to={`/runs?workspace=${encodeURIComponent(workspaceId)}`}>View run</Link></Button></Alert>
+              : <div className="launch-cta">{risk?.decision.outcome === 'confirmation_required' && !prepared ? <Button size="lg" type="button" disabled={busy || !effectiveCap} onClick={() => void confirmAndStart()}>{busy ? 'Confirming…' : 'Confirm and run'}</Button> : risk?.decision.outcome === 'deny' && !prepared ? <Button size="lg" type="button" disabled>Blocked by policy</Button> : <Button size="lg" type="button" disabled={busy || !effectiveCap} onClick={() => void previewAndMaybeStart()}>{busy ? 'Checking…' : prepared ? 'Retry safely' : 'Run tool'}</Button>}{prepared && <Button type="button" variant="ghost" disabled={busy} onClick={() => void resetPrepared()}>Reset</Button>}<span>{money(selected.reserveMicro, selected.currency)} maximum for this run</span></div>}
+          </CardContent></Card>
+        </div>
+      </div>}
     </section>}
   </>;
 }

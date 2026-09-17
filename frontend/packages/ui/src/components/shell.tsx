@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Badge } from './badge';
 
 export function Shell({ label, navigation, children }: {
   label: string;
@@ -14,12 +15,12 @@ export function Shell({ label, navigation, children }: {
           <span>Mender<span className="brand-label">{label}</span></span>
         </a>
         <nav aria-label="主导航">{navigation}</nav>
-        <div className="sidebar-footer"><span className="small-dot" />纵向 Alpha</div>
+        <div className="sidebar-footer"><span className="small-dot" />Local workspace</div>
       </aside>
       <div className="workspace">
-        <header className="topbar"><span>{label}</span><span className="preview-badge">开发版本 · 0.1</span></header>
+        <header className="topbar"><span>{label}</span><Badge variant="outline">Local</Badge></header>
         <main id="main-content" tabIndex={-1}>{children}</main>
-        <footer className="page-footer">Mender<span>连接能力 · 治理调用 · 可靠分发</span></footer>
+        <footer className="page-footer">Mender<span>Tools for agents, governed by your workspace</span></footer>
       </div>
     </div>
   );

@@ -1,6 +1,15 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Button } from './components/button';
+import { Alert, AlertDescription, AlertTitle } from './components/alert';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './components/card';
+import { Checkbox } from './components/checkbox';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './components/dialog';
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from './components/empty';
+import { Field, FieldDescription, FieldGroup, FieldLabel, FieldSet } from './components/field';
+import { Input } from './components/input';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from './components/select';
+import { Textarea } from './components/textarea';
 
 // UI-only building blocks: callbacks are injected by each app's composition root.
 // No business client, role decisions, state transitions or monetary calculations here.
@@ -29,15 +38,15 @@ export function Workbench(props: Props) {
     return () => controller.abort();
   }, [readSession]);
   return <>
-    <p className="eyebrow">{props.eyebrow}</p><h1>{props.title}</h1><p className="lead">{props.description}</p>
-    <div className="success-panel" role="note"><strong>操作边界</strong><span>{props.boundary}</span></div>
-    {sessionError ? <div className="error-panel" role="alert">{sessionError} <a href="/auth/login">重新登录</a></div>
+    <div className="product-heading"><h1>{props.title}</h1><p className="lead">{props.description}</p></div>
+    <Alert className="mb-5"><AlertTitle>Before you continue</AlertTitle><AlertDescription>{props.boundary}</AlertDescription></Alert>
+    {sessionError ? <Alert variant="destructive"><AlertTitle>Sign in required</AlertTitle><AlertDescription>{sessionError} <a href="/auth/login">Sign in again</a></AlertDescription></Alert>
       : !session ? <p role="status">正在验证登录会话…</p> : <>
-        <div className="workbench-identity">当前用户 <code>{session.userId}</code><span>会话不等于操作授权；权限每次由服务端复核。</span></div>
+        <div className="workbench-identity">Signed in as <code>{session.userId}</code><span>Permissions are rechecked by the service for every operation.</span></div>
         {props.workspaceScoped && <form className="workbench-scope" onSubmit={(event) => {
           event.preventDefault(); if (/^[A-Za-z0-9_-]{1,128}$/.test(workspaceDraft)) setScope(workspaceDraft);
-        }}><label>目标 Workspace<input name="workspace" required pattern="[A-Za-z0-9_-]{1,128}" maxLength={128} value={workspaceDraft} onChange={(event) => setWorkspaceDraft(event.target.value)} placeholder="Workspace ID" /></label>
-          <Button type="submit" variant="outline">切换工作区</Button><span>{scope ? `当前范围：${scope}` : '先确认目标工作区；切换会清空结果与待确认操作。'}</span></form>}
+        }}><Field><FieldLabel htmlFor="workbench-workspace">Workspace</FieldLabel><Input id="workbench-workspace" name="workspace" required pattern="[A-Za-z0-9_-]{1,128}" maxLength={128} value={workspaceDraft} onChange={(event) => setWorkspaceDraft(event.target.value)} placeholder="Workspace ID" /></Field>
+          <Button type="submit" variant="outline">Use workspace</Button><span>{scope ? `Current scope: ${scope}` : 'Choose a workspace before loading records.'}</span></form>}
         {(!props.workspaceScoped || scope) && <ScopedWorkbench key={`${session.userId}:${scope}`} {...props} scope={scope} />}
       </>}
   </>;
@@ -55,11 +64,7 @@ function ScopedWorkbench({ actions, execute, scope }: Props & { scope: string })
   const controller = useRef<AbortController | null>(null);
   const [confirmation, setConfirmation] = useState<{ action: WorkbenchAction; values: Record<string, string>; binding: WorkbenchRecord | null } | null>(null);
   const [confirmed, setConfirmed] = useState(false);
-  const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => () => controller.current?.abort(), []);
-  useEffect(() => {
-    if (confirmation) dialog.current?.showModal(); else dialog.current?.close();
-  }, [confirmation]);
   async function perform(operation: string, values: Record<string, string>) {
     controller.current?.abort();
     const active = new AbortController(); controller.current = active;
@@ -77,18 +82,21 @@ function ScopedWorkbench({ actions, execute, scope }: Props & { scope: string })
     else void perform(action.id, values);
   }
   return <div className="workbench-grid">
-    <section className="workbench-actions" aria-label="工作流操作">
-      <h2>工作流</h2><label>选择操作<select value={selected} disabled={busy} onChange={(event) => { setSelected(event.target.value); setError(''); setConfirmation(null); }}>{actions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
-      <p className="muted-copy">{action.description}</p>
-      <ActionFields key={`${action.id}:${version}`} action={action} seed={seed} busy={busy} submit={submit} />
-      {busy && <p role="status">正在等待服务端结果…</p>}
-      {error && <div className="error-panel" role="alert">{error}</div>}
-    </section>
-    <section className="workbench-results" aria-label="服务器结果">
-      <h2>服务器结果</h2>
-      {!result ? <div className="empty-state"><strong>{busy ? '正在读取…' : '尚无结果'}</strong><span>选择列表操作读取真实记录，再使用记录填写操作表单。</span></div> : <>
+    <Card className="workbench-actions" aria-label="Workflow actions">
+      <CardHeader><CardTitle>Workflow</CardTitle><CardDescription>{action.description}</CardDescription></CardHeader>
+      <CardContent className="flex flex-col gap-5">
+        <Field><FieldLabel>Action</FieldLabel><Select value={selected} disabled={busy} onValueChange={(value) => { setSelected(value); setError(''); setConfirmation(null); }}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectGroup>{actions.map((item) => <SelectItem key={item.id} value={item.id}>{item.label}</SelectItem>)}</SelectGroup></SelectContent></Select></Field>
+        <ActionFields key={`${action.id}:${version}`} action={action} seed={seed} busy={busy} submit={submit} />
+        {busy && <p role="status" className="muted-copy">Waiting for the service…</p>}
+        {error && <Alert variant="destructive"><AlertTitle>Request not completed</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
+      </CardContent>
+    </Card>
+    <Card className="workbench-results" aria-label="Server results">
+      <CardHeader><CardTitle>Results</CardTitle><CardDescription>Only server-returned facts are shown here.</CardDescription></CardHeader>
+      <CardContent className="flex flex-col gap-4">
+      {!result ? <Empty><EmptyHeader><EmptyTitle>{busy ? 'Loading…' : 'No results yet'}</EmptyTitle><EmptyDescription>Choose a read action to load records. Select a record before running actions that depend on an exact revision.</EmptyDescription></EmptyHeader></Empty> : <>
         <p role="status" className="workbench-notice">{result.note}</p>
-        {result.records.length === 0 && <div className="empty-state"><strong>当前范围没有记录</strong></div>}
+        {result.records.length === 0 && <Empty><EmptyHeader><EmptyTitle>No records in this scope</EmptyTitle></EmptyHeader></Empty>}
         {result.records.map((record) => <article className="workbench-record" key={record.key}>
           <div className="workbench-record-heading"><h3>{record.title}</h3><span className="state-badge">{record.state || '服务端记录'}</span></div>
           <details><summary>查看记录与精确绑定</summary><dl className="fact-grid">{record.facts.map((fact) => <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>)}</dl></details>
@@ -100,18 +108,19 @@ function ScopedWorkbench({ actions, execute, scope }: Props & { scope: string })
           const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'mender-current-page.json'; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 0);
         }}>导出本页安全 JSON</Button>}
       </>}
-    </section>
-    <dialog ref={dialog} className="workbench-dialog" onCancel={() => setConfirmation(null)} aria-labelledby="workbench-confirm-title">
-      {confirmation && <><h2 id="workbench-confirm-title">确认：{confirmation.action.label}</h2><p>核对目标、版本、理由与审批。该确认不会代替服务端授权或独立复核。</p>
+      </CardContent>
+    </Card>
+    <Dialog open={Boolean(confirmation)} onOpenChange={(open) => { if (!open) setConfirmation(null); }}>
+      {confirmation && <DialogContent><DialogHeader><DialogTitle>Confirm: {confirmation.action.label}</DialogTitle><DialogDescription>Review the target and exact revision. This confirmation never replaces server authorization or an independent approval.</DialogDescription></DialogHeader>
         {scope && <p>Workspace：<strong>{scope}</strong></p>}
         {confirmation.binding && <><h3>已读取的精确审批绑定</h3><dl>{confirmation.binding.facts.map((fact) => <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>)}</dl></>}
         <dl>{confirmation.action.fields.map((field) => <div key={field.name}><dt>{field.label}</dt><dd>{confirmation.values[field.name] || '—'}</dd></div>)}</dl>
-        <label className="workbench-checkbox"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />我已核对本次操作，不将请求提交视为最终生效。</label>
-        <div className="result-actions"><Button type="button" disabled={!confirmed || busy} onClick={() => {
+        <Field className="workbench-checkbox" data-disabled={busy || undefined}><div className="flex items-start gap-2"><Checkbox id="workbench-confirm" checked={confirmed} disabled={busy} onCheckedChange={(value) => setConfirmed(value === true)} /><FieldLabel htmlFor="workbench-confirm">I reviewed this operation and understand that submitting it does not guarantee final activation.</FieldLabel></div></Field>
+        <DialogFooter><Button type="button" disabled={!confirmed || busy} onClick={() => {
           const pending = confirmation; setConfirmation(null); void perform(pending.action.id, pending.values);
-        }}>确认执行</Button><Button type="button" variant="outline" onClick={() => setConfirmation(null)}>返回修改</Button></div>
-      </>}
-    </dialog>
+        }}>Confirm</Button><Button type="button" variant="outline" onClick={() => setConfirmation(null)}>Cancel</Button></DialogFooter>
+      </DialogContent>}
+    </Dialog>
   </div>;
 }
 
@@ -120,12 +129,20 @@ function ActionFields({ action, seed, busy, submit }: { action: WorkbenchAction;
   const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries(action.fields.map((field) => [field.name,
     field.readOnly ? field.initial ?? '' : field.options && !field.options.includes(seed[field.name] ?? '') ? field.initial ?? field.options[0] ?? '' : seed[field.name] ?? field.initial ?? field.options?.[0] ?? ''])));
   function onSubmit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); submit({ ...values }); }
-  return <form className="workbench-form" onSubmit={onSubmit}><fieldset disabled={busy}>
-    {action.fields.map((field) => <label htmlFor={`${id}-${field.name}`} key={field.name}>{field.label}
-      {field.options ? <select id={`${id}-${field.name}`} value={values[field.name]} disabled={field.readOnly} onChange={(event) => setValues({ ...values, [field.name]: event.target.value })}>{field.options.map((option) => <option key={option}>{option}</option>)}</select>
-        : field.multiline ? <textarea id={`${id}-${field.name}`} rows={field.name === 'manifest' ? 13 : 3} required={field.required !== false} maxLength={field.maxLength ?? 32768} value={values[field.name]} readOnly={field.readOnly} onChange={(event) => setValues({ ...values, [field.name]: event.target.value })} />
-          : <input id={`${id}-${field.name}`} required={field.required !== false} maxLength={field.maxLength ?? 256} value={values[field.name]} readOnly={field.readOnly} autoComplete="off" onChange={(event) => setValues({ ...values, [field.name]: event.target.value })} />}
-    </label>)}
-    <Button type="submit" disabled={busy}>{action.mutation ? '核对操作' : '读取记录'}</Button>
-  </fieldset></form>;
+  function control(field: WorkbenchField) {
+    const controlID = `${id}-${field.name}`;
+    if (field.options) return <Select value={values[field.name]} disabled={field.readOnly} onValueChange={(value) => setValues({ ...values, [field.name]: value })}>
+      <SelectTrigger id={controlID}><SelectValue /></SelectTrigger>
+      <SelectContent><SelectGroup>{field.options.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectGroup></SelectContent>
+    </Select>;
+    if (field.multiline) return <Textarea id={controlID} rows={field.name === 'manifest' ? 13 : 3} required={field.required !== false} maxLength={field.maxLength ?? 32768} value={values[field.name]} readOnly={field.readOnly} onChange={(event) => setValues({ ...values, [field.name]: event.target.value })} />;
+    return <Input id={controlID} required={field.required !== false} maxLength={field.maxLength ?? 256} value={values[field.name]} readOnly={field.readOnly} autoComplete="off" onChange={(event) => setValues({ ...values, [field.name]: event.target.value })} />;
+  }
+  return <form className="workbench-form" onSubmit={onSubmit}><FieldSet disabled={busy}><FieldGroup>
+    {action.fields.map((field) => <Field key={field.name} data-disabled={field.readOnly || undefined}><FieldLabel htmlFor={`${id}-${field.name}`}>{field.label}</FieldLabel>
+      {control(field)}
+      {field.readOnly && <FieldDescription>Server-owned value</FieldDescription>}
+    </Field>)}
+    <Button type="submit" disabled={busy}>{action.mutation ? 'Review action' : 'Load records'}</Button>
+  </FieldGroup></FieldSet></form>;
 }

@@ -7,7 +7,7 @@ import { WorkspacesPage, createWorkspaceGateway } from '../modules/workspace-acc
 import { ConnectionsPage, createConnectionGateway } from '../modules/connection-access';
 import { ToolLaunchPage, createLaunchGateway } from '../modules/tool-launch';
 import { UsagePage, createUsageGateway } from '../modules/usage-observability';
-import { CatalogManagementPage, createCatalogGateway } from '../modules/catalog-management';
+import { CatalogManagementPage, ToolCatalogPage, createCatalogGateway } from '../modules/catalog-management';
 
 const readStatus = createStatusReader();
 const runGateway = createRunGateway();
@@ -25,7 +25,7 @@ export const router = createBrowserRouter([{
     { path: 'status', element: <StatusPage readStatus={readStatus} /> },
     { path: 'workspaces', element: <WorkspacesPage gateway={workspaceGateway} /> },
     { path: 'connections', element: <ConnectionsPage gateway={connectionGateway} /> },
-    { path: 'catalog', element: <CatalogManagementPage gateway={catalogGateway} /> },
+    { path: 'catalog', element: <ToolCatalogPage gateway={catalogGateway} /> },
     { path: 'launch', element: <ToolLaunchPage gateway={launchGateway} /> },
     { path: 'usage', element: <UsagePage gateway={usageGateway} /> },
     { path: 'runs', element: <RunExplorerPage gateway={runGateway} /> },
@@ -34,6 +34,7 @@ export const router = createBrowserRouter([{
       const gateway = createPublisherWorkbenchGateway();
       return { Component: function PublisherRoute() { return <PublisherWorkbenchPage gateway={gateway} />; } };
     } },
+    { path: 'publisher/catalog', element: <CatalogManagementPage gateway={catalogGateway} /> },
     { path: '*', element: <NotFound /> },
   ],
 }]);

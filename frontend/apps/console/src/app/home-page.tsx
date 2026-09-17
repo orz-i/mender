@@ -1,36 +1,44 @@
 import { Link } from 'react-router';
-import { Button } from '@mender/ui';
+import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Separator } from '@mender/ui';
 
 export function HomePage() {
   return <>
-    <p className="eyebrow">Mender / Console</p>
-    <h1>欢迎使用 Mender</h1>
-    <p className="lead">将 API、MCP 与 Agent 汇聚为可发现、可治理、可分发的能力。当前 Alpha 已贯通人类登录、Connection、Catalog / Toolset 自助管理、可启动能力发现、受控 StartRun 与 Run Explorer。</p>
-    <section className="welcome-panel" aria-labelledby="welcome-heading">
-      <div><h2 id="welcome-heading">从能力发现到 Run 受理</h2><p>登录后从服务端过滤的 Toolset、ToolVersion 与 Connection 中选择目标，使用一次短期 Human capability 进入现有原子 Admission。</p></div>
-      <Button asChild><Link to="/launch">启动工具 <span aria-hidden="true">↗</span></Link></Button>
+    <div className="page-heading-row product-heading">
+      <div>
+        <h1>Welcome to Mender</h1>
+        <p className="lead">Discover tools, connect your accounts, and run capabilities from one workspace.</p>
+      </div>
+      <Badge variant="secondary">Local demo</Badge>
+    </div>
+
+    <section className="onboarding-stack" aria-label="Get started">
+      <Card className="onboarding-card">
+        <CardHeader>
+          <div className="step-heading"><span className="step-number">1</span><div><CardTitle>Choose a tool</CardTitle><CardDescription>Browse the tools your workspace can use. Pricing, access and side effects are shown before a run starts.</CardDescription></div></div>
+        </CardHeader>
+        <CardContent className="onboarding-actions"><Button asChild><Link to="/catalog">Browse tools</Link></Button></CardContent>
+      </Card>
+
+      <Card className="onboarding-card">
+        <CardHeader>
+          <div className="step-heading"><span className="step-number">2</span><div><CardTitle>Connect an account</CardTitle><CardDescription>Authorize the provider account a tool needs. Mender keeps provider credentials out of the browser.</CardDescription></div></div>
+        </CardHeader>
+        <CardContent className="onboarding-actions"><Button asChild variant="outline"><Link to="/connections">Manage connections</Link></Button></CardContent>
+      </Card>
+
+      <Card className="onboarding-card">
+        <CardHeader>
+          <div className="step-heading"><span className="step-number">3</span><div><CardTitle>Run and observe</CardTitle><CardDescription>Launch an authorized tool, then inspect status, output and usage without exposing internal execution details.</CardDescription></div></div>
+        </CardHeader>
+        <CardContent className="onboarding-actions"><Button asChild variant="outline"><Link to="/launch">Run a tool</Link></Button><Button asChild variant="ghost"><Link to="/runs">View runs</Link></Button></CardContent>
+      </Card>
     </section>
-    <section className="welcome-panel" aria-labelledby="catalog-heading">
-      <div><h2 id="catalog-heading">管理 Catalog 与 Toolset</h2><p>创建 ToolVersion draft、绑定 Connection/Budget，并使用服务端 preflight 发布 immutable version。</p></div>
-      <Button asChild variant="outline"><Link to="/catalog">打开 Catalog</Link></Button>
-    </section>
-    <section aria-label="后续能力规划">
-      <p className="section-label">后续能力规划</p>
-        <div className="capability-row">
-          <span className="row-number">01</span>
-          <div><h3>HTTP API</h3><p>将已有接口转换为统一工具。</p></div>
-          <span className="planned">计划接入</span>
-        </div>
-        <div className="capability-row">
-          <span className="row-number">02</span>
-          <div><h3>MCP Tools</h3><p>连接远程工具，并按工作空间分发。</p></div>
-          <span className="planned">计划接入</span>
-        </div>
-        <div className="capability-row">
-          <span className="row-number">03</span>
-          <div><h3>Remote Agent</h3><p>通过统一的任务合同协作与执行。</p></div>
-          <span className="planned">计划接入</span>
-        </div>
+
+    <Separator className="my-8" />
+    <section className="quick-links" aria-label="Workspace overview">
+      <Link to="/catalog"><strong>Tools</strong><span>Browse workspace capabilities</span></Link>
+      <Link to="/usage"><strong>Usage</strong><span>Review budgets and run charges</span></Link>
+      <Link to="/publisher"><strong>Publisher</strong><span>Publish your own integrations</span></Link>
     </section>
   </>;
 }

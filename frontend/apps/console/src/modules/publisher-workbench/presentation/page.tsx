@@ -136,4 +136,4 @@ const actions: WorkbenchAction[] = [
     "mutation": true
   }
 ];
-export function PublisherWorkbenchPage({gateway}: {gateway: Gateway}) { return <Workbench title="发布者工作台" eyebrow="Mender / console / S4" description="从声明式草稿到预检、提交审核和发布；使用已存在的工具版本与受审部署。" boundary="预检是服务端能力校验，不会试调用供应商。提交者不能自审；已发布版本不可覆盖。" workspaceScoped={true} actions={actions} session={gateway.session} execute={gateway.execute} />; }
+export function PublisherWorkbenchPage({gateway}: {gateway: Gateway}) { return <Workbench title="Publisher" eyebrow="Mender / Publisher" description="Create and publish integrations for your workspace. Drafts stay private until an independent reviewer approves the exact version." boundary="Publishing never bypasses server preflight or maker/checker review. Already published versions stay immutable." workspaceScoped={true} actions={actions} session={gateway.session} execute={gateway.execute} />; }

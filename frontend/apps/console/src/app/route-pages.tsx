@@ -3,15 +3,15 @@ import { Shell, Button } from '@mender/ui';
 
 export function Layout() {
   return <Shell label="Console" navigation={<>
-    <NavLink className="nav-link" to="/" end>开始</NavLink>
-    <NavLink className="nav-link" to="/workspaces">工作空间</NavLink>
-    <NavLink className="nav-link" to="/connections">授权连接</NavLink>
-    <NavLink className="nav-link" to="/catalog">Catalog / Toolset</NavLink>
-    <NavLink className="nav-link" to="/launch">启动工具</NavLink>
-    <NavLink className="nav-link" to="/usage">额度用量</NavLink>
-    <NavLink className="nav-link" to="/runs">运行记录</NavLink>
-    <NavLink className="nav-link" to="/publisher">发布者工作台</NavLink>
-    <NavLink className="nav-link" to="/status">服务状态</NavLink>
+    <NavLink className="nav-link" to="/" end>Get Started</NavLink>
+    <NavLink className="nav-link" to="/catalog">Tools</NavLink>
+    <NavLink className="nav-link" to="/connections">Connections</NavLink>
+    <NavLink className="nav-link" to="/runs">Runs</NavLink>
+    <NavLink className="nav-link" to="/usage">Usage</NavLink>
+    <span className="nav-group-label">Workspace</span>
+    <NavLink className="nav-link" to="/workspaces">Members & access</NavLink>
+    <NavLink className="nav-link" to="/publisher">Publisher</NavLink>
+    <NavLink className="nav-link" to="/status">Service status</NavLink>
   </>}><Outlet /></Shell>;
 }
 
