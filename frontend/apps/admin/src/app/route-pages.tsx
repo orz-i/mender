@@ -3,16 +3,19 @@ import { Shell, Button } from '@mender/ui';
 
 export function Layout() {
   return <Shell label="Admin" navigation={<>
-    <NavLink className="nav-link" to="/" end>开始</NavLink>
-    <NavLink className="nav-link" to="/publication-reviews">发布审核</NavLink>
-    <NavLink className="nav-link" to="/publication-history">审计历史</NavLink>
-    <NavLink className="nav-link" to="/publication-policy">发布策略</NavLink>
-    <NavLink className="nav-link" to="/execution-governance">执行治理</NavLink>
-    <NavLink className="nav-link" to="/release-management">插件审核与发布</NavLink>
-    <NavLink className="nav-link" to="/platform-operations">平台运营与异常</NavLink>
-    <NavLink className="nav-link" to="/support-approvals">危险审批与临时支持</NavLink>
-    <NavLink className="nav-link" to="/billing">账单与模拟支付</NavLink>
-    <NavLink className="nav-link" to="/status">服务状态</NavLink>
+    <NavLink className="nav-link" to="/" end>Overview</NavLink>
+    <span className="nav-group-label">Review</span>
+    <NavLink className="nav-link" to="/publication-reviews">Publication reviews</NavLink>
+    <NavLink className="nav-link" to="/release-management">Releases</NavLink>
+    <NavLink className="nav-link" to="/publication-history">Audit history</NavLink>
+    <span className="nav-group-label">Governance</span>
+    <NavLink className="nav-link" to="/publication-policy">Publication policy</NavLink>
+    <NavLink className="nav-link" to="/execution-governance">Execution policy</NavLink>
+    <NavLink className="nav-link" to="/support-approvals">Approvals & support</NavLink>
+    <span className="nav-group-label">Operations</span>
+    <NavLink className="nav-link" to="/platform-operations">Incidents</NavLink>
+    <NavLink className="nav-link" to="/billing">Billing</NavLink>
+    <NavLink className="nav-link" to="/status">Service status</NavLink>
   </>}><Outlet /></Shell>;
 }
 
