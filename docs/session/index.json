@@ -153,9 +153,9 @@
     "ses_9e87a3a9ec29486d9720e16a6defb776": {
       "path": "docs/session/ses_9e87a3a9ec29486d9720e16a6defb776.md",
       "title": "Mender 持久部署与生产化交付",
-      "status": "active",
+      "status": "completed",
       "created_at": "unix:1789617982",
-      "updated_at": "unix:1789619583",
+      "updated_at": "unix:1789619721",
       "parent_session_id": "ses_9bf34521dd4b41e4a3c24dd52485e3a0"
     },
     "ses_a14ecc74a98644ce8b7f5c338321c93f": {
