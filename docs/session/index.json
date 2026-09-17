@@ -161,9 +161,9 @@
     "ses_9f015cc42f794e1cb48dfef0f05f09c0": {
       "path": "docs/session/ses_9f015cc42f794e1cb48dfef0f05f09c0.md",
       "title": "Mender 产品可用性纠偏",
-      "status": "active",
+      "status": "completed",
       "created_at": "unix:1789623714",
-      "updated_at": "unix:1789628856",
+      "updated_at": "unix:1789628933",
       "parent_session_id": "ses_9e87a3a9ec29486d9720e16a6defb776"
     },
     "ses_a14ecc74a98644ce8b7f5c338321c93f": {
