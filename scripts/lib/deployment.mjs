@@ -23,13 +23,17 @@ export function scopedPath(root, input, prefix) {
  return p;
 }
 export function validateConfig(c) {
- const allowed=['version','environment','instance','console_origin','admin_origin','oidc_issuer','oidc_client_id','oidc_client_secret_file','oidc_ca_file','local_oidc_host_gateway','web_certificate_file','web_private_key_file','http_port','https_port','worker_workspaces'];
+ const allowed=['version','environment','instance','console_origin','admin_origin','oidc_issuer','oidc_client_id','oidc_client_secret_file','oidc_ca_file','local_oidc_host_gateway','local_oidc_fixture','web_certificate_file','web_private_key_file','http_port','https_port','worker_workspaces'];
  if(!c||Object.keys(c).some(k=>!allowed.includes(k))||c.version!==1||!['local','production'].includes(c.environment)||!/^mender_[a-z0-9_]{3,16}$/.test(c.instance))throw Error('Invalid deployment configuration or unknown field');
  for(const k of ['http_port','https_port'])if(!Number.isInteger(c[k])||c[k]<(c.environment==='local'?1024:1)||c[k]>65535)throw Error('Invalid host port; local fixtures use unprivileged ports');
  if(c.http_port===c.https_port)throw Error('HTTP and HTTPS ports must differ');
  if(c.worker_workspaces!==undefined&&(!Array.isArray(c.worker_workspaces)||c.worker_workspaces.length<1||c.worker_workspaces.length>64||new Set(c.worker_workspaces).size!==c.worker_workspaces.length||c.worker_workspaces.some(x=>typeof x!=='string'||!/^[A-Za-z0-9_-]{1,128}$/.test(x))))throw Error('Invalid explicit Worker workspace scope');
  if(c.environment==='production'&&!c.worker_workspaces)throw Error('Production requires explicit Worker workspace scope');
  if(c.local_oidc_host_gateway!==undefined&&(c.local_oidc_host_gateway!==true||c.environment!=='local'||new URL(c.oidc_issuer).hostname!=='idp.localhost'))throw Error('Host-gateway fixture is local-only and restricted to idp.localhost');
+ if(c.local_oidc_fixture!==undefined){
+  if(c.local_oidc_fixture!==true||c.environment!=='local'||!c.oidc_issuer||new URL(c.oidc_issuer).hostname!=='idp.localhost'||c.local_oidc_host_gateway)throw Error('Embedded local OIDC fixture is local-only and restricted to idp.localhost');
+  const port=Number(new URL(c.oidc_issuer).port||443);if(!Number.isInteger(port)||port<1024||port>65535||port===c.http_port||port===c.https_port)throw Error('Embedded local OIDC fixture requires a distinct unprivileged port');
+ }
  for(const k of ['console_origin','admin_origin']){
   const u=new URL(c[k]);if(u.protocol!=='https:'||u.origin!==c[k]||!/^([a-z0-9-]+\.)+[a-z0-9-]+$/.test(u.hostname))throw Error('Invalid HTTPS UI origin');
   if(Number(u.port||443)!==c.https_port)throw Error('UI origin port must match the published HTTPS port');
@@ -38,7 +42,10 @@ export function validateConfig(c) {
  if(new URL(c.console_origin).hostname===new URL(c.admin_origin).hostname)throw Error('Console and Admin require different hosts, not merely different ports');
  if(c.oidc_issuer){const u=new URL(c.oidc_issuer);if(u.protocol!=='https:'||u.username||u.password||u.search||u.hash)throw Error('Invalid OIDC issuer');}
  if(c.environment==='production'&&(!c.oidc_issuer||!c.oidc_client_id||!c.oidc_client_secret_file||!c.web_certificate_file||!c.web_private_key_file))throw Error('Production requires real OIDC and externally supplied HTTPS certificate/key');
- if(c.oidc_issuer&&(!c.oidc_client_id||!c.oidc_client_secret_file))throw Error('OIDC client configuration is incomplete');
+ if(c.oidc_issuer&&!c.oidc_client_id)throw Error('OIDC client configuration is incomplete');
+ if(c.oidc_issuer&&!c.local_oidc_fixture&&!c.oidc_client_secret_file)throw Error('OIDC client secret file is required outside the embedded local fixture');
+ if(c.local_oidc_fixture&&c.oidc_client_secret_file)throw Error('Embedded local OIDC fixture generates its own deployment-scoped client secret');
+ if(c.local_oidc_fixture&&c.oidc_client_id!=='mender-local-demo')throw Error('Embedded local OIDC fixture uses the fixed mender-local-demo client');
  return c;
 }
 export function validateWebCertificate(certBytes,keyBytes,hosts,now=Date.now()){
@@ -110,11 +117,11 @@ export function writeDeployment(root,dir,c,release){
  for(const [grant,key]of capabilities){const suffix=grant.replaceAll('-','_');const name=(c.instance+'_'+suffix);if(name.length>63)throw Error('Role name too long');const password=randomBytes(32).toString('hex');add('password_'+suffix,password);add('dsn_'+suffix,baseDSN(name,password));roles.push({name,grant,password_file:'/run/secrets/password_'+suffix});mappings[key+'_FILE']='/run/secrets/dsn_'+suffix;}
  add('role_plan',JSON.stringify({version:1,database:'mender',instance:c.instance,roles},null,2));
  add('db_ca',readFileSync(join(dir,'pki/ca.crt')));add('db_certificate',readFileSync(join(dir,'pki/database.crt')));add('db_private_key',readFileSync(join(dir,'pki/database.key')));
- if(c.oidc_issuer)add('oidc_client_secret',readFileSync(scopedPath(root,c.oidc_client_secret_file)));
+ if(c.oidc_issuer)add('oidc_client_secret',c.local_oidc_fixture?randomBytes(32).toString('base64url'):readFileSync(scopedPath(root,c.oidc_client_secret_file)));
  if(c.oidc_ca_file)add('oidc_ca',readFileSync(scopedPath(root,c.oidc_ca_file)));
  const cert=c.web_certificate_file?readFileSync(scopedPath(root,c.web_certificate_file)):readFileSync(join(dir,'pki/web.crt'));
  const key=c.web_private_key_file?readFileSync(scopedPath(root,c.web_private_key_file)):readFileSync(join(dir,'pki/web.key'));
- validateWebCertificate(cert,key,[new URL(c.console_origin).hostname,new URL(c.admin_origin).hostname]);
+ validateWebCertificate(cert,key,[new URL(c.console_origin).hostname,new URL(c.admin_origin).hostname,...(c.local_oidc_fixture?[new URL(c.oidc_issuer).hostname]:[])]);
  add('web_certificate',cert);add('web_private_key',key);
  const common={GIN_MODE:'release',MENDER_HTTP_ADDR:'0.0.0.0:18080',MENDER_RUN_API_ENABLED:'true',MENDER_RUN_READ_API_ENABLED:'true',MENDER_CURSOR_SIGNING_KEY_FILE:'/run/secrets/cursor',MENDER_PAYMENT_MODE:'sandbox',MENDER_CONSOLE_COOKIE_SECURE:'true',MENDER_RUN_START_API_ENABLED:'true',MENDER_RUN_COORDINATED_CANCEL_ENABLED:'true',MENDER_MCP_GATEWAY_ENABLED:'true',MENDER_MCP_FIXED_TOOLSET_ENABLED:'true'};
  const session={MENDER_CONSOLE_OIDC_ENABLED:'true',MENDER_CONSOLE_OIDC_ISSUER:c.oidc_issuer,MENDER_CONSOLE_OIDC_CLIENT_ID:c.oidc_client_id,MENDER_CONSOLE_OIDC_CLIENT_SECRET_FILE:'/run/secrets/oidc_client_secret'};
@@ -133,8 +140,15 @@ export function writeDeployment(root,dir,c,release){
   worker:{image:release.runtime_image,entrypoint:['/mender/worker'],read_only:true,user:'65532:65532',cap_drop:['ALL'],security_opt:['no-new-privileges:true'],restart:'unless-stopped',stop_grace_period:'30s',pids_limit:128,mem_limit:'512m',networks:['private'],environment:{MENDER_WORKER_CONTROL_ENABLED:'true',MENDER_WORKER_DATABASE_URL_FILE:'/run/secrets/dsn_worker',MENDER_WORKER_ID:c.instance+'_worker',MENDER_WORKER_WORKSPACES:'ws_local',MENDER_WORKER_DISPATCH_ENABLED:'false',MENDER_REVIEWED_WORKER_RUNTIME_ENABLED:'false'},secrets:['db_ca','dsn_worker'],depends_on:{database:{condition:'service_healthy'}},logging:{driver:'json-file',options:{'max-size':'10m','max-file':'3'}}},
   web:{image:release.web_image,read_only:true,user:'101:101',cap_drop:['ALL'],security_opt:['no-new-privileges:true'],restart:'unless-stopped',pids_limit:128,mem_limit:'256m',tmpfs:['/tmp'],networks:['private','egress'],ports:[`${c.environment==='production'?'0.0.0.0':'127.0.0.1'}:${c.http_port}:8080`,`${c.environment==='production'?'0.0.0.0':'127.0.0.1'}:${c.https_port}:8443`],secrets:['web_certificate','web_private_key'],volumes:['./nginx.conf:/etc/nginx/nginx.conf:ro'],depends_on:{'api-console':{condition:'service_healthy'},'api-admin':{condition:'service_healthy'}},logging:{driver:'json-file',options:{'max-size':'10m','max-file':'3'}}}
  },secrets,volumes:{pgdata:{labels:{'io.mender.instance':c.instance}}},networks:{private:{internal:true},egress:{}}};
+ if(c.local_oidc_fixture){
+  const oidcPort=Number(new URL(c.oidc_issuer).port||443);
+  compose.services['local-idp']={image:release.runtime_image,entrypoint:['/mender/localidp'],read_only:true,user:'65532:65532',cap_drop:['ALL'],security_opt:['no-new-privileges:true'],restart:'unless-stopped',pids_limit:64,mem_limit:'128m',environment:{MENDER_LOCAL_OIDC_ADDR:`0.0.0.0:${oidcPort}`,MENDER_LOCAL_OIDC_ISSUER:c.oidc_issuer,MENDER_LOCAL_OIDC_CLIENT_ID:c.oidc_client_id,MENDER_LOCAL_OIDC_CLIENT_SECRET_FILE:'/run/secrets/oidc_client_secret',MENDER_LOCAL_OIDC_REDIRECT_URIS:`${c.console_origin}/auth/callback,${c.admin_origin}/auth/callback`,MENDER_LOCAL_OIDC_CERT_FILE:'/run/secrets/web_certificate',MENDER_LOCAL_OIDC_KEY_FILE:'/run/secrets/web_private_key',MENDER_LOCAL_OIDC_CA_FILE:'/run/secrets/db_ca'},secrets:['oidc_client_secret','web_certificate','web_private_key','db_ca'],networks:{private:{aliases:['idp.localhost']}},ports:[`127.0.0.1:${oidcPort}:${oidcPort}`],healthcheck:{test:['CMD','/mender/localidp','health'],interval:'2s',timeout:'3s',retries:30,start_period:'2s'},logging:{driver:'json-file',options:{'max-size':'5m','max-file':'2'}}};
+  compose.services['api-console'].depends_on['local-idp']={condition:'service_healthy'};
+  compose.services['api-admin'].depends_on['local-idp']={condition:'service_healthy'};
+ }
  for(const name of ['api-console','api-admin']){
   if(c.oidc_ca_file){compose.services[name].secrets.push('oidc_ca');compose.services[name].environment.SSL_CERT_FILE='/run/secrets/oidc_ca';}
+  else if(c.local_oidc_fixture)compose.services[name].environment.SSL_CERT_FILE='/run/secrets/db_ca';
   if(c.local_oidc_host_gateway)compose.services[name].extra_hosts=['idp.localhost:host-gateway'];
  }
  const uid=process.getuid?.()||65532;const gid=process.getgid?.()||65532;
@@ -143,7 +157,7 @@ export function writeDeployment(root,dir,c,release){
  compose.volumes.pgdata.labels['io.mender.ownership']=ownership;
  compose.services.worker.environment.MENDER_WORKER_WORKSPACES=(c.worker_workspaces||['ws_local']).join(',');
  compose.services.web.healthcheck={test:['CMD','wget','-q','-O','/dev/null','http://127.0.0.1:8081/readyz'],interval:'5s',timeout:'4s',retries:12,start_period:'10s'};
- for(const name of ['api-console','api-admin','provision','operator','worker','web'])compose.services[name].user=`${uid}:${gid}`;
+ for(const name of ['api-console','api-admin','provision','operator','worker','web',...(c.local_oidc_fixture?['local-idp']:[])])compose.services[name].user=`${uid}:${gid}`;
  // Local Compose bind-mounted secrets retain host ownership; do not pretend
  // uid/mode in the secrets stanza changes filesystem ownership.
  if(process.platform!=='win32'&&process.getuid()===0){for(const f of readdirSync(secretDir))chownSync(join(secretDir,f),uid,gid);chownSync(join(dir,'nginx.conf'),uid,gid);}

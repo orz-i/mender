@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "environment": "local",
+  "instance": "mender_demo",
+  "worker_workspaces": ["ws_local"],
+  "console_origin": "https://console.localhost:18443",
+  "admin_origin": "https://admin.localhost:18443",
+  "oidc_issuer": "https://idp.localhost:19443",
+  "oidc_client_id": "mender-local-demo",
+  "local_oidc_fixture": true,
+  "http_port": 18000,
+  "https_port": 18443
+}

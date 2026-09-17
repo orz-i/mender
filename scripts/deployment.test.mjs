@@ -13,6 +13,11 @@ test('local configuration is explicit and production cannot inherit fixture iden
  assert.equal(validateConfig(config()).environment,'local');
  for(const mutate of [c=>c.environment='production',c=>c.extra='ignored?',c=>c.console_origin='http://console.localhost:18443',c=>c.admin_origin=c.console_origin,c=>c.oidc_issuer='http://idp.localhost',c=>c.instance='mender_bad;rm',c=>c.https_port=0,c=>c.https_port=c.http_port]){const c=config();mutate(c);assert.throws(()=>validateConfig(c));}
 });
+test('embedded local OIDC fixture is explicit, isolated and never valid for production',()=>{
+ const demo=JSON.parse(readFileSync('deploy/local.demo.example.json','utf8'));
+ assert.equal(validateConfig(demo).local_oidc_fixture,true);assert.equal(demo.oidc_client_id,'mender-local-demo');
+ for(const mutate of [c=>c.environment='production',c=>c.oidc_client_id='other-client',c=>c.oidc_client_secret_file='.local/secret',c=>c.local_oidc_host_gateway=true,c=>c.oidc_issuer='https://login.example.test:19443',c=>c.oidc_issuer='https://idp.localhost:18443']){const c=structuredClone(demo);mutate(c);assert.throws(()=>validateConfig(c));}
+});
 test('readiness checks the actual two TLS ingresses and only retries bounded GET probes',async()=>{
  const c={...config(),web_certificate_file:'operator-owned.pem'};let now=0;const seen=[];
  await waitForIngress(c,'.',{now:()=>now,pause:async(ms)=>{now+=ms;},probe:async(options)=>{seen.push(options);return now>=2000;}});

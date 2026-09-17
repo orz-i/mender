@@ -30,6 +30,8 @@ pnpm dev
 
 访问 [Console](http://127.0.0.1:5173) 或 [Admin](http://127.0.0.1:5174)。环境配置和开发命令见[开发指南](docs/engineering/development.md)。
 
+需要在 Docker 中保持数据并实际登录测试时，使用[本地可用测试实例](docs/engineering/local-demo.md)。该入口提供本机专用 OIDC 测试身份，不会连接真实支付或外部供应商。
+
 ## 文档
 
 - [持久化部署与生产化操作](docs/engineering/production-deployment.md) — 固定制品、TLS、角色／秘密、真实登录、备份与显式回退

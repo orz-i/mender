@@ -34,7 +34,7 @@ function build(output){
  const pinned=(info,prefix)=>{const v=info.RepoDigests?.find(x=>x.startsWith(prefix+'@sha256:'));if(!v)throw Error('Official base image digest unavailable');return v;};
  const trust=pinned(nginx,'nginx');const postgres=pinned(pg,'postgres');
  const context=join(dir,'context');mkdirSync(join(context,'bin'),{recursive:true});
- for(const name of ['api','worker','operator','provision','healthcheck','mender']){
+ for(const name of ['api','worker','operator','provision','healthcheck','mender','localidp']){
   run('go',['build','-trimpath','-buildvcs=false','-ldflags=-s -w','-o',join(context,'bin',name),`./cmd/${name}`],{cwd:join(root,'backend'),env:{...process.env,GOOS:'linux',GOARCH:'amd64',CGO_ENABLED:'0'},publicOutput:true});
  }
  cpSync(join(root,'frontend/apps/console/dist'),join(context,'console'),{recursive:true});cpSync(join(root,'frontend/apps/admin/dist'),join(context,'admin'),{recursive:true});
@@ -79,13 +79,13 @@ function preflight(input,signed,keyFile){
  for(const entry of d.controls)if(hash(readFileSync(join(dir,entry.path)))!==entry.sha256)throw Error('Deployment control drift requires explicit review; not automatically accepted');
  const releases=scopedPath(root,d.release_path||findReleasePath(d.release),'dist/releases/');const release=verifyBuiltRelease(releases);
  if(JSON.stringify(release)!==JSON.stringify(d.release))throw Error('Deployment release identity drift');
- for(const name of ['api-console','api-admin','worker','provision','operator'])if(c.services[name]?.image!==release.runtime_image)throw Error('Compose runtime image does not match the verified release');
+ for(const name of ['api-console','api-admin','worker','provision','operator',...(d.config.local_oidc_fixture?['local-idp']:[])])if(c.services[name]?.image!==release.runtime_image)throw Error('Compose runtime image does not match the verified release');
  if(c.services.web?.image!==release.web_image||c.services.database?.image!==release.postgres_image)throw Error('Compose web/database image does not match the verified release');
- validateWebCertificate(readFileSync(join(dir,'secrets/web_certificate')),readFileSync(join(dir,'secrets/web_private_key')),[new URL(d.config.console_origin).hostname,new URL(d.config.admin_origin).hostname]);
+ validateWebCertificate(readFileSync(join(dir,'secrets/web_certificate')),readFileSync(join(dir,'secrets/web_private_key')),[new URL(d.config.console_origin).hostname,new URL(d.config.admin_origin).hostname,...(d.config.local_oidc_fixture?[new URL(d.config.oidc_issuer).hostname]:[])]);
  if(d.config.environment==='production'||signed||keyFile){
   verifyProductionSignature(releases,signed,keyFile);
  }
- for(const name of ['api-console','api-admin','worker','web']){
+ for(const name of ['api-console','api-admin','worker','web',...(d.config.local_oidc_fixture?['local-idp']:[])]){
   const s=c.services[name];if(!s||s.read_only!==true||s.privileged||s.network_mode||s.user==='0:0'||!s.cap_drop.includes('ALL')||!s.security_opt.includes('no-new-privileges:true'))throw Error('Runtime hardening drift');
   if(s.secrets.includes('admin_dsn')||s.secrets.includes('db_password')||s.secrets.includes('role_plan'))throw Error('Administrator secrets must not reach runtimes');
  }
@@ -108,7 +108,7 @@ function switchRelease(input,releasePath,signed,keyFile){
  if(d.config.environment==='production'||signed||keyFile)verifyProductionSignature(nextDir,signed,keyFile);
  const running=run('docker',['ps','-q','--filter',`label=com.docker.compose.project=${c.name}`]);if(running)throw Error('Stop this deployment before switching release; take a backup and review migration compatibility');
  const revision='revision-'+Date.now();const archive=join(dir,revision);mkdirSync(archive,{mode:0o700});for(const name of ['compose.yaml','deployment.json'])copyFileSync(join(dir,name),join(archive,name));
- for(const name of ['api-console','api-admin','worker','provision','operator'])c.services[name].image=next.runtime_image;c.services.web.image=next.web_image;
+ for(const name of ['api-console','api-admin','worker','provision','operator',...(d.config.local_oidc_fixture?['local-idp']:[])])c.services[name].image=next.runtime_image;c.services.web.image=next.web_image;
  const composeText=stringify(c);d.previous_revision=revision;d.release=next;d.release_path=releasePath;d.controls.find(x=>x.path==='compose.yaml').sha256=hash(composeText);
  writeFileSync(join(dir,'compose.yaml.next'),composeText,{mode:0o600,flag:'wx'});writeFileSync(join(dir,'deployment.json.next'),JSON.stringify(d,null,2),{mode:0o600,flag:'wx'});
  renameSync(join(dir,'compose.yaml.next'),join(dir,'compose.yaml'));renameSync(join(dir,'deployment.json.next'),join(dir,'deployment.json'));

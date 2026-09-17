@@ -54,6 +54,8 @@ pnpm run deploy status .local/deploy/local
 
 `pnpm run deploy stop .local/deploy/local` 停止进程但保留卷。不要使用其他项目的容器名，也不要执行不加实例限制的 prune 或 down --volumes。部署生成目录中的 CA 私钥、密码和配置需备份并限制 ACL，不能上传 Git。
 
+如果需要一个可以立即登录、长期保留数据的本地测试实例，使用 [`deploy/local.demo.example.json`](../../deploy/local.demo.example.json) 和[本地可用测试实例](local-demo.md)。它会在 Compose 内增加一个仅限 local 模式的 `idp.localhost` OIDC fixture，并生成部署专用 client secret；production 配置严格拒绝该 fixture。这个入口只用于本机功能测试，不是生产身份提供方。
+
 ## 3. 配置真实 OIDC 和两个入口
 
 复制示例到忽略的本地 JSON，再增加 HTTPS issuer、client ID 和客户端秘密文件路径。客户端允许两个精确回调：
