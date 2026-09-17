@@ -2,7 +2,7 @@
 
 > 自动生成：`node scripts/render-project-status.mjs --write`。唯一可编辑状态源是 [project-data.json](project-data.json) 的任务 `execution` 字段；不要手改本页。
 
-复核日期：2026-09-16。本地复核提交：`6620b0a54c21363a5cf2fdfdc15c3feeef94dad4`。
+复核日期：2026-09-17。本地复核提交：`394599af3f529edbc159262356b5f9525dab8d5b`。
 
 本页区分实施、自动化证据和原任务验收。已有证据文件不等于本次测试通过；切片 COMPLETE 不等于原任务完整验收。未复核的条目明确标记待复核，不推断为没有代码。
 

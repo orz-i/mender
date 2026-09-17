@@ -5709,9 +5709,9 @@
   "baseline_notice": "原设计与估算保持 v1.1；baseline_execution 仅为最初计划快照。当前状态以 task.execution 和 docs/planning/current-status.md 为准，未知不再填 0%。历史切片 COMPLETE 不等于原任务全量验收。",
   "execution_tracking": {
     "schema_version": 1,
-    "reviewed_at": "2026-09-16",
-    "reviewed_head": "6620b0a54c21363a5cf2fdfdc15c3feeef94dad4",
-    "review_basis": "本轮实际工具、依赖、pnpm、隔离PostgreSQL/Chromium/恢复回执；保留旧记录时间范围，未取得人工/商业批准",
+    "reviewed_at": "2026-09-17",
+    "reviewed_head": "394599af3f529edbc159262356b5f9525dab8d5b",
+    "review_basis": "恢复原部署任务：双HTTPS入口就绪校验、端口一致性及CI使用pnpm run deploy已核对；当前新制品有13项真实Compose/TLS/协议模拟IdP/Chromium/持久重启/备份切换结果，pnpm check为165项Node通过，详见docs/engineering/2026-09-17-deployment-resume.md与deployment-resume-20260917证据。原S4独立恢复及网络依赖扫描本次未重跑；历史回执不改写。测试时HEAD为当前基线，未提交代码由source指纹固定；没有远端生产、外部IdP或人工/商业批准",
     "plan_fingerprint": "54a10bde509a7cd3c78ba6602cb73623fc4a446a946c3d38947ae625b21afc70",
     "canonical_aliases": {
       "S4-A": "S4-01",

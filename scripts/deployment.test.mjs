@@ -3,16 +3,44 @@ import test from 'node:test';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { spawnSync } from 'node:child_process';
+import { parse } from 'yaml';
 import { validateConfig, scopedPath, nginxConfig, fileInventory, capabilities } from './lib/deployment.mjs';
+import { readinessOptions, waitForIngress } from './lib/deployment-readiness.mjs';
 
 const config=()=>({version:1,environment:'local',instance:'mender_fixture',console_origin:'https://console.localhost:18443',admin_origin:'https://admin.localhost:18443',http_port:18000,https_port:18443});
 test('local configuration is explicit and production cannot inherit fixture identity or missing credentials',()=>{
  assert.equal(validateConfig(config()).environment,'local');
  for(const mutate of [c=>c.environment='production',c=>c.extra='ignored?',c=>c.console_origin='http://console.localhost:18443',c=>c.admin_origin=c.console_origin,c=>c.oidc_issuer='http://idp.localhost',c=>c.instance='mender_bad;rm',c=>c.https_port=0,c=>c.https_port=c.http_port]){const c=config();mutate(c);assert.throws(()=>validateConfig(c));}
 });
+test('readiness checks the actual two TLS ingresses and only retries bounded GET probes',async()=>{
+ const c={...config(),web_certificate_file:'operator-owned.pem'};let now=0;const seen=[];
+ await waitForIngress(c,'.',{now:()=>now,pause:async(ms)=>{now+=ms;},probe:async(options)=>{seen.push(options);return now>=2000;}});
+ assert.equal(seen.length,6);assert.deepEqual([...new Set(seen.map(x=>x.hostname))].sort(),['admin.localhost','console.localhost']);
+ for(const options of seen){assert.equal(options.method,'GET');assert.equal(options.path,'/readyz');assert.equal(options.rejectUnauthorized,true);assert.equal(options.agent,false);assert.equal(options.headers.Authorization,undefined);}
+ const production=readinessOptions('https://console.mender.org',{environment:'production'},'.');assert.equal(production.lookup,undefined);assert.equal(production.ca,undefined);assert.equal(production.rejectUnauthorized,true);
+});
+test('unready ingress or invalid TLS never becomes deployment success',async()=>{
+ const c={...config(),web_certificate_file:'operator-owned.pem'};let now=0;
+ await assert.rejects(waitForIngress(c,'.',{now:()=>now,pause:async(ms)=>{now+=ms;},probe:async()=>false}),/did not become ready/u);
+ assert.equal(now,60000);
+ await assert.rejects(waitForIngress(c,'.',{probe:async()=>{throw Error('TLS rejected');}}),/TLS rejected/u);
+});
+test('help is a no-side-effect command and documents explicit pnpm script invocation',()=>{
+ const out=spawnSync(process.execPath,['scripts/deploy.mjs','--help'],{encoding:'utf8',timeout:10000});
+ assert.equal(out.status,0,out.stderr);assert.match(out.stdout,/Mender deployment CLI/u);assert.match(out.stdout,/pnpm run deploy/u);assert.equal(out.stderr,'');
+ const guide=readFileSync('docs/engineering/production-deployment.md','utf8');assert.doesNotMatch(guide,/pnpm deploy\s+(build|prepare|preflight|up|stop|backup|operator|status|switch-release)/u);
+});
+test('advertised UI origins must use the actual published TLS port',()=>{
+ for(const mutate of [c=>c.console_origin='https://console.localhost',c=>c.admin_origin='https://admin.localhost:18444',c=>c.https_port=18445]){const c=config();mutate(c);assert.throws(()=>validateConfig(c),/origin port/u);}
+});
 test('deployment tests are not optional silently-skipped scripts and production example fails until configured',()=>{
  const p=JSON.parse(readFileSync('package.json','utf8'));assert.ok(p.scripts.test.includes('scripts/deployment.test.mjs'));
  assert.equal(p.scripts['test:deployment'],'node scripts/test-deployment.mjs');
+ const steps=parse(readFileSync('.github/workflows/ci.yml','utf8')).jobs.check.steps;
+ assert.ok(steps.some(step=>step.run==='pnpm run deploy build dist/releases/ci'));
+ assert.ok(steps.some(step=>step.run==='pnpm test:deployment dist/releases/ci'));
+ assert.ok(steps.every(step=>!/(?:^|\n)\s*pnpm deploy(?:\s|$)/u.test(step.run||'')));
  assert.throws(()=>validateConfig(JSON.parse(readFileSync('deploy/production.example.json','utf8'))));
 });
 test('deployment output never traverses, follows symlinks or leaves its dedicated workspace root',()=>{

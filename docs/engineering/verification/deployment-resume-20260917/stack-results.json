@@ -1,0 +1,23 @@
+{
+  "scope": "local-owned-production-image-stack",
+  "external_idp": false,
+  "external_psp": false,
+  "chromium_local_ca_exception": true,
+  "production_trust_modified": false,
+  "results": [
+    {"name":"generate owned local PKI without changing OS trust","result":"passed","duration_ms":437},
+    {"name":"published readiness rejects redirects, wrong identity, oversized bodies and untrusted TLS","result":"passed","duration_ms":148},
+    {"name":"prepare persistent configuration with separate credentials and HTTPS database verification","result":"passed","duration_ms":920},
+    {"name":"start built read-only non-root images and explicit least-privilege provisioning","result":"passed","duration_ms":20186},
+    {"name":"repeat provisioning without resetting credentials or generating data","result":"passed","duration_ms":1700},
+    {"name":"deployment preflight rejects untrusted release signatures and changed runtime images","result":"passed","duration_ms":2471},
+    {"name":"real Console login via TLS discovery, code, PKCE, nonce, JWKS and server session","result":"passed","duration_ms":749},
+    {"name":"distinct Admin origin is not authenticated by Console cookie; independent login lands safely","result":"passed","duration_ms":688},
+    {"name":"API restart preserves server-side browser session","result":"passed","duration_ms":6766},
+    {"name":"database restart preserves identities and sessions with the same volume and TLS key","result":"passed","duration_ms":3771},
+    {"name":"actual protected backup is readable by pg_restore and release switching preserves volume and secrets","result":"passed","duration_ms":26187},
+    {"name":"nonce tampering rejects login; no forged session is issued","result":"passed","duration_ms":212},
+    {"name":"logout invalidates persistent session and mobile page remains meaningful","result":"passed","duration_ms":234}
+  ],
+  "resources_removed": true
+}

@@ -32,6 +32,7 @@ export function validateConfig(c) {
  if(c.local_oidc_host_gateway!==undefined&&(c.local_oidc_host_gateway!==true||c.environment!=='local'||new URL(c.oidc_issuer).hostname!=='idp.localhost'))throw Error('Host-gateway fixture is local-only and restricted to idp.localhost');
  for(const k of ['console_origin','admin_origin']){
   const u=new URL(c[k]);if(u.protocol!=='https:'||u.origin!==c[k]||!/^([a-z0-9-]+\.)+[a-z0-9-]+$/.test(u.hostname))throw Error('Invalid HTTPS UI origin');
+  if(Number(u.port||443)!==c.https_port)throw Error('UI origin port must match the published HTTPS port');
   if(c.environment==='production'&&(u.hostname.endsWith('.localhost')||u.hostname.endsWith('.test')||u.hostname.endsWith('.invalid')||u.hostname.includes('example')))throw Error('Production requires real, distinct reviewed hostnames');
  }
  if(new URL(c.console_origin).hostname===new URL(c.admin_origin).hostname)throw Error('Console and Admin require different hosts, not merely different ports');

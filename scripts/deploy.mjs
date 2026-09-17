@@ -6,9 +6,11 @@ import { fileURLToPath } from 'node:url';
 import { parse, stringify } from 'yaml';
 import { scopedPath, validateConfig, validateWebCertificate, fileInventory, writeDeployment } from './lib/deployment.mjs';
 import { inventory, verifyRelease } from './lib/release-artifact.mjs';
+import { waitForIngress } from './lib/deployment-readiness.mjs';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
 const hash=b=>createHash('sha256').update(b).digest('hex');
+const usage='Mender deployment CLI (package script, not pnpm workspace deployment)\nUsage: pnpm run deploy build dist/releases/ID | prepare CONFIG RELEASE_DIR .local/deploy/ID | preflight DIR [--signed FILE --trusted-key FILE] | up DIR --apply [--signed FILE --trusted-key FILE] | status DIR | stop DIR | backup DIR .local/backups/ID --apply | switch-release DIR RELEASE_DIR --apply --migrations-reviewed [--signed FILE --trusted-key FILE] | operator DIR provision-human|provision-platform-staff|issue-key|revoke-key ...';
 function run(exe,args,options={}){
  const p=spawnSync(exe,args,{cwd:root,shell:false,windowsHide:true,encoding:'utf8',timeout:600000,maxBuffer:8*1024*1024,...options});
  if(p.status!==0){if(options.publicOutput)process.stderr.write((p.stderr||'').slice(-8000));throw Error(`${exe} ${args[0]} failed (exit ${p.status}); no deployment success asserted`);}
@@ -27,8 +29,8 @@ export function verifyBuiltRelease(dir){
 }
 function build(output){
  const dir=scopedPath(root,output,'dist/releases/');if(existsSync(dir))throw Error('Release output already exists; never overwrite a release');
- pnpm('check:toolchain');pnpm('build');
- const source=identity();const nginx=imageInfo('nginx:1.30.5-alpine');const pg=imageInfo('postgres:18.6');
+ pnpm('check:toolchain');const source=identity();pnpm('build');
+ const nginx=imageInfo('nginx:1.30.5-alpine');const pg=imageInfo('postgres:18.6');
  const pinned=(info,prefix)=>{const v=info.RepoDigests?.find(x=>x.startsWith(prefix+'@sha256:'));if(!v)throw Error('Official base image digest unavailable');return v;};
  const trust=pinned(nginx,'nginx');const postgres=pinned(pg,'postgres');
  const context=join(dir,'context');mkdirSync(join(context,'bin'),{recursive:true});
@@ -112,8 +114,9 @@ function switchRelease(input,releasePath,signed,keyFile){
  renameSync(join(dir,'compose.yaml.next'),join(dir,'compose.yaml'));renameSync(join(dir,'deployment.json.next'),join(dir,'deployment.json'));
  console.log(`Release switched; previous controls preserved in ${revision}. No database migration or process startup performed; run preflight and explicit up next.`);
 }
-function main(){
+async function main(){
  const [command,...args]=process.argv.slice(2);
+ if(['--help','-h','help'].includes(command)&&args.length===0){console.log(usage);return;}
  if(command==='build'&&args.length===1)return build(args[0]);
  if(command==='prepare'&&args.length===3){prepare(...args);const p=join(scopedPath(root,args[2],'.local/deploy/'),'deployment.json');const d=JSON.parse(readFileSync(p));d.release_path=args[1];writeFileSync(p,JSON.stringify(d,null,2),{mode:0o600});return;}
  if(command==='backup'&&args.length===3&&args[2]==='--apply')return backup(args[0],args[1]);
@@ -125,11 +128,11 @@ function main(){
  if(['preflight','up'].includes(command)){
   const input=args.shift();let signed,key;while(args.length){const flag=args.shift();if(flag==='--signed')signed=args.shift();else if(flag==='--trusted-key')key=args.shift();else if(flag==='--apply'&&command==='up')continue;else throw Error('Unknown deployment argument');}
   if(command==='up'&&!process.argv.includes('--apply'))throw Error('up requires explicit --apply; it creates persistent local resources');
-  const {dir}=preflight(input,signed,key);if(command==='preflight')return;
-  compose(dir,['up','-d','--wait','database']);compose(dir,['run','--rm','--no-deps','provision'],{publicOutput:true});compose(dir,['up','-d','--wait','--wait-timeout','120','api-console','api-admin','worker'],{publicOutput:true});compose(dir,['up','-d','--force-recreate','--wait','--wait-timeout','90','web'],{publicOutput:true});console.log('Stack started with Web readiness verified. Database volume is persistent; no production or G4 approval is implied.');return;
+  const {dir,d}=preflight(input,signed,key);if(command==='preflight')return;
+  compose(dir,['up','-d','--wait','database']);compose(dir,['run','--rm','--no-deps','provision'],{publicOutput:true});compose(dir,['up','-d','--wait','--wait-timeout','120','api-console','api-admin','worker'],{publicOutput:true});compose(dir,['up','-d','--force-recreate','--wait','--wait-timeout','90','web'],{publicOutput:true});await waitForIngress(d.config,dir);console.log('Stack started with both published HTTPS ingress endpoints verified. Database volume is persistent; no production or G4 approval is implied.');return;
  }
  if(['status','stop'].includes(command)&&args.length===1){const {dir}=readDeployment(args[0]);console.log(compose(dir,command==='status'?['ps']:['stop']));return;}
  if(command==='operator'&&args.length>=2){const {dir}=readDeployment(args.shift());const allowed=['provision-human','provision-platform-staff','issue-key','revoke-key'];if(!allowed.includes(args[0]))throw Error('Use explicit provisioning for schema/role operations');console.log(compose(dir,['run','--rm','--no-deps','operator',...args]));return;}
- throw Error('Usage: deploy build dist/releases/ID | prepare CONFIG RELEASE_DIR .local/deploy/ID | preflight DIR [--signed FILE --trusted-key FILE] | up DIR --apply [--signed FILE --trusted-key FILE] | status DIR | stop DIR | backup DIR .local/backups/ID --apply | switch-release DIR RELEASE_DIR --apply --migrations-reviewed [--signed FILE --trusted-key FILE] | operator DIR provision-human|provision-platform-staff|issue-key|revoke-key ...');
+ throw Error(usage);
 }
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){try{main();}catch(e){console.error(e.message);process.exitCode=1;}}
+if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){main().catch(e=>{console.error(e.message);process.exitCode=1;});}

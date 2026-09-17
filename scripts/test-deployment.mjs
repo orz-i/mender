@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { chromium, expect } from '@playwright/test';
 import { parse, stringify } from 'yaml';
 import { signRelease } from './lib/release-artifact.mjs';
+import { probeReadiness } from './lib/deployment-readiness.mjs';
 
 const releaseDir=process.argv[2];if(!/^dist\/releases\/[a-zA-Z0-9_-]+$/.test(releaseDir||''))throw Error('Usage: pnpm test:deployment dist/releases/ID');
 const suffix=randomBytes(5).toString('hex');const instance='mender_test_'+suffix;
@@ -24,6 +25,28 @@ const [httpsPort,httpPort]=await Promise.all([port(),port()]);
 try{
  await step('generate owned local PKI without changing OS trust',async()=>{
   await node(['scripts/backend.mjs','run','./cmd/provision','local-pki','../'+fixture+'/pki']);
+ });
+ await step('published readiness rejects redirects, wrong identity, oversized bodies and untrusted TLS',async()=>{
+  let mode='ready';let requests=0;
+  const server=createServer({key:readFileSync(join(fixture,'pki/web.key')),cert:readFileSync(join(fixture,'pki/web.crt'))},(req,res)=>{
+   requests++;assert.equal(req.method,'GET');assert.equal(req.url,'/readyz');assert.equal(req.headers.authorization,undefined);
+   if(mode==='redirect'){res.writeHead(302,{Location:'/must-not-follow'});res.end();return;}
+   if(mode==='unready'){res.writeHead(503);res.end();return;}
+   if(mode==='timeout')return;
+   res.setHeader('Content-Type','application/json');
+   res.end(mode==='oversized'?'x'.repeat(4097):JSON.stringify({service:mode==='wrong'?'another-service':'mender-api',status:'ready'}));
+  });
+  await new Promise(res=>server.listen(0,'127.0.0.1',res));
+  const options={hostname:'127.0.0.1',port:server.address().port,servername:'console.localhost',method:'GET',path:'/readyz',rejectUnauthorized:true,agent:false,ca:readFileSync(join(fixture,'pki/ca.crt'))};
+  try{
+   assert.equal(await probeReadiness(options),true);
+   mode='unready';assert.equal(await probeReadiness(options),false);
+   mode='wrong';await assert.rejects(probeReadiness(options),/invalid readiness identity/);
+   mode='redirect';const before=requests;await assert.rejects(probeReadiness(options),/invalid readiness response/);assert.equal(requests,before+1);
+   mode='oversized';await assert.rejects(probeReadiness(options),/exceeded limit/);
+   mode='timeout';assert.equal(await probeReadiness(options,50),false);
+   mode='ready';await assert.rejects(probeReadiness({...options,ca:undefined}),/certificate validation was not disabled/);
+  }finally{server.closeAllConnections();await new Promise(res=>server.close(res));}
  });
  const secret=randomBytes(32).toString('hex');writeFileSync(join(fixture,'oidc-client.txt'),secret,{mode:0o600});
  const keys=generateKeyPairSync('rsa',{modulusLength:2048});const jwk=keys.publicKey.export({format:'jwk'});jwk.kid='fixture-key';jwk.alg='RS256';jwk.use='sig';

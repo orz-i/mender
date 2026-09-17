@@ -1,0 +1,28 @@
+{
+  "record_type": "local-deployment-regression-observation",
+  "recorded_at": "2026-09-17T01:48:35Z",
+  "scope": "Resumed original S4-12/16/17 deployment work, not a new product stage or production approval",
+  "release_directory": "dist/releases/production-resume-20260917",
+  "source": {
+    "head": "394599af3f529edbc159262356b5f9525dab8d5b",
+    "source_sha256": "01ccc5356d3c0d9677a3572eae1997a6ffad7225e1b146eb4248e2a1eac0132f",
+    "note": "HEAD is the baseline before the tested uncommitted changes; the build fingerprints backend/frontend/scripts/deploy and listed toolchain manifests. It is not a claim that a future commit was tested. CI configuration is separately reviewed."
+  },
+  "platform": "linux/amd64",
+  "images": {
+    "runtime": "sha256:75349c4aec265df31c6e5fd7173c3a57881c92d07ecd6d15e49f7bc56b4c24aa",
+    "web": "sha256:c4086dc13dc8a9b49749b5596cef532d9cf5f3d30b2e390d1f2b7d7eec484db8",
+    "postgres": "postgres@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280",
+    "trust": "nginx@sha256:25820c39dba41369486df729ad6697de2fab631ca809e0503e1d1e0c73d9a232"
+  },
+  "checks": [
+    {"command":"pnpm test:deployment:contract","exit_code":0,"duration_ms":2303,"node_tests":11,"verification_id":"764eb310c94840e3b17da9dbecd3da30"},
+    {"command":"pnpm run deploy build dist/releases/production-resume-20260917","exit_code":0,"duration_ms":25796,"verification_id":"b790dd52775c4406a52dddf5f09a8024"},
+    {"command":"pnpm test:deployment dist/releases/production-resume-20260917","exit_code":0,"duration_ms":74319,"steps":13,"verification_id":"9888db8b55514507b13c0335bfb24a2a"},
+    {"command":"pnpm check","exit_code":0,"duration_ms":38315,"node_tests":165,"failed":0,"skipped":0,"verification_id":"6c47f9331843467e83a442df8463c2a3","note":"Final full check after source and CI fixes. Some Go results are cached. Independent S4 recovery and dependency scans were not rerun in this resume; their earlier evidence remains historical."}
+  ],
+  "stack_result": "docs/engineering/verification/deployment-resume-20260917/stack-results.json",
+  "cleanup": {"instance":"mender_test_ebd01d21f2","containers_remaining":0,"volumes_remaining":0,"verified_by":"separate docker ps -a and docker volume ls queries restricted to this Compose project"},
+  "browser": {"runtime":"existing Playwright; Browser plugin not available","desktop":[1440,960],"mobile":[390,844],"visual_review":"Console login, Admin identity and mobile logout screenshots inspected","screenshots_directory":".tmp/deploy-fixture-ebd01d21f2"},
+  "limits": {"external_idp":false,"external_psp":false,"production_deployed":false,"remote_pushed":false,"production_trust_modified":false,"gate_approval":"not_granted"}
+}
