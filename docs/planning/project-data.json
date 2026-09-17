@@ -1932,7 +1932,7 @@
         "evidence": [
           {
             "path": "frontend/apps/console/src/app/router.tsx",
-            "sha256": "ef763b32662b806ecdb3314fc1e984d95ec66f713e22c3b426404a794c486dfc"
+            "sha256": "c228ff2ae355648a7e13c907542a94ee29ffcd7d69ff374e78b274bb317509bb"
           },
           {
             "path": "frontend/apps/admin/src/app/router.tsx",
@@ -1984,7 +1984,7 @@
           },
           {
             "path": "frontend/apps/console/src/app/router.tsx",
-            "sha256": "ef763b32662b806ecdb3314fc1e984d95ec66f713e22c3b426404a794c486dfc"
+            "sha256": "c228ff2ae355648a7e13c907542a94ee29ffcd7d69ff374e78b274bb317509bb"
           }
         ],
         "verification_receipt": null,
@@ -2024,7 +2024,7 @@
         "evidence": [
           {
             "path": "frontend/apps/console/src/app/router.tsx",
-            "sha256": "ef763b32662b806ecdb3314fc1e984d95ec66f713e22c3b426404a794c486dfc"
+            "sha256": "c228ff2ae355648a7e13c907542a94ee29ffcd7d69ff374e78b274bb317509bb"
           }
         ],
         "verification_receipt": null,
@@ -2656,7 +2656,7 @@
           },
           {
             "path": "frontend/apps/console/src/app/router.tsx",
-            "sha256": "ef763b32662b806ecdb3314fc1e984d95ec66f713e22c3b426404a794c486dfc"
+            "sha256": "c228ff2ae355648a7e13c907542a94ee29ffcd7d69ff374e78b274bb317509bb"
           }
         ],
         "verification_receipt": null,
@@ -3378,7 +3378,7 @@
           },
           {
             "path": "frontend/apps/console/src/app/router.tsx",
-            "sha256": "ef763b32662b806ecdb3314fc1e984d95ec66f713e22c3b426404a794c486dfc"
+            "sha256": "c228ff2ae355648a7e13c907542a94ee29ffcd7d69ff374e78b274bb317509bb"
           }
         ],
         "verification_receipt": null,
@@ -3418,7 +3418,7 @@
         "evidence": [
           {
             "path": "frontend/apps/console/src/app/router.tsx",
-            "sha256": "ef763b32662b806ecdb3314fc1e984d95ec66f713e22c3b426404a794c486dfc"
+            "sha256": "c228ff2ae355648a7e13c907542a94ee29ffcd7d69ff374e78b274bb317509bb"
           },
           {
             "path": "docs/engineering/g3-evidence.json",
@@ -4196,7 +4196,7 @@
           },
           {
             "path": "frontend/apps/console/src/app/router.tsx",
-            "sha256": "ef763b32662b806ecdb3314fc1e984d95ec66f713e22c3b426404a794c486dfc"
+            "sha256": "c228ff2ae355648a7e13c907542a94ee29ffcd7d69ff374e78b274bb317509bb"
           },
           {
             "path": "docs/engineering/2026-09-16-s4-workbenches.md",
