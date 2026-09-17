@@ -8,6 +8,7 @@
   "oidc_issuer": "https://idp.localhost:19443",
   "oidc_client_id": "mender-local-demo",
   "local_oidc_fixture": true,
+  "local_demo_fixture": true,
   "http_port": 18000,
   "https_port": 18443
 }

@@ -15,8 +15,16 @@ test('local configuration is explicit and production cannot inherit fixture iden
 });
 test('embedded local OIDC fixture is explicit, isolated and never valid for production',()=>{
  const demo=JSON.parse(readFileSync('deploy/local.demo.example.json','utf8'));
- assert.equal(validateConfig(demo).local_oidc_fixture,true);assert.equal(demo.oidc_client_id,'mender-local-demo');
- for(const mutate of [c=>c.environment='production',c=>c.oidc_client_id='other-client',c=>c.oidc_client_secret_file='.local/secret',c=>c.local_oidc_host_gateway=true,c=>c.oidc_issuer='https://login.example.test:19443',c=>c.oidc_issuer='https://idp.localhost:18443']){const c=structuredClone(demo);mutate(c);assert.throws(()=>validateConfig(c));}
+ assert.equal(validateConfig(demo).local_oidc_fixture,true);assert.equal(demo.local_demo_fixture,true);assert.equal(demo.oidc_client_id,'mender-local-demo');
+ for(const mutate of [c=>c.environment='production',c=>c.oidc_client_id='other-client',c=>c.oidc_client_secret_file='.local/secret',c=>c.local_oidc_host_gateway=true,c=>c.oidc_issuer='https://login.example.test:19443',c=>c.oidc_issuer='https://idp.localhost:18443',c=>c.worker_workspaces=[]]){const c=structuredClone(demo);mutate(c);assert.throws(()=>validateConfig(c));}
+});
+test('local product demo is explicit and wires only a loopback reviewed provider fixture',()=>{
+ const source=readFileSync('scripts/lib/deployment.mjs','utf8');
+ assert.match(source,/local_demo_fixture/u);assert.match(source,/MENDER_REVIEWED_PROVIDER_IDS:'provider_local_demo'/u);
+ assert.match(source,/MENDER_REVIEWED_EGRESS_ALLOWED_HOSTS:'127\.0\.0\.1'/u);assert.match(source,/MENDER_REVIEWED_EGRESS_ALLOW_LOOPBACK:'true'/u);
+ assert.match(source,/network_mode:'service:worker'/u);assert.match(source,/MENDER_LOCAL_PROVIDER_ENABLED:'true'/u);
+ const build=readFileSync('scripts/deploy.mjs','utf8');assert.match(build,/localidp','localprovider'/u);
+ const production=JSON.parse(readFileSync('deploy/production.example.json','utf8'));production.local_demo_fixture=true;assert.throws(()=>validateConfig(production),/local product demo fixture/iu);
 });
 test('readiness checks the actual two TLS ingresses and only retries bounded GET probes',async()=>{
  const c={...config(),web_certificate_file:'operator-owned.pem'};let now=0;const seen=[];

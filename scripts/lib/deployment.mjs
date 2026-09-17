@@ -23,7 +23,7 @@ export function scopedPath(root, input, prefix) {
  return p;
 }
 export function validateConfig(c) {
- const allowed=['version','environment','instance','console_origin','admin_origin','oidc_issuer','oidc_client_id','oidc_client_secret_file','oidc_ca_file','local_oidc_host_gateway','local_oidc_fixture','web_certificate_file','web_private_key_file','http_port','https_port','worker_workspaces'];
+ const allowed=['version','environment','instance','console_origin','admin_origin','oidc_issuer','oidc_client_id','oidc_client_secret_file','oidc_ca_file','local_oidc_host_gateway','local_oidc_fixture','local_demo_fixture','web_certificate_file','web_private_key_file','http_port','https_port','worker_workspaces'];
  if(!c||Object.keys(c).some(k=>!allowed.includes(k))||c.version!==1||!['local','production'].includes(c.environment)||!/^mender_[a-z0-9_]{3,16}$/.test(c.instance))throw Error('Invalid deployment configuration or unknown field');
  for(const k of ['http_port','https_port'])if(!Number.isInteger(c[k])||c[k]<(c.environment==='local'?1024:1)||c[k]>65535)throw Error('Invalid host port; local fixtures use unprivileged ports');
  if(c.http_port===c.https_port)throw Error('HTTP and HTTPS ports must differ');
@@ -34,6 +34,7 @@ export function validateConfig(c) {
   if(c.local_oidc_fixture!==true||c.environment!=='local'||!c.oidc_issuer||new URL(c.oidc_issuer).hostname!=='idp.localhost'||c.local_oidc_host_gateway)throw Error('Embedded local OIDC fixture is local-only and restricted to idp.localhost');
   const port=Number(new URL(c.oidc_issuer).port||443);if(!Number.isInteger(port)||port<1024||port>65535||port===c.http_port||port===c.https_port)throw Error('Embedded local OIDC fixture requires a distinct unprivileged port');
  }
+ if(c.local_demo_fixture!==undefined&&(c.local_demo_fixture!==true||c.environment!=='local'||!c.local_oidc_fixture||!Array.isArray(c.worker_workspaces)||!c.worker_workspaces.includes('ws_local')))throw Error('Local product demo fixture requires local embedded OIDC and ws_local Worker scope');
  for(const k of ['console_origin','admin_origin']){
   const u=new URL(c[k]);if(u.protocol!=='https:'||u.origin!==c[k]||!/^([a-z0-9-]+\.)+[a-z0-9-]+$/.test(u.hostname))throw Error('Invalid HTTPS UI origin');
   if(Number(u.port||443)!==c.https_port)throw Error('UI origin port must match the published HTTPS port');
@@ -146,6 +147,17 @@ export function writeDeployment(root,dir,c,release){
   compose.services['api-console'].depends_on['local-idp']={condition:'service_healthy'};
   compose.services['api-admin'].depends_on['local-idp']={condition:'service_healthy'};
  }
+ if(c.local_demo_fixture){
+  Object.assign(compose.services.worker.environment,{
+   MENDER_WORKER_DISPATCH_ENABLED:'true',MENDER_REVIEWED_WORKER_RUNTIME_ENABLED:'true',MENDER_REVIEWED_HTTP_DISPATCH_ENABLED:'true',MENDER_REVIEWED_PROVIDER_CONTROL_ENABLED:'true',MENDER_REVIEWED_SETTLEMENT_ENABLED:'true',
+   MENDER_REVIEWED_SECRET_ROOT:'/run/mender/provider-secrets',MENDER_EXECUTOR_DATABASE_URL_FILE:'/run/secrets/dsn_executor',MENDER_RECONCILER_DATABASE_URL_FILE:'/run/secrets/dsn_reconciler',MENDER_SETTLEMENT_DATABASE_URL_FILE:'/run/secrets/dsn_settlement',
+   MENDER_REVIEWED_PROVIDER_IDS:'provider_local_demo',MENDER_REVIEWED_EGRESS_ALLOWED_HOSTS:'127.0.0.1',MENDER_REVIEWED_EGRESS_ALLOW_HTTP:'true',MENDER_REVIEWED_EGRESS_ALLOW_LOOPBACK:'true'
+  });
+  compose.services.worker.secrets.push('dsn_executor','dsn_reconciler','dsn_settlement');
+  compose.services.worker.tmpfs=['/run/mender/provider-secrets'];
+  compose.services.operator.environment.MENDER_LOCAL_DEMO_ENABLED='true';
+  compose.services['local-provider']={image:release.runtime_image,entrypoint:['/mender/localprovider'],read_only:true,user:'65532:65532',cap_drop:['ALL'],security_opt:['no-new-privileges:true'],restart:'unless-stopped',pids_limit:64,mem_limit:'128m',network_mode:'service:worker',environment:{MENDER_LOCAL_PROVIDER_ENABLED:'true',MENDER_LOCAL_PROVIDER_ADDR:'0.0.0.0:19080'},depends_on:{worker:{condition:'service_started'}},healthcheck:{test:['CMD','/mender/localprovider','health'],interval:'2s',timeout:'3s',retries:30,start_period:'2s'},logging:{driver:'json-file',options:{'max-size':'5m','max-file':'2'}}};
+ }
  for(const name of ['api-console','api-admin']){
   if(c.oidc_ca_file){compose.services[name].secrets.push('oidc_ca');compose.services[name].environment.SSL_CERT_FILE='/run/secrets/oidc_ca';}
   else if(c.local_oidc_fixture)compose.services[name].environment.SSL_CERT_FILE='/run/secrets/db_ca';
@@ -157,7 +169,7 @@ export function writeDeployment(root,dir,c,release){
  compose.volumes.pgdata.labels['io.mender.ownership']=ownership;
  compose.services.worker.environment.MENDER_WORKER_WORKSPACES=(c.worker_workspaces||['ws_local']).join(',');
  compose.services.web.healthcheck={test:['CMD','wget','-q','-O','/dev/null','http://127.0.0.1:8081/readyz'],interval:'5s',timeout:'4s',retries:12,start_period:'10s'};
- for(const name of ['api-console','api-admin','provision','operator','worker','web',...(c.local_oidc_fixture?['local-idp']:[])])compose.services[name].user=`${uid}:${gid}`;
+ for(const name of ['api-console','api-admin','provision','operator','worker','web',...(c.local_oidc_fixture?['local-idp']:[]),...(c.local_demo_fixture?['local-provider']:[])])compose.services[name].user=`${uid}:${gid}`;
  // Local Compose bind-mounted secrets retain host ownership; do not pretend
  // uid/mode in the secrets stanza changes filesystem ownership.
  if(process.platform!=='win32'&&process.getuid()===0){for(const f of readdirSync(secretDir))chownSync(join(secretDir,f),uid,gid);chownSync(join(dir,'nginx.conf'),uid,gid);}
